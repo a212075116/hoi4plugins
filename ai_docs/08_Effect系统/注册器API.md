@@ -89,6 +89,24 @@
 `EffectDef` 里由注册器自动填写的字段：`tokenId`、`state`、`vt[]`、`entryVt[]`、`entry[]`。
 使用者只需在 `fill` 里填 `name`/`desc`/`locKey`/`exec`（宏已代劳）。
 
+## 坑：不要在工具提示路径里做文件 I/O
+
+在 `Effect_BuildTooltip` 里直接 `Plugin_Log`（每次 CreateFile/WriteFile/CloseHandle），
+会导致**游戏在第一个事件执行后崩溃**（Frida 报 `script has been destroyed`，进程随后退出）。
+移除日志即恢复。
+
+做法：**延迟输出**。
+
+    // 工具提示里：只拷进全局缓冲，不做任何 I/O
+    if (g_hasPendingTip == 0 && osz > 0 && osz < 150) {
+        ...拷到 g_pendingTip; g_pendingLoc = locKey; g_hasPendingTip = 1;
+    }
+
+    // 执行函数一开始：把上一条写日志
+    Effect_FlushPendingTooltip();
+
+代价：日志里的文本是**上一次**触发的；要看最后一次需多触发一轮。
+
 ## 实现上的关键取舍
 
 | 事项 | 做法 | 原因 |

@@ -14,13 +14,19 @@ print('进地图: %s  %.1f 秒' % (ok, time.time()-t0))
 if not ok: sys.exit(1)
 print()
 print('%-11s %-10s %-6s %s' % ('事件','操作','ok','摄像机 +0x69C'))
-for ev, desc in [('camtest.1','set 1500'), ('camtest.2','set 999'), ('camtest.3','add 500')]:
+seq = [('camtest.1','set 1500'), ('camtest.2','set 999'), ('camtest.3','add 500'), ('camtest.1','set 1500')]
+for ev, desc in seq:
     r = str(e.exec('event', [ev]))
     okk = r.split('out->ok')[1].split(chr(10))[0].strip() if 'out->ok' in r else '?'
     time.sleep(1.3)
-    print('%-11s %-10s %-6s %.2f' % (ev, desc, okk, e.camHeight()))
+    try:
+        h = e.camHeight()
+    except Exception as ex:
+        h = float('nan')
+        print('  camHeight 读取失败: %s' % ex)
+    print('%-11s %-10s %-6s %.2f' % (ev, desc, okk, h))
 print()
-print('=== 文本与执行日志 ===')
+print('=== 日志 ===')
 lg = r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/reports/mod_loader_tbb.log'
 for l in open(lg, encoding='utf-8', errors='replace').read().splitlines():
-    if ('efftip' in l and 'text=[' in l) or 'camera_height #' in l or '[eff] +' in l or 'camera effects' in l: print('  ' + l)
+    if 'efftip' in l or 'camera_height #' in l or '[eff] +' in l: print('  ' + l)

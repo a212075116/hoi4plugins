@@ -44,7 +44,10 @@ static void CamApplyHeight(void* cam, float h)
 
 static void __fastcall ExecSetCamHeight(void* self, void* scope)
 {
-    void* cam = CamObj();
+    void* cam;
+
+    Effect_FlushPendingTooltip();
+    cam = CamObj();
     float before;
     float after;
     float want;
@@ -64,7 +67,10 @@ static void __fastcall ExecSetCamHeight(void* self, void* scope)
 
 static void __fastcall ExecAddCamHeight(void* self, void* scope)
 {
-    void* cam = CamObj();
+    void* cam;
+
+    Effect_FlushPendingTooltip();
+    cam = CamObj();
     float before;
     float after;
     float delta;

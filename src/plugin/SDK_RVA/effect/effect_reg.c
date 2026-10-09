@@ -20,6 +20,20 @@ typedef void  (__fastcall *StrAppendFn)(void* str, unsigned long long n);
 typedef char  assert_ptr64[(sizeof(void*) == 8) ? 1 : -1];
 
 static int g_registeredCount = 0;
+static char g_pendingTip[192];
+static const char* g_pendingLoc = NULL;
+static int g_hasPendingTip = 0;
+
+void Effect_FlushPendingTooltip(void)
+{
+    if (g_hasPendingTip) {
+        Plugin_Log("[efftip] loc=%s text=[%s]", g_pendingLoc ? g_pendingLoc : "?",
+                   g_pendingTip);
+        g_hasPendingTip = 0;
+    }
+}
+
+void Effect_FlushPendingTooltip(void);
 
 static unsigned char* Img(void)
 {
@@ -132,6 +146,25 @@ void* Effect_BuildTooltip(void* self, void* out, void* ctx, const char* locKey)
         for (i = 0; i < sz; ++i) dst[i] = src[i];
         dst[sz] = 0;
         *(unsigned long long*)((unsigned char*)out + 0x10) = sz;
+    }
+
+    {
+        unsigned long long osz = *(unsigned long long*)((unsigned char*)out + 0x10);
+        unsigned long long ocap = *(unsigned long long*)((unsigned char*)out + 0x18);
+        unsigned char* op = (ocap <= EFF_SSO_MAX)
+                            ? (unsigned char*)out : *(unsigned char**)out;
+        if (g_hasPendingTip == 0 && osz > 0 && osz < 150 &&
+            ConsoleCmd_IsReadable(op, (size_t)osz + 1)) {
+            unsigned long long j;
+            int n = 0;
+            for (j = 0; j < osz && n < 180; ++j) {
+                char ch = (char)op[j];
+                g_pendingTip[n++] = (ch == 10 || ch == 13) ? ' ' : ch;
+            }
+            g_pendingTip[n] = 0;
+            g_pendingLoc = locKey;
+            g_hasPendingTip = 1;
+        }
     }
 
     return out;
