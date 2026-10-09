@@ -15,8 +15,22 @@ import sys, json, io, os, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + os.sep + '..' + os.sep + 'tools')
 from idalib_cli import send
 
-IMG = 0x140000000
-MAX_EA = 0x14377E000
+# IMG / MAX_EA 不写死: 启动时向服务端 ping 取得 (见 init_range)
+IMG = None
+MAX_EA = None
+
+
+def init_range():
+    """从 idalib 服务取 imagebase 与地址上界, 避免硬编码。"""
+    global IMG, MAX_EA
+    r = send({'op': 'ping'})
+    if not r.get('ok'):
+        raise SystemExit('idalib 服务不可用: %s' % r)
+    IMG = int(r['imagebase'], 16)
+    MAX_EA = int(r.get('max_ea') or (IMG + 0x4000000), 16)
+    print('      imagebase = %#x   max_ea = %#x   funcs = %s'
+          % (IMG, MAX_EA, r.get('funcs')), flush=True)
+    print('      数据库 = %s' % r.get('input'), flush=True)
 
 
 def bytes_at(ea, n):
@@ -91,6 +105,8 @@ def main():
     only_n = int(sys.argv[2]) if len(sys.argv) > 2 else 0
 
     t0 = time.time()
+    print('[0/3] 探测服务与镜像范围 ...', flush=True)
+    init_range()
     print('[1/3] 取 ??_7 符号 ...', flush=True)
     r = send({'op': 'names', 'needle': '??_7', 'limit': 100000})
     items = r.get('items') or []

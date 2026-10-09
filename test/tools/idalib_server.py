@@ -20,11 +20,22 @@
 #   {'op':'shutdown'}
 import os, sys, json, socket, threading, traceback
 
+# IDA 安装目录: 用 IDADIR_OVERRIDE 覆盖, 默认是作者机器上的路径
 IDADIR = os.environ.get('IDADIR_OVERRIDE', r'D:\IDA Professional 9.0')
 os.environ['IDADIR'] = IDADIR
 
-I64 = r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/sources/1.19.3/hoi4.exe.i64'
+# .i64 数据库路径: 用 IDALIB_I64 覆盖。
+# 数据库不进版本控制 (1.7 GB), 由使用者按 ai_docs/01_工程与构建/复现索引表.md
+# 的步骤, 自己从 hoi4.exe 用 IDA 分析生成。
+I64 = os.environ.get(
+    'IDALIB_I64',
+    r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/sources/1.19.3/hoi4.exe.i64')
 PORT = int(os.environ.get('IDALIB_PORT', '19531'))
+
+if not os.path.isfile(I64):
+    print('[idalib] 找不到数据库: %s' % I64, flush=True)
+    print('[idalib] 请设置 IDALIB_I64 环境变量, 或先按复现文档生成 .i64', flush=True)
+    raise SystemExit(2)
 
 import idapro
 t0 = __import__('time').time()
@@ -46,7 +57,18 @@ def ev(v):
 
 
 def op_ping(req):
-    return {'ok': True, 'imagebase': hex(BASE), 'funcs': ida_funcs.get_func_qty()}
+    # max_ea / min_ea 报出来, 让调用方不必硬编码镜像范围。
+    # 注意: idaapi 没有 get_max_ea, 要用 idc.get_max_ea / idc.get_min_ea。
+    try:
+        max_ea = idc.get_max_ea(0)
+        min_ea = idc.get_min_ea(0)
+    except Exception as e:
+        max_ea = BASE + 0x4000000
+        min_ea = BASE
+        print('[idalib] ping 取范围失败, 用默认值: %s' % e, flush=True)
+    return {'ok': True, 'imagebase': hex(BASE), 'min_ea': hex(min_ea),
+            'max_ea': hex(max_ea), 'funcs': ida_funcs.get_func_qty(),
+            'input': I64}
 
 
 def op_decompile(req):
