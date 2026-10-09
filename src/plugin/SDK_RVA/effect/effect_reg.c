@@ -71,8 +71,6 @@ typedef void  (__fastcall *ParamDtorFn)(void* p);
 typedef void* (__fastcall *OrigTooltipFn)(void* self, void* out, void* ctx);
 typedef void  (__fastcall *StrAppendFn)(void* str, unsigned long long n);
 
-static void Wstr(void* p, const char* s);
-
 static const char* g_locKey = "EFFECT_SET_CAMERA_HEIGHT";
 static int g_tipMode = 0;
 static int g_tipCalls = 0;
@@ -107,30 +105,8 @@ static void* __fastcall MyGetTooltip(void* self, void* out, void* ctx)
 
     {
         long long fixed = 0;
-        float pf = ParamAsFloat(self);
 
         ((GetParamFn)(img + RVA_EFF_GETPARAM))((unsigned char*)self + 0x58, &fixed, ctx, 0, 0);
-
-        if (g_tipCalls <= 8) {
-            unsigned long long s108 = *(unsigned long long*)((unsigned char*)self + 0x110);
-            unsigned long long c108 = *(unsigned long long*)((unsigned char*)self + 0x118);
-            unsigned char* d108 = (c108 <= EFF_SSO_MAX)
-                                  ? ((unsigned char*)self + 0x108)
-                                  : *(unsigned char**)((unsigned char*)self + 0x108);
-            char buf[80];
-            int bn = 0;
-            unsigned long long j;
-            buf[0] = 0;
-            if (s108 < 60 && ConsoleCmd_IsReadable(d108, (size_t)s108 + 1)) {
-                for (j = 0; j < s108 && bn < 70; ++j) {
-                    char ch = (char)d108[j];
-                    buf[bn++] = (ch >= 32 && ch < 127) ? ch : '.';
-                }
-            }
-            buf[bn] = 0;
-            Plugin_Log("[efftip] call#%d ParamAsFloat=%.2f getParam=%lld +0x108sz=%llu str=[%s]",
-                       g_tipCalls, pf, fixed, s108, buf);
-        }
 
         ((ParamCtorFn)(img + RVA_EFF_PARAM_CTOR))(paramDesc);
         *(int*)(paramDesc + 0x00) = 9;
@@ -211,60 +187,15 @@ static void* __fastcall MyFactory(void)
     return inst;
 }
 
-static void Wstr(void* p, const char* s)
+static float ParamFixedToFloat(void* self, void* ctx)
 {
-    unsigned char* d = (unsigned char*)p;
-    size_t n = 0;
-    size_t i;
-    while (s[n] != 0) ++n;
-    if (n <= EFF_SSO_MAX) {
-        for (i = 0; i <= EFF_SSO_MAX; ++i) d[i] = 0;
-        for (i = 0; i < n; ++i) d[i] = (unsigned char)s[i];
-        *(unsigned long long*)(d + 0x10) = n;
-        *(unsigned long long*)(d + 0x18) = EFF_SSO_MAX;
-    } else {
-        for (i = 0; i < n; ++i) d[i] = (unsigned char)s[i];
-        d[n] = 0;
-        *(unsigned long long*)(d + 0x10) = n;
-        *(unsigned long long*)(d + 0x18) = n;
-    }
-}
+    unsigned char* img = Img();
+    long long fixed = 0;
 
-static float ParamAsFloat(void* self)
-{
-    unsigned char* p = (unsigned char*)self + EFF_OFF_PARAM;
-    unsigned long long size;
-    unsigned long long cap;
-    const char* data;
-    double v = 0.0;
-    double frac = 0.0;
-    double scale = 1.0;
-    int neg = 0;
-    int dot = 0;
-    size_t i;
-
-    if (!ConsoleCmd_IsReadable(p, 32)) return 0.0f;
-    size = *(unsigned long long*)(p + EFF_OFF_PARAM_SIZE);
-    cap  = *(unsigned long long*)(p + EFF_OFF_PARAM_CAP);
-    if (size == 0 || size > 64) return 0.0f;
-    data = (cap <= EFF_SSO_MAX) ? (const char*)p : *(const char**)p;
-    if (!ConsoleCmd_IsReadable(data, (size_t)size)) return 0.0f;
-
-    for (i = 0; i < (size_t)size; ++i) {
-        char c = data[i];
-        if (c == '-') { neg = 1; }
-        else if (c == '+') { }
-        else if (c == '.') { dot = 1; }
-        else if (c >= '0' && c <= '9') {
-            if (dot) { scale *= 10.0; frac += (double)(c - '0') / scale; }
-            else { v = v * 10.0 + (double)(c - '0'); }
-        } else {
-            break;
-        }
-    }
-    v += frac;
-    if (neg) v = -v;
-    return (float)v;
+    if (img == NULL) return 0.0f;
+    if (!ConsoleCmd_IsReadable(img + RVA_EFF_GETPARAM, 16)) return 0.0f;
+    ((GetParamFn)(img + RVA_EFF_GETPARAM))((unsigned char*)self + 0x58, &fixed, ctx, 0, 0);
+    return (float)((double)fixed / 100000.0);
 }
 
 static void __fastcall ExecSetCamHeight(void* self, void* scope)
@@ -295,7 +226,7 @@ static void __fastcall ExecSetCamHeight(void* self, void* scope)
     if (!ConsoleCmd_IsReadable((unsigned char*)cam + 0x69C, 8)) return;
 
     {
-        float want = ParamAsFloat(self);
+        float want = ParamFixedToFloat(self, scope);
         before = *(float*)((unsigned char*)cam + 0x69C);
         ((CamSetHeightFn)(img + RVA_CAM_SETH))(cam, want);
         after = *(float*)((unsigned char*)cam + 0x69C);
