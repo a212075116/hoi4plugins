@@ -129,8 +129,121 @@ static long long __fastcall Handler_SetCamHeight(CmdResult* out, CmdArgs* args)
     return (long long)out;
 }
 
+int Camera_GetLimits(void* cam, int* lo, int* hi)
+{
+    if (cam == NULL || lo == NULL || hi == NULL) return 0;
+    if (!ConsoleCmd_IsReadable((unsigned char*)cam + OFF_CAM_MINH, 8)) return 0;
+    *lo = *(int*)((unsigned char*)cam + OFF_CAM_MINH);
+    *hi = *(int*)((unsigned char*)cam + OFF_CAM_MAXH);
+    return 1;
+}
+
+int Camera_SetLowerLimit(void* cam, int lo)
+{
+    if (cam == NULL) return 0;
+    if (!ConsoleCmd_IsReadable((unsigned char*)cam + OFF_CAM_MINH, 4)) return 0;
+    if (lo < 0) lo = 0;
+    *(int*)((unsigned char*)cam + OFF_CAM_MINH) = lo;
+    return 1;
+}
+
+int Camera_SetUpperLimit(void* cam, int hi)
+{
+    if (cam == NULL) return 0;
+    if (!ConsoleCmd_IsReadable((unsigned char*)cam + OFF_CAM_MAXH, 4)) return 0;
+    if (hi < 1) hi = 1;
+    *(int*)((unsigned char*)cam + OFF_CAM_MAXH) = hi;
+    return 1;
+}
+
+static long long __fastcall Handler_SetLowerLimit(CmdResult* out, CmdArgs* args)
+{
+    unsigned char* cam;
+    char arg[128];
+    float want;
+    int lo;
+    int hi;
+
+    if (out == NULL) return 0;
+    ConsoleCmd_InitResult(out);
+    cam = CamObj();
+    if (cam == NULL) {
+        ConsoleCmd_SetMessage(out, "Camera lower limit is unknown");
+        return (long long)out;
+    }
+    if (!Camera_GetLimits(cam, &lo, &hi)) {
+        ConsoleCmd_SetMessage(out, "Camera lower limit is unreadable");
+        return (long long)out;
+    }
+    if (!ConsoleCmd_GetArg(args, 0, arg, sizeof(arg))) {
+        char msg[160];
+        _snprintf_s(msg, sizeof(msg), _TRUNCATE, "Currently,Camera Lower Limit is %d", lo);
+        ConsoleCmd_SetMessage(out, msg);
+        out->ok = 1;
+        return (long long)out;
+    }
+    if (!ParseFloat(arg, &want)) {
+        ConsoleCmd_SetMessage(out, "Camera Lower Limit is unchanged");
+        return (long long)out;
+    }
+    Camera_SetLowerLimit(cam, (int)want);
+    Camera_GetLimits(cam, &lo, &hi);
+    {
+        char msg[160];
+        _snprintf_s(msg, sizeof(msg), _TRUNCATE, "Currently,Camera Lower Limit is %d", lo);
+        ConsoleCmd_SetMessage(out, msg);
+        out->ok = 1;
+        Plugin_Log("[setcamlower] arg=%s -> lo=%d hi=%d", arg, lo, hi);
+    }
+    return (long long)out;
+}
+
+static long long __fastcall Handler_SetUpperLimit(CmdResult* out, CmdArgs* args)
+{
+    unsigned char* cam;
+    char arg[128];
+    float want;
+    int lo;
+    int hi;
+
+    if (out == NULL) return 0;
+    ConsoleCmd_InitResult(out);
+    cam = CamObj();
+    if (cam == NULL) {
+        ConsoleCmd_SetMessage(out, "Camera upper limit is unknown");
+        return (long long)out;
+    }
+    if (!Camera_GetLimits(cam, &lo, &hi)) {
+        ConsoleCmd_SetMessage(out, "Camera upper limit is unreadable");
+        return (long long)out;
+    }
+    if (!ConsoleCmd_GetArg(args, 0, arg, sizeof(arg))) {
+        char msg[160];
+        _snprintf_s(msg, sizeof(msg), _TRUNCATE, "Currently,Camera Upper Limit is %d", hi);
+        ConsoleCmd_SetMessage(out, msg);
+        out->ok = 1;
+        return (long long)out;
+    }
+    if (!ParseFloat(arg, &want)) {
+        ConsoleCmd_SetMessage(out, "Camera Upper Limit is unchanged");
+        return (long long)out;
+    }
+    Camera_SetUpperLimit(cam, (int)want);
+    Camera_GetLimits(cam, &lo, &hi);
+    {
+        char msg[160];
+        _snprintf_s(msg, sizeof(msg), _TRUNCATE, "Currently,Camera Upper Limit is %d", hi);
+        ConsoleCmd_SetMessage(out, msg);
+        out->ok = 1;
+        Plugin_Log("[setcamupper] arg=%s -> lo=%d hi=%d", arg, lo, hi);
+    }
+    return (long long)out;
+}
+
 static const CmdDef kCamCmds[] = {
     { "setcamheight", "Set camera height", "sch", 1, { "<height>" }, &Handler_SetCamHeight },
+    { "setcameraheight_lowerlimit", "Set camera height lower limit", "schll", 1, { "<value>" }, &Handler_SetLowerLimit },
+    { "setcameraheight_upperlimit", "Set camera height upper limit", "schul", 1, { "<value>" }, &Handler_SetUpperLimit },
 };
 
 unsigned char* Camera_GetObject(void)

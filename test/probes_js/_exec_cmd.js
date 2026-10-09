@@ -118,6 +118,25 @@ rpc.exports = {
     } catch (e) { return -1.0; }
   },
 
+  // 读摄像机高度与相邻字段的原始字节 (判断 int / float)
+  camLimits: function () {
+    const base = Process.getModuleByName('hoi4.exe').base;
+    const idler = base.add(0x332F698).readPointer();
+    if (idler.isNull()) return 'idler NULL';
+    const cam = idler.add(0x750).readPointer();
+    if (cam.isNull()) return 'cam NULL';
+    const out = [];
+    const offs = [0x69C, 0x6D0, 0x6D4, 0x6D8, 0x6DC, 0x6F4, 0x6F8, 0x6FC];
+    for (let k = 0; k < offs.length; k++) {
+      const o = offs[k];
+      out.push('  +0x' + o.toString(16) +
+               '  u32=' + cam.add(o).readU32() +
+               '  i32=' + cam.add(o).readS32() +
+               '  f32=' + cam.add(o).readFloat().toFixed(4));
+    }
+    return out.join('\n');
+  },
+
   // 读摄像机当前状态
   cam: function () {
     const base = Process.getModuleByName('hoi4.exe').base;
