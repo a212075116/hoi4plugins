@@ -1,0 +1,261 @@
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <string.h>
+
+#include "console_cmd.h"
+
+#define RVA_CMD_MANAGER   0x35E1A80u
+#define RVA_CMDTBL_MERGE  0x24B4920u
+#define RVA_CMDMGR_INIT   0x24B4C40u
+#define RVA_STR_ASSIGN    0x129CA0u
+
+typedef char assert_cmdstring[(sizeof(CmdString) == 32) ? 1 : -1];
+typedef char assert_cmdentry [(sizeof(CmdEntry)  == 456) ? 1 : -1];
+
+static void DefaultLog(const char* fmt, ...) {
+    char buf[2048];
+    char path[MAX_PATH];
+    SYSTEMTIME st;
+    HANDLE h;
+    DWORD written = 0;
+    va_list ap;
+    int n;
+
+    va_start(ap, fmt);
+    n = _vsnprintf_s(buf, sizeof(buf), _TRUNCATE, fmt, ap);
+    va_end(ap);
+    if (n < 0) return;
+
+    GetLocalTime(&st);
+    _snprintf_s(path, sizeof(path), _TRUNCATE, "%s/console_cmd.log",
+                "D:/SteamLibrary/steamapps/common/Hearts of Iron IV/reports");
+    h = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                    NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE) return;
+    {
+        char line[2304];
+        int m = _snprintf_s(line, sizeof(line), _TRUNCATE,
+                            "[%02d:%02d:%02d.%03d] %s\r\n",
+                            st.wHour, st.wMinute, st.wSecond, st.wMilliseconds, buf);
+        if (m > 0) WriteFile(h, line, (DWORD)m, &written, NULL);
+    }
+    CloseHandle(h);
+}
+
+CmdLogFn g_CmdLog = DefaultLog;
+
+int ConsoleCmd_IsReadable(const void* p, size_t n) {
+    MEMORY_BASIC_INFORMATION mbi;
+    const unsigned char* end;
+    DWORD readable;
+
+    if (p == NULL) return 0;
+    if (VirtualQuery(p, &mbi, sizeof(mbi)) == 0) return 0;
+    if (mbi.State != MEM_COMMIT) return 0;
+    if (mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD)) return 0;
+    readable = PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY
+             | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY;
+    if ((mbi.Protect & readable) == 0) return 0;
+    end = (const unsigned char*)p + n;
+    if (end < (const unsigned char*)p) return 0;
+    if (end > (const unsigned char*)mbi.BaseAddress + mbi.RegionSize) return 0;
+    return 1;
+}
+
+void ConsoleCmd_InitResult(CmdResult* out) {
+    if (out == NULL) return;
+    out->ok = 0;
+    out->message.u.buf[0] = 0;
+    out->message.size = 0;
+    out->message.cap  = 15;
+}
+
+static void WriteShort(CmdString* s, const char* str) {
+    size_t n = 0;
+    while (str[n] != 0) ++n;
+    if (n > CMD_SSO_MAX) n = CMD_SSO_MAX;
+    s->size = n;
+    s->cap  = 15;
+    memcpy(s->u.buf, str, n);
+    s->u.buf[n] = 0;
+}
+
+void ConsoleCmd_SetMessage(CmdResult* out, const char* s) {
+    HMODULE base;
+    typedef void** (__fastcall *AssignFn)(void** dst, const void* src, size_t len);
+    AssignFn assign;
+    size_t n;
+
+    if (out == NULL || s == NULL) return;
+
+    if (out->message.cap != 15 && out->message.cap != 0) {
+
+    }
+    if (out->message.cap == 0) {
+        out->message.u.buf[0] = 0;
+        out->message.size = 0;
+        out->message.cap  = 15;
+    }
+
+    n = 0;
+    while (s[n] != 0) ++n;
+
+    if (n <= CMD_SSO_MAX) {
+        WriteShort(&out->message, s);
+        return;
+    }
+
+    base = GetModuleHandleA(NULL);
+    if (base == NULL) { WriteShort(&out->message, s); return; }
+    assign = (AssignFn)((unsigned char*)base + RVA_STR_ASSIGN);
+    assign((void**)&out->message, s, n);
+}
+
+int ConsoleCmd_GetArg(CmdArgs* args, int i, char* dst, size_t dstn) {
+    CmdString* e;
+    if (args == NULL || dst == NULL || dstn == 0) return 0;
+    if (i < 0 || i >= args->count || args->count > CMD_MAX_ARGS) return 0;
+    if (args->data == NULL || !ConsoleCmd_IsReadable(args->data, 32)) return 0;
+    e = (CmdString*)((char*)args->data + (size_t)i * sizeof(CmdString));
+    if (!ConsoleCmd_IsReadable(e, 32)) return 0;
+
+    if (e->cap <= CMD_SSO_MAX) {
+        size_t k;
+        for (k = 0; k + 1 < dstn && k < CMD_SSO_MAX; ++k) {
+            char c = e->u.buf[k];
+            if (c == 0) break;
+            dst[k] = c;
+        }
+        dst[k] = 0;
+        return k > 0;
+    }
+    if (e->cap < 4096 && e->size < 512) {
+        const char* sp = e->u.ptr;
+        size_t k;
+        if (!ConsoleCmd_IsReadable(sp, e->size + 1)) return 0;
+        for (k = 0; k + 1 < dstn && k < e->size; ++k) dst[k] = sp[k];
+        dst[k] = 0;
+        return k > 0;
+    }
+    return 0;
+}
+
+static void FillEntry(CmdEntry* e, const CmdDef* d) {
+    memset(e, 0, sizeof(*e));
+    e->flag     = 1;
+    e->handler  = (void*)d->handler;
+    e->argCount = d->argCount;
+    WriteShort(&e->name, d->name);
+    WriteShort(&e->usage, d->usage ? d->usage : "");
+    WriteShort(&e->description, d->description ? d->description : "");
+    if (d->argCount > 0) {
+        int i;
+        for (i = 0; i < d->argCount && i < CMD_MAX_ARGS; ++i) {
+            if (d->argNames[i] != NULL) WriteShort(&e->args[i], d->argNames[i]);
+        }
+    }
+}
+
+static int CheckDef(const CmdDef* d) {
+    static const char* kFields[4] = { "name", "usage", "description", "argName" };
+    const char* vals[4];
+    int k;
+
+    if (d->name == NULL || d->handler == NULL) {
+        g_CmdLog("[cmdreg] skip: name or handler is null");
+        return 0;
+    }
+    if (d->argCount < 0 || d->argCount > CMD_MAX_ARGS) {
+        g_CmdLog("[cmdreg] skip %s: argCount=%d out of [0,%d]",
+                 d->name, d->argCount, CMD_MAX_ARGS);
+        return 0;
+    }
+    vals[0] = d->name;
+    vals[1] = d->usage ? d->usage : "";
+    vals[2] = d->description ? d->description : "";
+    for (k = 0; k < 3; ++k) {
+        size_t n = 0;
+        while (vals[k][n] != 0) ++n;
+        if (n > CMD_SSO_MAX) {
+            g_CmdLog("[cmdreg] skip %s: %s len %llu > SSO max %d",
+                     d->name, kFields[k], (unsigned long long)n, CMD_SSO_MAX);
+            return 0;
+        }
+    }
+    for (k = 0; k < d->argCount; ++k) {
+        if (d->argNames[k] != NULL) {
+            size_t n = 0;
+            while (d->argNames[k][n] != 0) ++n;
+            if (n > CMD_SSO_MAX) {
+                g_CmdLog("[cmdreg] skip %s: argNames[%d] len %llu > SSO max %d",
+                         d->name, k, (unsigned long long)n, CMD_SSO_MAX);
+                return 0;
+            }
+        }
+    }
+    return 1;
+}
+
+int ConsoleCmd_RegisterAll(const CmdDef* defs, int n) {
+    HMODULE base;
+    unsigned char* img;
+    void** mgrSlot;
+    void* mgr;
+    typedef void (*MergeFn)(void* mgr, CmdTable* src);
+    typedef void (*InitFn)(void);
+    static CmdEntry entries[16];
+    static CmdTable  table;
+    int i;
+    int ok = 0;
+
+    if (defs == NULL || n <= 0) return 0;
+    if (n > (int)(sizeof(entries) / sizeof(entries[0]))) {
+        g_CmdLog("[cmdreg] max %d per call, got %d",
+                 (int)(sizeof(entries) / sizeof(entries[0])), n);
+        return 0;
+    }
+
+    base = GetModuleHandleA(NULL);
+    if (base == NULL) { g_CmdLog("[cmdreg] no main module base"); return 0; }
+    img = (unsigned char*)base;
+
+    mgrSlot = (void**)(img + RVA_CMD_MANAGER);
+    if (!ConsoleCmd_IsReadable(mgrSlot, sizeof(void*))) {
+        g_CmdLog("[cmdreg] manager slot %p unreadable", (void*)mgrSlot);
+        return 0;
+    }
+    if (*mgrSlot == NULL) {
+        InitFn init = (InitFn)(img + RVA_CMDMGR_INIT);
+        g_CmdLog("[cmdreg] manager not built, init %p", (void*)init);
+        init();
+    }
+    mgr = *mgrSlot;
+    if (mgr == NULL) { g_CmdLog("[cmdreg] manager still null, abort"); return 0; }
+
+    g_CmdLog("[cmdreg] manager = %p (count=%d capacity=%d)",
+             mgr, *(int*)((char*)mgr + 12), *(int*)((char*)mgr + 8));
+
+    for (i = 0; i < n; ++i) {
+        if (!CheckDef(&defs[i])) continue;
+        FillEntry(&entries[ok], &defs[i]);
+        g_CmdLog("[cmdreg] + [%d] \"%s\" desc=\"%s\" argc=%d handler=%p",
+                 ok, defs[i].name, defs[i].description ? defs[i].description : "",
+                 defs[i].argCount, (void*)defs[i].handler);
+        ++ok;
+    }
+    if (ok == 0) { g_CmdLog("[cmdreg] nothing passed checks, abort"); return 0; }
+
+    table.data     = entries;
+    table.capacity = ok;
+    table.count    = ok;
+
+    {
+        MergeFn merge = (MergeFn)(img + RVA_CMDTBL_MERGE);
+        g_CmdLog("[cmdreg] merge %p with %d entry(ies)", (void*)merge, ok);
+        merge(mgr, &table);
+    }
+    g_CmdLog("[cmdreg] done: count=%d", *(int*)((char*)mgr + 12));
+    return ok;
+}

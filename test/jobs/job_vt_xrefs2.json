@@ -1,0 +1,9 @@
+{
+  "output": "D:/SteamLibrary/steamapps/common/Hearts of Iron IV/reports/vt_xrefs2.log",
+  "targets": [
+    "??_7CGui@@6B@",
+    "??_7CButtonWrapper@@6B@",
+    "??_7CButtonObserverGlue@@6B@",
+    "??_7CGuiAnimationReloader@@6B@"
+  ]
+}

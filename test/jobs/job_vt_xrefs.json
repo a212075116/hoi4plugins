@@ -1,0 +1,9 @@
+{
+  "output": "D:/SteamLibrary/steamapps/common/Hearts of Iron IV/reports/vt_xrefs.log",
+  "targets": [
+    "??_7CUnit@@6B@",
+    "??_7CEffect@@6B@",
+    "??_7CPdxMouse@@6B@",
+    "??_7CScriptedEffectTemplate@@6B@"
+  ]
+}

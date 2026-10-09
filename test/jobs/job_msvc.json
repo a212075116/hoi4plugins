@@ -1,0 +1,24 @@
+{
+  "signatures": [
+    "D:/SteamLibrary/steamapps/common/Hearts of Iron IV/ida/FLIRTDB/cmt/windows/libcmt_15_msvc_arm.sig",
+    "D:/SteamLibrary/steamapps/common/Hearts of Iron IV/ida/FLIRTDB/cmt/windows/libcmt_15_msvc_x64.sig",
+    "D:/SteamLibrary/steamapps/common/Hearts of Iron IV/ida/FLIRTDB/cmt/windows/libcmt_15_msvc_x86.sig",
+    "D:/SteamLibrary/steamapps/common/Hearts of Iron IV/ida/FLIRTDB/cmt/windows/libcmtd_15_msvc_arm.sig",
+    "D:/SteamLibrary/steamapps/common/Hearts of Iron IV/ida/FLIRTDB/cmt/windows/libcmtd_15_msvc_x64.sig",
+    "D:/SteamLibrary/steamapps/common/Hearts of Iron IV/ida/FLIRTDB/cmt/windows/libcmtd_15_msvc_x86.sig",
+    "D:/SteamLibrary/steamapps/common/Hearts of Iron IV/ida/FLIRTDB/cpmt/windows/libcpmt_15_msvc_64.sig",
+    "D:/SteamLibrary/steamapps/common/Hearts of Iron IV/ida/FLIRTDB/cpmt/windows/libcpmt_15_msvc_arm.sig",
+    "D:/SteamLibrary/steamapps/common/Hearts of Iron IV/ida/FLIRTDB/cpmt/windows/libcpmt_15_msvc_x86.sig",
+    "D:/SteamLibrary/steamapps/common/Hearts of Iron IV/ida/FLIRTDB/cpmt/windows/libcpmtd_15_msvc_64.sig",
+    "D:/SteamLibrary/steamapps/common/Hearts of Iron IV/ida/FLIRTDB/cpmt/windows/libcpmtd_15_msvc_arm.sig",
+    "D:/SteamLibrary/steamapps/common/Hearts of Iron IV/ida/FLIRTDB/cpmt/windows/libcpmtd_15_msvc_x86.sig",
+    "D:/SteamLibrary/steamapps/common/Hearts of Iron IV/ida/FLIRTDB/vcruntime/windows/libvcruntime_15_msvc_arm.sig",
+    "D:/SteamLibrary/steamapps/common/Hearts of Iron IV/ida/FLIRTDB/vcruntime/windows/libvcruntime_15_msvc_x64.sig",
+    "D:/SteamLibrary/steamapps/common/Hearts of Iron IV/ida/FLIRTDB/vcruntime/windows/libvcruntime_15_msvc_x86.sig",
+    "D:/SteamLibrary/steamapps/common/Hearts of Iron IV/ida/FLIRTDB/vcruntime/windows/libvcruntimed_15_msvc_arm.sig",
+    "D:/SteamLibrary/steamapps/common/Hearts of Iron IV/ida/FLIRTDB/vcruntime/windows/libvcruntimed_15_msvc_x64.sig",
+    "D:/SteamLibrary/steamapps/common/Hearts of Iron IV/ida/FLIRTDB/vcruntime/windows/libvcruntimed_15_msvc_x86.sig"
+  ],
+  "output": "D:/SteamLibrary/steamapps/common/Hearts of Iron IV/reports/run_msvc.log",
+  "json": "D:/SteamLibrary/steamapps/common/Hearts of Iron IV/reports/run_msvc.json"
+}
