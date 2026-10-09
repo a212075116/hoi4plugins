@@ -202,3 +202,57 @@
     }
 
 **已有的 `Camera_SetHeight`（调 `sub_1412643F0`）可以直接复用。**
+## 五、运行期实测记录（2026-10-09）
+
+### 环境就绪确认
+
+    hoi4 base = 0x7ff6f3cc0000
+    lexer initialized (0x1435E1AB0)       = 1     ✓
+    lexer sync initialized (0x1435E1AB1)  = 1     ✓
+    dyn count (dword_1435E1ACC)           = 50280   ← 游戏自己已注册 5 万个
+    dyn data  (qword_1435E1AC0)           = 0x211d0d73040
+    name table(qword_1435E1AE0)           = 0x2116f34d040
+
+**50280 这个数字本身就是证据**：游戏运行到进地图时，已动态注册了 5 万个 token。
+
+### 注册测试
+
+    AddDynamicToken("set_camera_height")
+      out_id = 70279
+
+**新 id 的算法**：`70279 = 50280(count) + 1 + 19998(base)`
+
+### 验证（三项全过）
+
+| 验证 | 结果 |
+|---|---|
+| token 真的进表（用 id 反查名字） | `id 70279 -> "set_camera_height"` ✓ |
+| id 递增 | 再注册 `my_test_token_xyz` 得到 70280 ✓ |
+| 幂等 | 重复注册 `set_camera_height` 仍返回 70279 ✓ |
+
+注册期间游戏进程存活（pid 50684，4571 MB）。
+
+### 调用方式（Frida 原型）
+
+    // 注意: IDA 里给的地址是绝对地址(基址 0x140000000), 必须换算成 RVA
+    //       这是本次踩过的坑 —— 直接 base.add(0x1435E1AB0) 会算到模块外
+    function img(ea) { return Process.getModuleByName('hoi4.exe').base.add(ea - 0x140000000); }
+
+    const outId = Memory.alloc(8);
+    const strBuf = Memory.allocUtf8String('set_camera_height');
+    const view = Memory.alloc(16);          // { char* data; size_t len }
+    view.writePointer(strBuf);
+    view.add(8).writeU64(name.length);
+    new NativeFunction(img(0x1424BB460), 'pointer', ['pointer','pointer','pointer'])(outId, view, ptr(0));
+
+探针：`test/probes_js/_addtoken.js`
+
+## 六、还剩什么
+
+| 步骤 | 状态 |
+|---|---|
+| 1 注册 token 名字 | **✓ 已完成并验证** |
+| 2 构造 entry + 工厂虚表 | 待做 |
+| 3 构造实例 + 执行虚表 | 待做 |
+| 4 注册进 `_EffectEntries` | 待做 |
+| 5 触发并验证设置了摄像头高度 | 待做（最终标准） |

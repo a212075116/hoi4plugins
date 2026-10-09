@@ -1,0 +1,20 @@
+import sys, time, importlib.util, os
+os.chdir(r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV')
+spec = importlib.util.spec_from_file_location('fh', r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/probes_frida/frida_host.py')
+fh = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(fh)
+pid, session, sc, fresh = fh.connect(r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/probes_js/_addtoken.js', force_spawn=False)
+time.sleep(0.5)
+e = sc.exports_sync
+print('=== 注册前 ===')
+print('  dyn count = ' + str(sc.exports_sync.probe().split(chr(10))[3]))
+print()
+print('=== 调 AddDynamicToken 注册 set_camera_height ===')
+print(e.addToken('set_camera_height'))
+print()
+print('=== 注册后 dyn count ===')
+print('  ' + sc.exports_sync.probe().split(chr(10))[3])
+print()
+print('=== 用 id 反查名字验证 ===')
+for i in (50281, 50282, 50283, 50280):
+    print('  ' + e.nameOfId(i))
