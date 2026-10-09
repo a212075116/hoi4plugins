@@ -10,8 +10,10 @@
 #include "effect_reg.h"
 #include "file_redirect.h"
 #include "process_block.h"
+#include "gamedate.h"
 
 int EffectCameras_Register(void);
+int EffectGameDate_Register(void);
 
 #define RVA_GS_GLOBAL   0x332F260u
 #define RVA_VT_MAIN     0x2721158u
@@ -172,6 +174,10 @@ static DWORD WINAPI PluginThread(LPVOID p)
                     Plugin_Log("[plugin] effects registered at poll %d, count=%d",
                                round, Effect_RegistryRegisteredCount());
                 }
+                if (ok) {
+                    int nd = EffectGameDate_Register();
+                    Plugin_Log("[plugin] date effects registered: %d", nd);
+                }
             }
             if (!ok) Sleep(10);
         }
@@ -190,6 +196,11 @@ static DWORD WINAPI PluginThread(LPVOID p)
     {
         int n = Camera_RegisterCommands();
         Plugin_Log("[plugin] Camera_RegisterCommands -> %d", n);
+    }
+
+    {
+        int n = GameDate_RegisterCommands();
+        Plugin_Log("[plugin] GameDate_RegisterCommands -> %d", n);
     }
 
     {

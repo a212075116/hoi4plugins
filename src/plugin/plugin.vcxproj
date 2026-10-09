@@ -48,7 +48,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)SDK_RVA\camera;$(ProjectDir)SDK_RVA\console;$(ProjectDir)SDK_RVA\effect;$(ProjectDir)SDK_RVA\hook;..\carrier;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)SDK_RVA\camera;$(ProjectDir)SDK_RVA\console;$(ProjectDir)SDK_RVA\effect;$(ProjectDir)SDK_RVA\gamedate;$(ProjectDir)SDK_RVA\hook;..\carrier;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -64,7 +64,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)SDK_RVA\camera;$(ProjectDir)SDK_RVA\console;$(ProjectDir)SDK_RVA\effect;$(ProjectDir)SDK_RVA\hook;..\carrier;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)SDK_RVA\camera;$(ProjectDir)SDK_RVA\console;$(ProjectDir)SDK_RVA\effect;$(ProjectDir)SDK_RVA\gamedate;$(ProjectDir)SDK_RVA\hook;..\carrier;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -82,6 +82,8 @@
     <ClCompile Include="SDK_RVA\effect\effect_camera.c" />
     <ClCompile Include="SDK_RVA\hook\file_redirect.c" />
     <ClCompile Include="SDK_RVA\hook\process_block.c" />
+    <ClCompile Include="SDK_RVA\gamedate\gamedate.c" />
+    <ClCompile Include="SDK_RVA\effect\effect_gamedate.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="SDK_RVA\console\console_cmd.h" />
@@ -89,6 +91,8 @@
     <ClInclude Include="SDK_RVA\effect\effect_reg.h" />
     <ClInclude Include="SDK_RVA\hook\file_redirect.h" />
     <ClInclude Include="SDK_RVA\hook\process_block.h" />
+    <ClInclude Include="SDK_RVA\gamedate\gamedate.h" />
+    <ClInclude Include="SDK_RVA\effect\effect_gamedate.h" />
   </ItemGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

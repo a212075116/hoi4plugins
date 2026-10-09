@@ -1,0 +1,17 @@
+import sys, time, importlib.util
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
+spec = importlib.util.spec_from_file_location('fh', r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/probes_frida/frida_host.py')
+fh = importlib.util.module_from_spec(spec); spec.loader.exec_module(fh)
+pid, session, sc, fresh = fh.connect(r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/probes_js/_dparse.js', force_spawn=False)
+print('fresh=%s' % fresh, flush=True)
+e = sc.exports_sync
+time.sleep(0.5)
+print(e.tab(), flush=True)
+print(e.gsdate(), flush=True)
+print(e.callParse('510.6.7.0'), flush=True)
+time.sleep(1)
+print(e.gsdate(), flush=True)
+print(e.callParse('500.1.1.0'), flush=True)
+time.sleep(1)
+print(e.gsdate(), flush=True)
+fh.detach(session)
