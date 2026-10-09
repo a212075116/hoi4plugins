@@ -9,6 +9,8 @@
 #include "camera_height.h"
 #include "effect_reg.h"
 
+int EffectCameras_Register(void);
+
 #define RVA_GS_GLOBAL   0x332F260u
 #define RVA_VT_MAIN     0x2721158u
 #define RVA_VT_SEC      0x27211B0u
@@ -147,15 +149,15 @@ static DWORD WINAPI PluginThread(LPVOID p)
         int ok = 0;
         int readyAt = -1;
         for (round = 0; round < 3000 && !ok; ++round) {
-            if (Effect_LexerReady()) {
+            if (Effect_RegistryReady()) {
                 if (readyAt < 0) {
                     readyAt = round;
                     Plugin_Log("[plugin] lexer ready at poll %d", round);
                 }
-                ok = Effect_RegisterCameraHeight();
+                ok = (EffectCameras_Register() > 0);
                 if (ok) {
-                    Plugin_Log("[plugin] camera height effect registered at poll %d, tokenId=%d",
-                               round, Effect_GetTokenId());
+                    Plugin_Log("[plugin] effects registered at poll %d, count=%d",
+                               round, Effect_RegistryRegisteredCount());
                 }
             }
             if (!ok) Sleep(10);

@@ -4,7 +4,6 @@
 
 #include "carrier.h"
 #include "console_cmd.h"
-#include "camera_height.h"
 #include "effect_reg.h"
 
 extern void Plugin_Log(const char* fmt, ...);
@@ -12,23 +11,22 @@ extern void Plugin_Log(const char* fmt, ...);
 typedef void* (__fastcall *AddTokenFn)(void* outId, void* view, void* a3);
 typedef void* (__fastcall *StabFactoryFn)(void);
 typedef void* (__fastcall *RegEntryFn)(void* map, int id, void* entry);
-typedef void  (__fastcall *CamSetHeightFn)(void* cam, float h);
-typedef char  assert_effectsize[(sizeof(void*) == 8) ? 1 : -1];
+typedef void* (__fastcall *GetParamFn)(void* a1, void* out, void* ctx, long long a4, unsigned char a5);
+typedef void* (__fastcall *PackKeyFn)(void* out, const char* key, void* params, int count);
+typedef void* (__fastcall *FormatFn)(void* out, void* ctx, void* packed);
+typedef void  (__fastcall *ParamCtorFn)(void* p);
+typedef void  (__fastcall *ParamDtorFn)(void* p);
+typedef void  (__fastcall *StrAppendFn)(void* str, unsigned long long n);
+typedef char  assert_ptr64[(sizeof(void*) == 8) ? 1 : -1];
 
-static void* g_execVt[EFF_VT_SLOTS];
-static void* g_entryVt[2];
-static unsigned char g_entry[16];
-static int   g_tokenId = 0;
-static int   g_installed = 0;
-static int   g_execCalls = 0;
-static int   g_registerAttempts = 0;
+static int g_registeredCount = 0;
 
 static unsigned char* Img(void)
 {
     return (unsigned char*)GetModuleHandleA(NULL);
 }
 
-int Effect_LexerReady(void)
+int Effect_RegistryReady(void)
 {
     unsigned char* img = Img();
     if (img == NULL) return 0;
@@ -38,100 +36,84 @@ int Effect_LexerReady(void)
     return 1;
 }
 
-int Effect_AddToken(const char* name, int* outId)
+static int AddToken(const char* name, int* outId)
 {
     struct NameView { const char* data; unsigned long long len; } view;
-    unsigned char* img;
+    unsigned char* img = Img();
     AddTokenFn fn;
     int id = 0;
     unsigned long long n = 0;
 
-    if (name == NULL || outId == NULL) return 0;
-    img = Img();
-    if (img == NULL) return 0;
-    if (!Effect_LexerReady()) return 0;
+    if (img == NULL || name == NULL || outId == NULL) return 0;
     if (!ConsoleCmd_IsReadable(img + RVA_ADD_TOKEN, 16)) return 0;
-
     while (name[n] != 0) ++n;
     if (n == 0) return 0;
+
     view.data = name;
     view.len  = n;
-
     fn = (AddTokenFn)(img + RVA_ADD_TOKEN);
     fn(&id, &view, NULL);
     *outId = id;
     return id != 0;
 }
 
-typedef void* (__fastcall *GetParamFn)(void* a1, void* out, void* ctx, long long a4, unsigned char a5);
-typedef void* (__fastcall *PackKeyFn)(void* out, const char* key, void* params, int count);
-typedef void* (__fastcall *FormatFn)(void* out, void* ctx, void* packed);
-typedef void  (__fastcall *ParamCtorFn)(void* p);
-typedef void  (__fastcall *ParamDtorFn)(void* p);
-typedef void* (__fastcall *OrigTooltipFn)(void* self, void* out, void* ctx);
-typedef void  (__fastcall *StrAppendFn)(void* str, unsigned long long n);
+void* Effect_NewInstance(void* vt)
+{
+    unsigned char* img = Img();
+    StabFactoryFn make;
+    void* inst;
 
-static const char* g_locKey = "EFFECT_SET_CAMERA_HEIGHT";
-static int g_tipMode = 0;
-static int g_tipCalls = 0;
+    if (img == NULL || vt == NULL) return NULL;
+    if (!ConsoleCmd_IsReadable(img + RVA_STAB_FACTORY, 16)) return NULL;
+    make = (StabFactoryFn)(img + RVA_STAB_FACTORY);
+    inst = make();
+    if (inst != NULL) *(void**)inst = vt;
+    return inst;
+}
 
-static void* __fastcall MyGetTooltip(void* self, void* out, void* ctx)
+float Effect_ParamFloat(void* self, void* ctx)
+{
+    unsigned char* img = Img();
+    long long fixed = 0;
+
+    if (img == NULL || self == NULL) return 0.0f;
+    if (!ConsoleCmd_IsReadable(img + RVA_EFF_GETPARAM, 16)) return 0.0f;
+    ((GetParamFn)(img + RVA_EFF_GETPARAM))((unsigned char*)self + 0x58, &fixed, ctx, 0, 0);
+    return (float)((double)fixed / EFF_FIXED_SCALE);
+}
+
+void* Effect_BuildTooltip(void* self, void* out, void* ctx, const char* locKey)
 {
     unsigned char* img = Img();
     unsigned char paramDesc[EFF_PARAMDESC_SIZE];
     unsigned char packed[32];
     unsigned char fin[32];
-    long long v18 = 0;
     unsigned long long sz;
     unsigned long long cap;
     unsigned char* src;
     unsigned char* dst;
     unsigned long long i;
 
-    if (img == NULL) return out;
-
-    ++g_tipCalls;
-
-    if (g_tipMode == 1) {
-        return ((OrigTooltipFn)(img + RVA_STAB_TOOLTIP))(self, out, ctx);
-    }
-
+    if (img == NULL || out == NULL) return out;
+    if (locKey == NULL) locKey = "";
     if (!ConsoleCmd_IsReadable(img + RVA_EFF_PACKKEY, 16)) return out;
 
     memset(paramDesc, 0, sizeof(paramDesc));
     memset(packed, 0, sizeof(packed));
     memset(fin, 0, sizeof(fin));
-    (void)v18;
 
     {
         long long fixed = 0;
-
         ((GetParamFn)(img + RVA_EFF_GETPARAM))((unsigned char*)self + 0x58, &fixed, ctx, 0, 0);
-
         ((ParamCtorFn)(img + RVA_EFF_PARAM_CTOR))(paramDesc);
         *(int*)(paramDesc + 0x00) = 9;
         *(void**)(paramDesc + 0x08) = (void*)(img + RVA_EFF_PARAM_TAG);
         *(long long*)(paramDesc + 0x50) = fixed;
-        ((PackKeyFn)(img + RVA_EFF_PACKKEY))(packed, g_locKey, paramDesc, 1);
+        ((PackKeyFn)(img + RVA_EFF_PACKKEY))(packed, locKey, paramDesc, 1);
         ((ParamDtorFn)(img + RVA_EFF_PARAM_DTOR))(paramDesc);
     }
 
-    if (g_tipCalls <= 8) {
-        unsigned long long pkSz = *(unsigned long long*)(packed + 0x10);
-        unsigned long long pkCap = *(unsigned long long*)(packed + 0x18);
-        unsigned char* pk = (pkCap <= EFF_SSO_MAX) ? packed : *(unsigned char**)packed;
-        if (pkSz < 200) Plugin_Log("[efftip] call#%d packed=[%s] sz=%llu cap=%llu",
-                                   g_tipCalls, (char*)pk, pkSz, pkCap);
-    }
-
     ((FormatFn)(img + RVA_EFF_FORMAT))(fin, ctx, packed);
-
-    if (g_tipCalls <= 8) {
-        unsigned long long fs = *(unsigned long long*)(fin + 0x10);
-        unsigned long long fc = *(unsigned long long*)(fin + 0x18);
-        unsigned char* fp = (fc <= EFF_SSO_MAX) ? fin : *(unsigned char**)fin;
-        if (fs < 200) Plugin_Log("[efftip] call#%d formatted=[%s]", g_tipCalls, (char*)fp);
-    }
 
     sz = *(unsigned long long*)(fin + 0x10);
     cap = *(unsigned long long*)(fin + 0x18);
@@ -140,10 +122,10 @@ static void* __fastcall MyGetTooltip(void* self, void* out, void* ctx)
     *(unsigned long long*)((unsigned char*)out + 0x10) = 0;
     *(unsigned long long*)((unsigned char*)out + 0x18) = 0;
     *(unsigned long long*)out = 0;
-    *((unsigned char*)out + 0x18) = 15;
+    *((unsigned char*)out + 0x18) = EFF_SSO_MAX;
     *(unsigned char*)out = 0;
 
-    if (sz > 0 && sz < 200 && ConsoleCmd_IsReadable(src, (size_t)sz)) {
+    if (sz > 0 && sz < 400 && ConsoleCmd_IsReadable(src, (size_t)sz)) {
         ((StrAppendFn)(img + RVA_EFF_STR_APPEND))(out, sz);
         cap = *(unsigned long long*)((unsigned char*)out + 0x18);
         dst = (cap <= EFF_SSO_MAX) ? (unsigned char*)out : *(unsigned char**)out;
@@ -152,90 +134,10 @@ static void* __fastcall MyGetTooltip(void* self, void* out, void* ctx)
         *(unsigned long long*)((unsigned char*)out + 0x10) = sz;
     }
 
-    if (g_tipCalls <= 8) {
-        unsigned long long osz = *(unsigned long long*)((unsigned char*)out + 0x10);
-        unsigned long long ocap = *(unsigned long long*)((unsigned char*)out + 0x18);
-        unsigned char* op = (ocap <= EFF_SSO_MAX) ? (unsigned char*)out : *(unsigned char**)out;
-        char dtxt[256];
-        int dn = 0;
-        unsigned long long j;
-        if (osz < 200 && ConsoleCmd_IsReadable(op, (size_t)osz + 1)) {
-            for (j = 0; j < osz && dn < 240; ++j) {
-                char ch = (char)op[j];
-                dtxt[dn++] = (ch == 10 || ch == 13) ? ' ' : ch;
-            }
-            dtxt[dn] = 0;
-            Plugin_Log("[efftip] call#%d key=%s len=%llu text=[%s]",
-                       g_tipCalls, g_locKey, osz, dtxt);
-        }
-    }
-
     return out;
 }
 
-static void* __fastcall MyFactory(void)
-{
-    unsigned char* img = Img();
-    StabFactoryFn make;
-    void* inst;
-
-    if (img == NULL) return NULL;
-    if (!ConsoleCmd_IsReadable(img + RVA_STAB_FACTORY, 16)) return NULL;
-    make = (StabFactoryFn)(img + RVA_STAB_FACTORY);
-    inst = make();
-    if (inst != NULL) *(void**)inst = g_execVt;
-    return inst;
-}
-
-static float ParamFixedToFloat(void* self, void* ctx)
-{
-    unsigned char* img = Img();
-    long long fixed = 0;
-
-    if (img == NULL) return 0.0f;
-    if (!ConsoleCmd_IsReadable(img + RVA_EFF_GETPARAM, 16)) return 0.0f;
-    ((GetParamFn)(img + RVA_EFF_GETPARAM))((unsigned char*)self + 0x58, &fixed, ctx, 0, 0);
-    return (float)((double)fixed / 100000.0);
-}
-
-static void __fastcall ExecSetCamHeight(void* self, void* scope)
-{
-    unsigned char* img = Img();
-    void* idler;
-    void* cam;
-    float before;
-    float after;
-
-    (void)self;
-    (void)scope;
-    ++g_execCalls;
-
-    if (img == NULL) return;
-    if (!ConsoleCmd_IsReadable(img + RVA_CAM_SLOT, sizeof(void*))) return;
-    idler = *(void**)(img + RVA_CAM_SLOT);
-    if (idler == NULL) {
-        Plugin_Log("[eff] exec#%d idler NULL", g_execCalls);
-        return;
-    }
-    if (!ConsoleCmd_IsReadable((unsigned char*)idler + 0x750, sizeof(void*))) return;
-    cam = *(void**)((unsigned char*)idler + 0x750);
-    if (cam == NULL) {
-        Plugin_Log("[eff] exec#%d cam NULL", g_execCalls);
-        return;
-    }
-    if (!ConsoleCmd_IsReadable((unsigned char*)cam + 0x69C, 8)) return;
-
-    {
-        float want = ParamFixedToFloat(self, scope);
-        before = *(float*)((unsigned char*)cam + 0x69C);
-        ((CamSetHeightFn)(img + RVA_CAM_SETH))(cam, want);
-        after = *(float*)((unsigned char*)cam + 0x69C);
-        Plugin_Log("[eff] exec#%d setcamheight param=%.3f  %.2f -> %.2f",
-                   g_execCalls, want, before, after);
-    }
-}
-
-int Effect_Register(const char* name, const char* desc, EffectExecFn exec, int* outId)
+int Effect_RegistryRegister(EffectDef* def)
 {
     unsigned char* img;
     RegEntryFn reg;
@@ -243,70 +145,69 @@ int Effect_Register(const char* name, const char* desc, EffectExecFn exec, int* 
     int id = 0;
     int i;
 
-    if (name == NULL || desc == NULL || exec == NULL || outId == NULL) return 0;
-    if (g_installed) { *outId = g_tokenId; return 1; }
-    ++g_registerAttempts;
+    if (def == NULL) return 0;
+    if (def->state == EFF_STATE_OK) return 1;
+    if (def->name == NULL || def->desc == NULL || def->exec == NULL) {
+        def->state = EFF_STATE_FAILED;
+        return 0;
+    }
 
     img = Img();
     if (img == NULL) return 0;
-    if (!Effect_LexerReady()) {
-        Plugin_Log("[eff] lexer not ready, defer");
-        return 0;
-    }
-    if (!Effect_AddToken(name, &id)) {
-        Plugin_Log("[eff] AddToken failed: %s", name);
+    if (!Effect_RegistryReady()) return 0;
+
+    if (!AddToken(def->name, &id)) {
+        Plugin_Log("[eff] AddToken failed: %s", def->name);
+        def->state = EFF_STATE_FAILED;
         return 0;
     }
 
     for (i = 0; i < EFF_VT_SLOTS; ++i) {
-        g_execVt[i] = *(void**)(img + RVA_STAB_VT + (unsigned)i * 8);
+        def->vt[i] = *(void**)(img + RVA_STAB_VT + (unsigned)i * 8);
     }
-    g_execVt[EFF_VT_EXEC / 8] = (void*)exec;
-    g_execVt[EFF_VT_TOOLTIP / 8] = (void*)MyGetTooltip;
+    def->vt[EFF_VT_EXEC / 8]    = (void*)def->exec;
+    def->vt[EFF_VT_TOOLTIP / 8] = (void*)def->tooltip;
 
-    g_entryVt[0] = *(void**)(img + RVA_STAB_ENTRY_VT);
-    g_entryVt[1] = (void*)MyFactory;
+    def->entryVt[0] = *(void**)(img + RVA_STAB_ENTRY_VT);
+    def->entryVt[1] = (void*)def->factory;
 
-    *(void**)g_entry = g_entryVt;
-    *(const char**)(g_entry + 8) = desc;
+    *(void**)def->entry = def->entryVt;
+    *(const char**)(def->entry + 8) = def->desc;
 
     map = *(void**)(img + RVA_EFFECT_MAP);
     if (map == NULL) {
         Plugin_Log("[eff] _EffectEntries is NULL");
+        def->state = EFF_STATE_FAILED;
         return 0;
     }
     reg = (RegEntryFn)(img + RVA_REG_ENTRY);
-    reg(map, id, g_entry);
+    reg(map, id, def->entry);
 
-    g_tokenId = id;
-    g_installed = 1;
-    *outId = id;
-    Plugin_Log("[eff] registered name=%s tokenId=%d exec=%p factory=%p map=%p",
-               name, id, (void*)exec, (void*)MyFactory, map);
+    def->tokenId = id;
+    def->state = EFF_STATE_OK;
+    ++g_registeredCount;
+    Plugin_Log("[eff] + %s  tokenId=%d  loc=%s  exec=%p",
+               def->name, id, def->locKey, (void*)def->exec);
     return 1;
 }
 
-int Effect_IsCameraHeightRegistered(void)
+int Effect_RegistryRegisterAll(EffectDef** defs, int count)
 {
-    return g_installed;
-}
-int Effect_RegisterCameraHeight(void)
-{
-    int id = 0;
-    int ok;
-    ok = Effect_Register("set_camera_height",
-                         "Sets the camera height",
-                         &ExecSetCamHeight, &id);
-    if (ok) Plugin_Log("[eff] camera height effect ready, tokenId=%d", id);
+    int i;
+    int ok = 0;
+
+    if (defs == NULL || count <= 0) return 0;
+    if (!Effect_RegistryReady()) return 0;
+
+    for (i = 0; i < count; ++i) {
+        if (defs[i] == NULL) continue;
+        if (Effect_RegistryRegister(defs[i])) ++ok;
+    }
+    Plugin_Log("[eff] registry: %d/%d registered", ok, count);
     return ok;
 }
 
-int Effect_GetLastError(void)
+int Effect_RegistryRegisteredCount(void)
 {
-    return g_registerAttempts;
-}
-
-int Effect_GetTokenId(void)
-{
-    return g_tokenId;
+    return g_registeredCount;
 }

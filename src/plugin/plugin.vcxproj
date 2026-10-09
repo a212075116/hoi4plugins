@@ -79,6 +79,7 @@
     <ClCompile Include="SDK_RVA\console\console_cmd.c" />
     <ClCompile Include="SDK_RVA\camera\camera_height.c" />
     <ClCompile Include="SDK_RVA\effect\effect_reg.c" />
+    <ClCompile Include="SDK_RVA\effect\effect_camera.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="SDK_RVA\console\console_cmd.h" />
