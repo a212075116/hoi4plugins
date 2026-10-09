@@ -5,8 +5,8 @@ fh = importlib.util.module_from_spec(spec); spec.loader.exec_module(fh)
 pid, session, sc, fresh = fh.connect(r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/probes_js/_dis.js', force_spawn=False, wait=False)
 time.sleep(0.5)
 e = sc.exports_sync
-for st in (0xf9c5a0, 0xf9c5b0, 0xf9c680, 0xf9c6d0):
-    r = e.dis(st, 20)
-    print('--- 起点 %#x ---' % st)
-    print(r)
-    print()
+print('=== 0x1810c0 起 30 条 (上层调用者) ===')
+print(e.dis(0x1810c0, 30))
+print()
+print('=== 0x175b00 起 25 条 (本函数更前面, 找入口与判断) ===')
+print(e.dis(0x175b00, 25))

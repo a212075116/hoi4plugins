@@ -9,6 +9,7 @@
 #include "camera_height.h"
 #include "effect_reg.h"
 #include "file_redirect.h"
+#include "process_block.h"
 
 int EffectCameras_Register(void);
 
@@ -149,6 +150,11 @@ static DWORD WINAPI PluginThread(LPVOID p)
         int ok = FileRedirect_Install();
         Plugin_Log("[plugin] FileRedirect_Install -> %d (gameRoot=%s)",
                    ok, FileRedirect_GameRoot());
+    }
+
+    {
+        int ok = ProcBlock_Install();
+        Plugin_Log("[plugin] ProcBlock_Install -> %d", ok);
     }
 
     {

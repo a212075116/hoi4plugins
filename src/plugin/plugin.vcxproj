@@ -81,12 +81,14 @@
     <ClCompile Include="SDK_RVA\effect\effect_reg.c" />
     <ClCompile Include="SDK_RVA\effect\effect_camera.c" />
     <ClCompile Include="SDK_RVA\hook\file_redirect.c" />
+    <ClCompile Include="SDK_RVA\hook\process_block.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="SDK_RVA\console\console_cmd.h" />
     <ClInclude Include="SDK_RVA\camera\camera_height.h" />
     <ClInclude Include="SDK_RVA\effect\effect_reg.h" />
     <ClInclude Include="SDK_RVA\hook\file_redirect.h" />
+    <ClInclude Include="SDK_RVA\hook\process_block.h" />
   </ItemGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
