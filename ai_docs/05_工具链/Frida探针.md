@@ -1,6 +1,8 @@
 # Frida 探针
 
-> 脚本目录：hoi4plugins/test/（原 flirt/loader/，已迁移）
+> 脚本目录：hoi4plugins/test/
+> 宿主 frida_host.py 在 test/probes_frida/，JS 探针在 test/probes_js/
+> （早期路径为 flirt/loader/，**该目录已不存在**）
 
 ## 用途
 
@@ -9,7 +11,7 @@
 
 ## 宿主
 
-flirt/loader/frida_host.py 提供：
+test/probes_frida/frida_host.py 提供：
 
 | 函数 | 说明 |
 |---|---|

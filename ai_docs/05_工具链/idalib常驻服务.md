@@ -1,6 +1,7 @@
 # idalib 常驻服务
 
-> 脚本：flirt/idalib_server.py、flirt/idalib_cli.py
+> 脚本：test/tools/idalib_server.py、test/tools/idalib_cli.py
+> （早期路径为 `flirt/idalib_server.py`，目录 flirt/ 已不存在，见文末）
 > 数据库：hoi4plugins/sources/1.19.3/hoi4.exe.i64
 
 ## 为什么需要它
@@ -50,8 +51,8 @@ TCP 127.0.0.1:19531，一行一个 JSON 请求 -> 一行一个 JSON 响应。
 
 ## 用法
 
-    python flirt/idalib_server.py          # 后台常驻
-    python flirt/idalib_cli.py decompile 0x140DC53B0
+    python hoi4plugins/test/tools/idalib_server.py          # 后台常驻
+    python hoi4plugins/test/tools/idalib_cli.py decompile 0x140DC53B0
 
 改 .i64 路径的位置在 idalib_server.py 第 26 行的 I64 常量。
 
@@ -62,3 +63,23 @@ TCP 127.0.0.1:19531，一行一个 JSON 请求 -> 一行一个 JSON 响应。
 - handler 签名（sub_140241DF0）
 - 摄像机 getter（sub_140DC53B0）
 - CString::assign（sub_140129CA0）
+
+## 路径变更记录
+
+早期所有探针脚本都放在 `flirt/` 下（`flirt/loader/`、`flirt/`、`flirt/idalib_*.py`），
+后来重组为：
+
+| 旧路径 | 现路径 |
+|---|---|
+| `flirt/idalib_server.py` | `test/tools/idalib_server.py` |
+| `flirt/idalib_cli.py` | `test/tools/idalib_cli.py` |
+| `flirt/loader/frida_host.py` | `test/probes_frida/frida_host.py` |
+| `flirt/loader/*.js` | `test/probes_js/*.js` |
+| `flirt/脚本.py`（ida 批处理） | `test/probes_ida/*.py` |
+
+**`flirt/` 目录现已不存在。** 若在某处看到 `flirt/...` 字样：
+
+- `ai_docs/` 里若出现，说明那处还没更新，请按上表改正；
+- `test/probes_py/*.py`、`test/probes_frida/frida_*.py` 等**历史脚本**里仍留有旧路径，
+  它们大多已失效，**不要照抄**，新脚本请参照 `test/probes_js/` + `test/tools/*_run.py` 的现行写法。
+

@@ -2,27 +2,23 @@
 function M() { return Process.getModuleByName('hoi4.exe'); }
 rpc.exports = {
   ready: function () { return M().base.toString(); },
-  find: function (needle) {
+  vt: function (rva, n) {
     const m = M();
     const out = [];
-    const pat = [];
-    for (let i = 0; i < needle.length; i++) pat.push(needle.charCodeAt(i));
-    const rgs = Process.enumerateRanges('r--');
-    for (let r = 0; r < rgs.length; r++) {
-      const rg = rgs[r];
-      if (rg.size > 0x4000000) continue;
+    for (let i = 0; i < n; i++) {
       try {
-        const u8 = new Uint8Array(rg.base.readByteArray(rg.size));
-        for (let i = 0; i + pat.length < u8.length; i++) {
-          let ok = true;
-          for (let k = 0; k < pat.length; k++) if (u8[i + k] !== pat[k]) { ok = false; break; }
-          if (ok && u8[i + pat.length] === 0) {
-            out.push('rva=' + rg.base.add(i).sub(m.base).toString(16));
-            if (out.length >= 6) return out.join('  ');
-          }
-        }
-      } catch (e) { }
+        const v = m.base.add(rva + i * 8).readPointer();
+        let r = -1;
+        try { r = v.sub(m.base).toInt32(); } catch (e) { }
+        out.push('[' + i + '] +0x' + (i * 8).toString(16) + '  rva=' + (r > 0 && r < 0x3800000 ? r.toString(16) : '?'));
+      } catch (e) { out.push('[' + i + '] ERR'); }
     }
-    return out.length ? out.join('  ') : '(未找到)';
+    return out.join('\n');
+  },
+  hex: function (rva, n) {
+    const u8 = new Uint8Array(M().base.add(rva).readByteArray(n));
+    let s = '';
+    for (let i = 0; i < u8.length; i++) { s += ('0' + u8[i].toString(16)).slice(-2) + ' '; if ((i+1) % 16 === 0) s += '\n'; }
+    return s;
   }
 };

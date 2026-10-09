@@ -4,8 +4,9 @@
 # 为什么: idat.exe 每次批处理要重新加载 906MB 的 .i64 并 auto_wait, 实测 3-5 分钟;
 #          idalib 是进程内库, 加载一次后所有查询都是毫秒级。
 # 用法:
-#   python flirt/idalib_server.py            # 后台常驻, 监听 127.0.0.1:PORT
-#   python flirt/idalib_cli.py decompile 0x140DC53B0
+#   python hoi4plugins/test/tools/idalib_server.py            # 后台常驻, 监听 127.0.0.1:PORT
+#   python hoi4plugins/test/tools/idalib_cli.py decompile 0x140DC53B0
+#   (早期路径为 flirt/idalib_*.py, flirt/ 目录已不存在)
 #
 # 协议: 一行一个 JSON 请求 -> 一行一个 JSON 响应
 #   {'op':'ping'}

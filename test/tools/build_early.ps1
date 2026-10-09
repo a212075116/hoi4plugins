@@ -1,4 +1,7 @@
-﻿$ErrorActionPreference='Stop'
+# 已废弃: 本脚本构建的是早期载体方案 (CARRIER_EARLY_THREAD -> tbb_early.dll),
+#           源码路径 flirt/loader/ 已不存在, 现行载体在 src/carrier/ 并走 hoi4plugins.sln 构建。
+#           保留仅为记录历史, 不要直接使用。
+$ErrorActionPreference='Stop'
 $here = 'D:\SteamLibrary\steamapps\common\Hearts of Iron IV\flirt\loader'
 $build = Join-Path $here 'build'
 $vc = 'C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat'

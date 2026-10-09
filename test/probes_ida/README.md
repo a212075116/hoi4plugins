@@ -1,4 +1,6 @@
-# flirt/ 脚本索引
+# probes_ida 脚本索引
+
+> 早期标题为 "flirt/ 脚本索引"，目录 flirt/ 已不存在，现路径 test/probes_ida/。
 
 在 `hoi4.exe.i64` 上做 FLIRT 签名恢复与 C++ RTTI 结构恢复的全部脚本。
 所有脚本都通过 `FLIRT_JOB` 环境变量接收 JSON 配置，**路径不硬编码**。
@@ -7,8 +9,9 @@
 
 ```powershell
 Set-Location 'D:/SteamLibrary/steamapps/common/Hearts of Iron IV'
-$env:FLIRT_JOB = "$PWD/flirt/job_xxx.json".Replace('\','/')
-& 'D:/IDA Professional 9.0/idat.exe' -A -S"$PWD/flirt/脚本.py" -L"$PWD/reports/ida_xxx.log" "work/db/hoi4.exe.i64"
+$env:FLIRT_JOB = "$PWD/test/probes_ida/job_xxx.json".Replace('\','/')
+& 'D:/IDA Professional 9.0/idat.exe' -A -S"$PWD/test/probes_ida/脚本.py" -L"$PWD/reports/ida_xxx.log" "hoi4plugins/sources/1.19.3/hoi4.exe.i64"
+
 ```
 
 > 长任务（数千次改名）**必须后台跑**：单次命令有 120 秒上限，超时会被中断（中断时数据库不写入，安全）。
@@ -66,3 +69,7 @@ $env:FLIRT_JOB = "$PWD/flirt/job_xxx.json".Replace('\','/')
 2. **vftable 边界判据**：每个 vftable 的 `-0x8` 处是指向自身 COL 的指针；内存布局为 `[表N槽位…][表N+1的COL][表N+1槽位…]`，所以「连续读到第一个非代码指针」与 COL 边界判据**结果完全一致**（实测越界 0）。
 3. **命名顺序决定归属**：字母序下继承槽位只有 **5.5%** 归属正确，继承深度序下达到 **72.8%**。
 4. IDA 9 内置 `rtti.dll` 已做透 RTTI 解析，第三方 ClassInformer / HexRaysPyTools / virtuailor 均已过时或版本不兼容。
+> **现状**：`idat.exe` 批处理每次要重新加载 865 MB 的 .i64（3-5 分钟），
+> 已被 `test/tools/idalib_server.py` 常驻服务取代（加载一次 12.5 秒，之后查询毫秒级）。
+> 日常查询请走 idalib，不要再用上面的 idat 命令行，详见 `ai_docs/05_工具链/idalib常驻服务.md`。
+
