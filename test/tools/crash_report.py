@@ -1,8 +1,11 @@
 """Find and summarize HOI4 crash reports (exception.txt + minidump.dmp).
 
-Paradox already writes one folder per crash under:
+Paradox writes one folder per crash, by default under:
   Documents/Paradox Interactive/Hearts of Iron IV/crashes/<timestamp>/
-Each contains exception.txt (stack with module+line), minidump.dmp, meta.yml and a logs/ snapshot.
+Our plugin redirects that to <game root>/crashes (see
+ai_docs/05_工具链/崩溃文件重定向.md), so both locations are searched.
+Each folder contains exception.txt (stack with module+line), minidump.dmp,
+meta.yml and a logs/ snapshot.
 Usage:
   python crash_report.py             # list last 10, show newest in full
   python crash_report.py -n 3        # show newest 3 in full
@@ -12,9 +15,25 @@ Usage:
 import os, sys, shutil, argparse
 
 ROOT = r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV'
-CRASH = os.path.join(os.path.expanduser('~'), 'Documents', 'Paradox Interactive',
-                     'Hearts of Iron IV', 'crashes')
+CANDS = [
+    os.path.join(ROOT, 'crashes'),
+    os.path.join(os.path.expanduser('~'), 'Documents', 'Paradox Interactive',
+                 'Hearts of Iron IV', 'crashes'),
+]
 OUR_DLL = 'hoi4_mod_plugin.dll'
+
+
+def pick_crash_dir():
+    for c in CANDS:
+        try:
+            if os.path.isdir(c) and any(os.path.isdir(os.path.join(c, n)) for n in os.listdir(c)):
+                return c
+        except Exception:
+            pass
+    return CANDS[0]
+
+
+CRASH = pick_crash_dir()
 
 
 def crash_dirs():
