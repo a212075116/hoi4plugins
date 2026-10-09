@@ -14,10 +14,11 @@ import frida, time, json, os, sys
 W = r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV'
 LOG = r'C:/Users/a2120/Documents/Paradox Interactive/Hearts of Iron IV/logs/game.log'
 EXE = W + '/hoi4.exe'
-# 初始国家 tag 由环境变量 HOI4_START_TAG 决定 (默认 CHI)。
-# 用 mod 地图时, 必须换成该地图上真实存在的 tag, 否则进图会失败。
-DEFAULT_START_TAG = os.environ.get('HOI4_START_TAG', 'CHI')
-ARGS = [EXE, '-gdpr-compliant', '-start_tag=' + DEFAULT_START_TAG, '-nolauncher']
+# 初始国家 tag 必须显式给出 (环境变量 HOI4_START_TAG 或 set_start_tag())。
+# 不给就不传 -start_tag, 由游戏自己决定; 绝不静默用某个写死的 tag ——
+# 用 mod 地图时若 tag 不在该地图上, 进图会失败, 那样得到的结果是错的。
+DEFAULT_START_TAG = os.environ.get('HOI4_START_TAG') or None
+ARGS = [EXE, '-gdpr-compliant', '-nolauncher']
 IN_GAME_MARK = 'Launching SINGLEPLAYER-game'
 
 
@@ -26,7 +27,7 @@ def set_start_tag(tag):
     global ARGS, DEFAULT_START_TAG
     DEFAULT_START_TAG = tag
     ARGS = [a for a in ARGS if not a.startswith('-start_tag=')]
-    ARGS = [ARGS[0], ARGS[1], '-start_tag=' + tag] + ARGS[2:]
+    ARGS = [ARGS[0], '-gdpr-compliant', '-start_tag=' + tag, '-nolauncher']
     return ARGS
 
 
