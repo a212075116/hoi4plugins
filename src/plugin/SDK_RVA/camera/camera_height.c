@@ -11,6 +11,29 @@ extern void Plugin_Log(const char* fmt, ...);
 
 typedef void (__fastcall *CamSetHeightFn)(void* cam, float height);
 
+static int g_trueUpper = 0;
+
+int Camera_TrueLower(void)
+{
+    return CAM_TRUE_LOWER;
+}
+
+int Camera_TrueUpper(void* cam)
+{
+    int lo;
+    int hi;
+    if (g_trueUpper <= 0) {
+        if (cam != NULL && Camera_GetLimits(cam, &lo, &hi) && hi > 0) {
+            g_trueUpper = hi;
+        } else {
+            g_trueUpper = (int)CAM_TRUE_UPPER_FALLBACK;
+        }
+        Plugin_Log("[cam] true upper limit captured: %d (true lower = %d)",
+                   g_trueUpper, CAM_TRUE_LOWER);
+    }
+    return g_trueUpper;
+}
+
 int Camera_SetHeight(void* cam, float want)
 {
     HMODULE base;
@@ -156,6 +179,31 @@ int Camera_SetUpperLimit(void* cam, int hi)
     return 1;
 }
 
+int Camera_ClampHeightInto(void* cam, int lo, int hi)
+{
+    float h;
+    if (cam == NULL) return 0;
+    if (!ConsoleCmd_IsReadable((unsigned char*)cam + OFF_CAM_HEIGHT, 4)) return 0;
+    h = *(float*)((unsigned char*)cam + OFF_CAM_HEIGHT);
+    if (h < (float)lo) { Camera_SetHeight(cam, (float)lo); return 1; }
+    if (h > (float)hi) { Camera_SetHeight(cam, (float)hi); return 1; }
+    return 0;
+}
+
+int Camera_ApplyLimits(void* cam, int* inOutLo, int* inOutHi, int* moved)
+{
+    int lo;
+    int hi;
+    if (moved != NULL) *moved = 0;
+    if (!Camera_GetLimits(cam, &lo, &hi)) return 0;
+    if (inOutLo != NULL) *inOutLo = lo;
+    if (inOutHi != NULL) *inOutHi = hi;
+    if (Camera_ClampHeightInto(cam, lo, hi)) {
+        if (moved != NULL) *moved = 1;
+    }
+    return 1;
+}
+
 static long long __fastcall Handler_SetLowerLimit(CmdResult* out, CmdArgs* args)
 {
     unsigned char* cam;
@@ -163,6 +211,8 @@ static long long __fastcall Handler_SetLowerLimit(CmdResult* out, CmdArgs* args)
     float want;
     int lo;
     int hi;
+    int oldLo;
+    int moved;
 
     if (out == NULL) return 0;
     ConsoleCmd_InitResult(out);
@@ -186,14 +236,38 @@ static long long __fastcall Handler_SetLowerLimit(CmdResult* out, CmdArgs* args)
         ConsoleCmd_SetMessage(out, "Camera Lower Limit is unchanged");
         return (long long)out;
     }
+    oldLo = lo;
+    {
+        int v = (int)want;
+        int tlo = Camera_TrueLower();
+        int thi = Camera_TrueUpper(cam);
+        if (v < tlo) { v = tlo; Plugin_Log("[setcamlower] clamp %d -> true lower %d", (int)want, tlo); }
+        if (v > thi) { v = thi; Plugin_Log("[setcamlower] clamp %d -> true upper %d", (int)want, thi); }
+        want = (float)v;
+    }
     Camera_SetLowerLimit(cam, (int)want);
     Camera_GetLimits(cam, &lo, &hi);
+    if (lo > hi) {
+        Camera_SetUpperLimit(cam, lo);
+        Plugin_Log("[setcamlower] lo(%d) > hi(%d), hi raised to lo", lo, hi);
+    }
+    moved = 0;
+    Camera_ApplyLimits(cam, &lo, &hi, &moved);
     {
-        char msg[160];
-        _snprintf_s(msg, sizeof(msg), _TRUNCATE, "Currently,Camera Lower Limit is %d", lo);
+        float now = *(float*)(cam + OFF_CAM_HEIGHT);
+        char msg[192];
+        if (moved) {
+            _snprintf_s(msg, sizeof(msg), _TRUNCATE,
+                        "Lower Limit is %d, Height pulled to %.2f (range [%d,%d])",
+                        lo, now, lo, hi);
+        } else {
+            _snprintf_s(msg, sizeof(msg), _TRUNCATE,
+                        "Currently,Camera Lower Limit is %d (range [%d,%d])", lo, lo, hi);
+        }
         ConsoleCmd_SetMessage(out, msg);
         out->ok = 1;
-        Plugin_Log("[setcamlower] arg=%s -> lo=%d hi=%d", arg, lo, hi);
+        Plugin_Log("[setcamlower] arg=%s  lo %d -> %d  hi=%d  height=%.2f  moved=%d",
+                   arg, oldLo, lo, hi, now, moved);
     }
     return (long long)out;
 }
@@ -205,6 +279,8 @@ static long long __fastcall Handler_SetUpperLimit(CmdResult* out, CmdArgs* args)
     float want;
     int lo;
     int hi;
+    int oldHi;
+    int moved;
 
     if (out == NULL) return 0;
     ConsoleCmd_InitResult(out);
@@ -228,14 +304,38 @@ static long long __fastcall Handler_SetUpperLimit(CmdResult* out, CmdArgs* args)
         ConsoleCmd_SetMessage(out, "Camera Upper Limit is unchanged");
         return (long long)out;
     }
+    oldHi = hi;
+    {
+        int v = (int)want;
+        int tlo = Camera_TrueLower();
+        int thi = Camera_TrueUpper(cam);
+        if (v > thi) { v = thi; Plugin_Log("[setcamupper] clamp %d -> true upper %d", (int)want, thi); }
+        if (v < tlo) { v = tlo; Plugin_Log("[setcamupper] clamp %d -> true lower %d", (int)want, tlo); }
+        want = (float)v;
+    }
     Camera_SetUpperLimit(cam, (int)want);
     Camera_GetLimits(cam, &lo, &hi);
+    if (hi < lo) {
+        Camera_SetLowerLimit(cam, hi);
+        Plugin_Log("[setcamupper] hi(%d) < lo(%d), lo lowered to hi", hi, lo);
+    }
+    moved = 0;
+    Camera_ApplyLimits(cam, &lo, &hi, &moved);
     {
-        char msg[160];
-        _snprintf_s(msg, sizeof(msg), _TRUNCATE, "Currently,Camera Upper Limit is %d", hi);
+        float now = *(float*)(cam + OFF_CAM_HEIGHT);
+        char msg[192];
+        if (moved) {
+            _snprintf_s(msg, sizeof(msg), _TRUNCATE,
+                        "Upper Limit is %d, Height pulled to %.2f (range [%d,%d])",
+                        hi, now, lo, hi);
+        } else {
+            _snprintf_s(msg, sizeof(msg), _TRUNCATE,
+                        "Currently,Camera Upper Limit is %d (range [%d,%d])", hi, lo, hi);
+        }
         ConsoleCmd_SetMessage(out, msg);
         out->ok = 1;
-        Plugin_Log("[setcamupper] arg=%s -> lo=%d hi=%d", arg, lo, hi);
+        Plugin_Log("[setcamupper] arg=%s  hi %d -> %d  lo=%d  height=%.2f  moved=%d",
+                   arg, oldHi, hi, lo, now, moved);
     }
     return (long long)out;
 }

@@ -108,10 +108,23 @@ static void __fastcall ExecSetLowerLimit(void* self, void* scope)
     }
     want = (int)Effect_ParamFloat(self, scope);
     old = lo;
+    {
+        int tlo = Camera_TrueLower();
+        int thi = Camera_TrueUpper(cam);
+        if (want < tlo) want = tlo;
+        if (want > thi) want = thi;
+    }
     Camera_SetLowerLimit(cam, want);
     Camera_GetLimits(cam, &lo, &hi);
-    Plugin_Log("[eff] set_camera_height_lowerlimit  want=%d  lo %d -> %d  (hi=%d)",
-               want, old, lo, hi);
+    if (lo > hi) Camera_SetUpperLimit(cam, lo);
+    {
+        int moved = 0;
+        float now;
+        Camera_ApplyLimits(cam, &lo, &hi, &moved);
+        now = CamCurrentHeight(cam);
+        Plugin_Log("[eff] set_camera_height_lowerlimit  want=%d  lo %d -> %d  hi=%d  height=%.2f  moved=%d",
+                   want, old, lo, hi, now, moved);
+    }
 }
 
 static void __fastcall ExecSetUpperLimit(void* self, void* scope)
@@ -134,30 +147,23 @@ static void __fastcall ExecSetUpperLimit(void* self, void* scope)
     }
     want = (int)Effect_ParamFloat(self, scope);
     old = hi;
+    {
+        int tlo = Camera_TrueLower();
+        int thi = Camera_TrueUpper(cam);
+        if (want > thi) want = thi;
+        if (want < tlo) want = tlo;
+    }
     Camera_SetUpperLimit(cam, want);
     Camera_GetLimits(cam, &lo, &hi);
-    Plugin_Log("[eff] set_camera_height_upperlimit  want=%d  hi %d -> %d  (lo=%d)",
-               want, old, hi, lo);
-}
-
-static void __fastcall ExecChangeCamHeight(void* self, void* scope)
-{
-    void* cam;
-    float before;
-    float after;
-    float delta;
-
-    Effect_FlushPendingTooltip();
-    cam = CamObj();
-    if (cam == NULL) {
-        Plugin_Log("[eff] change_camera_height: no camera");
-        return;
+    if (hi < lo) Camera_SetLowerLimit(cam, hi);
+    {
+        int moved = 0;
+        float now;
+        Camera_ApplyLimits(cam, &lo, &hi, &moved);
+        now = CamCurrentHeight(cam);
+        Plugin_Log("[eff] set_camera_height_upperlimit  want=%d  hi %d -> %d  lo=%d  height=%.2f  moved=%d",
+                   want, old, hi, lo, now, moved);
     }
-    delta = Effect_ParamFloat(self, scope);
-    before = CamCurrentHeight(cam);
-    CamApplyHeight(cam, before + delta);
-    after = CamCurrentHeight(cam);
-    Plugin_Log("[eff] change_camera_height  %.2f -> %.2f (delta %.3f)", before, after, delta);
 }
 
 EFF_DEF(setcamheight, "set_camera_height", "Sets the camera height",
@@ -169,8 +175,7 @@ EFF_DEF(setcamlower, "set_camera_height_lowerlimit", "Sets the camera height low
 EFF_DEF(setcamupper, "set_camera_height_upperlimit", "Sets the camera height upper limit",
         "EFFECT_SET_CAMERA_HEIGHT_UPPERLIMIT", &ExecSetUpperLimit)
 
-EFF_DEF(changecamheight, "change_camera_height", "Changes the camera height by a signed amount",
-        "EFFECT_CHANGE_CAMERA_HEIGHT", &ExecChangeCamHeight)
+
 
 EFF_DEF(addcamheight, "add_camera_height", "Adds to the camera height",
         "EFFECT_ADD_CAMERA_HEIGHT", &ExecAddCamHeight)
@@ -179,8 +184,7 @@ static EffectDef* g_effects[] = {
     &setcamheight_def,
     &addcamheight_def,
     &setcamlower_def,
-    &setcamupper_def,
-    &changecamheight_def
+    &setcamupper_def
 };
 
 #define EFF_CAMERA_COUNT (int)(sizeof(g_effects) / sizeof(g_effects[0]))
@@ -192,7 +196,6 @@ int EffectCameras_Register(void)
     addcamheight_fill();
     setcamlower_fill();
     setcamupper_fill();
-    changecamheight_fill();
     n = Effect_RegistryRegisterAll(g_effects, EFF_CAMERA_COUNT);
     Plugin_Log("[eff] camera effects registered: %d/%d", n, EFF_CAMERA_COUNT);
     return n;
