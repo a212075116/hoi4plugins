@@ -259,3 +259,53 @@ hook `0xf9b4b0` 得到 `total=158681, 返回非 0 = 115842`。
 - `CResistance + 0x008` = 指向所属 `CState` 的指针（反查很方便）
 - `ComputeOccupiedTag` 就是拿 `CState+0xc8` 去 core 数组里找，**owner 必定在其中**，
   所以它对每个州都会返回有效 tag
+
+### 完整调用链（第四轮，已打通）
+
+外层是一个遍历所有 CState 的循环：
+
+    dd7446:  mov rax, [rip + 0x2557e13]       ; 取 CGameState
+    dd744d:  mov rcx, [rax + 0x2c8]           ; CState 数组数据
+    dd7454:  movsxd rax, dword [rax + 0x2d4]  ; 数组长度
+    dd745b:  lea r12, [rcx + rax*8]
+    dd7470:  mov rdi, [rsi]                   ; 取一个 CState
+    dd7473:  lea rcx, [rdi + 0x268]           ; -> CResistance
+    dd747a:  call 0xf9ae60                     ; 1) UpdateOccupation
+    dd7486:  call 0xf9adb0                     ; 2) 检查(见下)
+    dd748b:  mov rcx, rdi
+    dd748e:  call 0x9d5720                     ; 3) CState::Update
+    dd749a:  jne 0xdd7470                      ; 循环
+
+三个被调用者：
+
+| RVA | 作用 | 关键点 |
+|---|---|---|
+| 0xf9ae60 | UpdateOccupation | 调 0xf986b0 算 tag, 再调 0xf9b050 写 tag 与 +0x208 |
+| 0xf9adb0 | 检查 | tag<=0 直接返回; 否则 0xff3be0 取数据, 失败时打 resistance.cpp:103 的 state %d: occupation is not initialzied; 成功则 0xffddf0 (哈希表操作) |
+| 0x9d5720 | CState::Update | 0x9d54a0 + 尾调用 0x9e02c0 (每日更新) |
+
+而 0x9e02c0 就是最早发现的、会走 0xf9b4b0 -> 0xf91850 -> GetOccupationLaw(0xf99d30)
+-> resistance.cpp:609 的那条路径。
+
+### 关键日志对照（实测）
+
+    resistance.cpp:609  called GetOccupationLaw with no occupatin data   435 条
+    resistance.cpp:103  state %d: occupation is not initialzied            0 条
+
+103 行是 0 条这一点很有价值: 它说明在 0xf9adb0 执行时 tag 仍然有效,
+因此清零发生在这一遍循环之后。
+
+### 时间线（spawn 起算，实测）
+
+    t≈36s  SetTagAndFlag 已完成 446 次; 此刻所有 tag 仍非 0 (tag0=0)
+    t≈38s  435 个对象的 tag 变 0, 11 个保持非 0
+
+清零窗口只有约 2 秒, 正好是进入地图的时刻。
+
+### 观察到的两个统计事实（供后续使用）
+
+- mod 的 446 个 state 文件里, 393 个 owner 出现在 add_core_of 列表里, 53 个完全没有 add_core_of
+  (例如 owner=WS1 / WV1 / WS3 / WS2 的那些)。运行时这些州的 core 列表并不为空,
+  说明引擎会把 owner 自动纳入 core。
+- ComputeOccupiedTag 有两个分支都可能返回有效 tag: 精确匹配 (f9874e) 与回退遍历 (f9877f),
+  列表为空时才走到 f988c0 那条真正不命中的路径。
