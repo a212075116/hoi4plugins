@@ -77,6 +77,43 @@ static void* __fastcall MyFactory(void)
     return inst;
 }
 
+static float ParamAsFloat(void* self)
+{
+    unsigned char* p = (unsigned char*)self + EFF_OFF_PARAM;
+    unsigned long long size;
+    unsigned long long cap;
+    const char* data;
+    double v = 0.0;
+    double frac = 0.0;
+    double scale = 1.0;
+    int neg = 0;
+    int dot = 0;
+    size_t i;
+
+    if (!ConsoleCmd_IsReadable(p, 32)) return 0.0f;
+    size = *(unsigned long long*)(p + EFF_OFF_PARAM_SIZE);
+    cap  = *(unsigned long long*)(p + EFF_OFF_PARAM_CAP);
+    if (size == 0 || size > 64) return 0.0f;
+    data = (cap <= EFF_SSO_MAX) ? (const char*)p : *(const char**)p;
+    if (!ConsoleCmd_IsReadable(data, (size_t)size)) return 0.0f;
+
+    for (i = 0; i < (size_t)size; ++i) {
+        char c = data[i];
+        if (c == '-') { neg = 1; }
+        else if (c == '+') { }
+        else if (c == '.') { dot = 1; }
+        else if (c >= '0' && c <= '9') {
+            if (dot) { scale *= 10.0; frac += (double)(c - '0') / scale; }
+            else { v = v * 10.0 + (double)(c - '0'); }
+        } else {
+            break;
+        }
+    }
+    v += frac;
+    if (neg) v = -v;
+    return (float)v;
+}
+
 static void __fastcall ExecSetCamHeight(void* self, void* scope)
 {
     unsigned char* img = Img();
@@ -104,10 +141,37 @@ static void __fastcall ExecSetCamHeight(void* self, void* scope)
     }
     if (!ConsoleCmd_IsReadable((unsigned char*)cam + 0x69C, 8)) return;
 
-    before = *(float*)((unsigned char*)cam + 0x69C);
-    ((CamSetHeightFn)(img + RVA_CAM_SETH))(cam, 1500.0f);
-    after = *(float*)((unsigned char*)cam + 0x69C);
-    Plugin_Log("[eff] exec#%d setcamheight 1500  %.2f -> %.2f", g_execCalls, before, after);
+    {
+        unsigned char* p = (unsigned char*)self;
+        char line[512];
+        int off = 0;
+        int k;
+        for (k = 0; k < 0x140; k += 4) {
+            unsigned int v;
+            if (!ConsoleCmd_IsReadable(p + k, 4)) break;
+            v = *(unsigned int*)(p + k);
+            if (off < 400) {
+                int w = _snprintf_s(line + off, sizeof(line) - (size_t)off, _TRUNCATE,
+                                    "%03X:%08X ", k, v);
+                if (w > 0) off += w;
+            }
+            if ((k & 0x1F) == 0x1C) {
+                Plugin_Log("[effdump] %s", line);
+                off = 0;
+                line[0] = 0;
+            }
+        }
+        if (off > 0) Plugin_Log("[effdump] %s", line);
+    }
+
+    {
+        float want = ParamAsFloat(self);
+        before = *(float*)((unsigned char*)cam + 0x69C);
+        ((CamSetHeightFn)(img + RVA_CAM_SETH))(cam, want);
+        after = *(float*)((unsigned char*)cam + 0x69C);
+        Plugin_Log("[eff] exec#%d setcamheight param=%.3f  %.2f -> %.2f",
+                   g_execCalls, want, before, after);
+    }
 }
 
 int Effect_Register(const char* name, const char* desc, EffectExecFn exec, int* outId)

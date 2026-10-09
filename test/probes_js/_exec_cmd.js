@@ -91,6 +91,33 @@ rpc.exports = {
     return lines.join('\n');
   },
 
+  // 就绪探测: 返回 {ok, idler, cam, h}
+  ready: function () {
+    const base = Process.getModuleByName('hoi4.exe').base;
+    const idler = base.add(0x332F698).readPointer();
+    if (idler.isNull()) return { ok: false, why: 'idler NULL' };
+    try {
+      const cam = idler.add(0x750).readPointer();
+      if (cam.isNull()) return { ok: false, why: 'cam NULL', idler: idler.toString() };
+      if (cam.toUInt32() < 0x10000) return { ok: false, why: 'cam bogus', idler: idler.toString() };
+      const h = cam.add(0x69C).readFloat();
+      if (!(h > 0.0 && h < 100000.0)) return { ok: false, why: 'height bogus ' + h };
+      return { ok: true, idler: idler.toString(), cam: cam.toString(), h: h };
+    } catch (e) { return { ok: false, why: String(e) }; }
+  },
+
+  // 只返回高度数值
+  camHeight: function () {
+    const base = Process.getModuleByName('hoi4.exe').base;
+    const idler = base.add(0x332F698).readPointer();
+    if (idler.isNull()) return -1.0;
+    try {
+      const cam = idler.add(0x750).readPointer();
+      if (cam.isNull()) return -1.0;
+      return cam.add(0x69C).readFloat();
+    } catch (e) { return -1.0; }
+  },
+
   // 读摄像机当前状态
   cam: function () {
     const base = Process.getModuleByName('hoi4.exe').base;

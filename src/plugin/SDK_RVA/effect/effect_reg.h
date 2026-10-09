@@ -15,6 +15,10 @@ typedef void (__fastcall *EffectExecFn)(void* self, void* scope);
 #define EFF_VT_EXEC         0x68
 #define EFF_VT_DTOR         0x00
 #define EFF_ENTRY_VT_FACTORY 0x08
+#define EFF_OFF_PARAM        0x108
+#define EFF_OFF_PARAM_SIZE   0x10
+#define EFF_OFF_PARAM_CAP    0x18
+#define EFF_SSO_MAX          15
 
 int  Effect_LexerReady(void);
 int  Effect_AddToken(const char* name, int* outId);
