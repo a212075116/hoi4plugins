@@ -1,0 +1,17 @@
+import sys, time, importlib.util, os
+os.chdir(r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV')
+spec = importlib.util.spec_from_file_location('fh', r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/probes_frida/frida_host.py')
+fh = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(fh)
+pid, session, sc, fresh = fh.connect(r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/probes_js/_exec_cmd.js', force_spawn=False)
+time.sleep(0.5)
+e = sc.exports_sync
+print('=== 触发前 ===')
+print('  ' + e.cam())
+print()
+print('=== event camtest.1 ===')
+print(e.exec('event', ['camtest.1']))
+print()
+time.sleep(2.5)
+print('=== 触发后 ===')
+print('  ' + e.cam())

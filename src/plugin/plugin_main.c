@@ -7,6 +7,7 @@
 #include "carrier.h"
 #include "console_cmd.h"
 #include "camera_height.h"
+#include "effect_reg.h"
 
 #define RVA_GS_GLOBAL   0x332F260u
 #define RVA_VT_MAIN     0x2721158u
@@ -140,6 +141,27 @@ static DWORD WINAPI PluginThread(LPVOID p)
     (void)p;
     Plugin_Log("[plugin] thread start, pid=%lu", (unsigned long)GetCurrentProcessId());
     Plugin_Log("[plugin] hoi4 base=%p", (void*)GetModuleHandleA(NULL));
+
+    {
+        int round;
+        int ok = 0;
+        int readyAt = -1;
+        for (round = 0; round < 3000 && !ok; ++round) {
+            if (Effect_LexerReady()) {
+                if (readyAt < 0) {
+                    readyAt = round;
+                    Plugin_Log("[plugin] lexer ready at poll %d", round);
+                }
+                ok = Effect_RegisterCameraHeight();
+                if (ok) {
+                    Plugin_Log("[plugin] camera height effect registered at poll %d, tokenId=%d",
+                               round, Effect_GetTokenId());
+                }
+            }
+            if (!ok) Sleep(10);
+        }
+        if (!ok) Plugin_Log("[plugin] gave up waiting for lexer (polls=%d)", round);
+    }
 
     for (i = 0; i < 300; ++i) {
         void* cur = NULL;
