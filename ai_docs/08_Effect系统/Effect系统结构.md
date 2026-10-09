@@ -204,3 +204,70 @@
 （各 effect 的解析函数都会调到它），说明 `a1` 是某种「effect 列表」上下文。
 
 **下一步要查的是：谁遍历 `a1+8` 那个数组。**
+## ★ 执行机制（已确证）
+
+### 结论
+
+| 位置 | 作用 |
+|---|---|
+| 实例虚表 **`+0x60`** | `sub_14053D9E0`（1865B）通用骨架：gamestate 断言 + scope 处理 |
+| 实例虚表 **`+0x68`** | **★★★ 真正的「执行」** |
+
+**执行签名**：`void __fastcall Execute(effect* this, Scope* scope)`
+
+### 证据一：基类 `+0x68` 是「遍历子 effect」
+
+    __int64 __fastcall sub_14053E130(__int64 a1, __int64 a2)   // CValueEffect::?
+    {
+      i_1 = *(int *)(a1 + 20);                             // this+0x14 = 子 effect 数量
+      if ( i_1 > 0 )
+        for ( i = 0; i < i_1; ++i )
+        {
+          v6 = *(_QWORD *)(*(_QWORD *)(a1 + 8) + 8 * i);   // this+0x08 = 子 effect 数组
+          result = (*(**(v6) + 96))(v6, a2);               // 调子 effect 的 +0x60
+        }
+    }
+
+说明 `this+0x08` 就是 `sub_140540EE0` 里 push 进去的那个 `CPdxArray`。
+
+### 证据二：`CAddStabilityEffect` 重写的 `+0x68` 真的在改 stability
+
+    __int64 __fastcall sub_14034C2F0(int a1, __int64 a2)
+    {
+      v3 = a2;
+      v4 = sub_140BB4390(a2 + 8);              // 从 scope 取 CCountry
+      sub_140544C90(a1 + 88, &v6, v3, 0, 0);   // 从 this+0x58 取参数值
+      return sub_1406D23F0(v4, v6);            // 改 stability
+    }
+
+而 `sub_1406D23F0` 就是 stability 的写入口：
+
+    __int64 __fastcall sub_1406D23F0(__int64 a1, __int64 a2)
+    {
+      v2 = a2 + *(_QWORD *)(a1 + 4304);        // CCountry+0x10D0，累加
+      *(_QWORD *)(a1 + 4304) = v2;
+      ... 夹紧到 [qword_143332E98, qword_143332DF8] ...
+    }
+
+**stability 是 64 位定点数，存在 `CCountry+0x10D0`。**
+
+### 一个反直觉的点
+
+子类 `+0x68` **没有**调基类去遍历子 effect，它直接做自己的事。
+而基类 `+0x68` 只负责遍历子 effect 并调它们的 `+0x60`。
+
+所以这两个槽的分工是：
+
+- `+0x68`：本 effect 的「执行」（子类覆盖；想处理子 effect 得自己调基类或遍历）
+- `+0x60`：被父 effect 遍历时被调用的入口（通用骨架，一般不覆盖）
+
+### 至此，注册新 effect 需要的东西都齐了
+
+| 需要提供 | 内容 |
+|---|---|
+| entry 对象（16 字节） | `{ 我的 entry 虚表*, 描述字符串* }` |
+| entry 虚表 | `[0]` 析构、`[1]` **工厂**（造实例） |
+| 实例对象（296 字节） | 布局对齐 `CValueEffect`（子 effect 数组在 `+0x08`、参数在 `+0x58`） |
+| 实例虚表 | 25 槽；**`+0x68` 写我们的执行**；其余可指向基类实现 |
+| 注册 entry | `sub_1405415A0(qword_143330000, 新id, entry)` |
+| 注册名字 | `sub_1424C4B70(名字槽, 新id, "set_camera_height")` ← **槽的结构待查** |
