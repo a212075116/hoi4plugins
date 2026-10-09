@@ -8,6 +8,7 @@
 #include "console_cmd.h"
 #include "camera_height.h"
 #include "effect_reg.h"
+#include "file_redirect.h"
 
 int EffectCameras_Register(void);
 
@@ -143,6 +144,12 @@ static DWORD WINAPI PluginThread(LPVOID p)
     (void)p;
     Plugin_Log("[plugin] thread start, pid=%lu", (unsigned long)GetCurrentProcessId());
     Plugin_Log("[plugin] hoi4 base=%p", (void*)GetModuleHandleA(NULL));
+
+    {
+        int ok = FileRedirect_Install();
+        Plugin_Log("[plugin] FileRedirect_Install -> %d (gameRoot=%s)",
+                   ok, FileRedirect_GameRoot());
+    }
 
     {
         int round;

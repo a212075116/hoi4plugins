@@ -34,7 +34,75 @@ function wstr(p, s) {
   }
 }
 
+const FILELOG = [];
+let fileHookCount = 0;
+function installFileHook() {
+  const targets = [['kernel32.dll', 'CreateFileW'], ['kernel32.dll', 'CreateDirectoryW']];
+  for (let k = 0; k < targets.length; k++) {
+    let a = null;
+    try { a = Process.getModuleByName(targets[k][0]).getExportByName(targets[k][1]); } catch (e) { continue; }
+    if (!a) continue;
+    try {
+      Interceptor.attach(a, {
+        onEnter: function (args) {
+          try {
+            const p = args[0];
+            if (p.isNull()) return;
+            const s = p.readUtf16String();
+            if (!s) return;
+            if (s.indexOf('crash') >= 0 || s.indexOf('Crash') >= 0 ||
+                s.indexOf('.dmp') >= 0 || s.indexOf('meta.yml') >= 0 ||
+                s.indexOf('exception.txt') >= 0) {
+              const line = targets[k][1] + '  ' + s + '\n';
+              if (FILELOG.length < 300) FILELOG.push(line.trim());
+              try {
+                const f = new File('D:/SteamLibrary/steamapps/common/Hearts of Iron IV/reports/filehook.log', 'a');
+                f.write(line);
+                f.flush();
+                f.close();
+              } catch (e) { }
+            }
+          } catch (e) { }
+        }
+      });
+      fileHookCount++;
+    } catch (e) { }
+  }
+  return fileHookCount;
+}
+
+let procHookCount = 0;
+function installProcHook() {
+  const names = ['CreateProcessW', 'CreateProcessA'];
+  for (let i = 0; i < names.length; i++) {
+    let a = null;
+    try { a = Process.getModuleByName('kernel32.dll').getExportByName(names[i]); } catch (e) { continue; }
+    if (!a) continue;
+    try {
+      Interceptor.attach(a, {
+        onEnter: function (args) {
+          try {
+            let s = null;
+            const p = args[1].isNull() ? args[0] : args[1];
+            if (p.isNull()) return;
+            s = (names[i] === 'CreateProcessW') ? p.readUtf16String() : p.readAnsiString();
+            if (!s) return;
+            const line = names[i] + '  ' + s + '\n';
+            try { const f = new File('D:/SteamLibrary/steamapps/common/Hearts of Iron IV/reports/prochook.log', 'a'); f.write(line); f.flush(); f.close(); } catch (e) { }
+          } catch (e) { }
+        }
+      });
+      procHookCount++;
+    } catch (e) { }
+  }
+  return procHookCount;
+}
+
 rpc.exports = {
+  hookProc: function () { return 'procHooked=' + installProcHook(); },
+  hookFiles: function () { return 'hooked=' + installFileHook(); },
+  fileLog: function () { return FILELOG.length ? FILELOG.join('\n') : '(nothing captured)'; },
+
   findHandler: function (name) {
     const base = Process.getModuleByName('hoi4.exe').base;
     const mgr = base.add(MGR_RVA).readPointer();
@@ -135,6 +203,22 @@ rpc.exports = {
                '  f32=' + cam.add(o).readFloat().toFixed(4));
     }
     return out.join('\n');
+  },
+
+  // 列出控制台命令里名字含关键字的
+  listCmds: function (needle) {
+    const base = Process.getModuleByName('hoi4.exe').base;
+    const mgr = base.add(0x35E1A80).readPointer();
+    if (mgr.isNull()) return 'mgr NULL';
+    const data = mgr.readPointer();
+    const count = mgr.add(12).readInt();
+    const out = [];
+    for (let i = 0; i < count; i++) {
+      const e = data.add(i * 456);
+      const n = rstr(e.add(0x08));
+      if (!needle || n.indexOf(needle) >= 0) out.push(n);
+    }
+    return 'count=' + count + '  matched=' + out.length + '\n' + out.join('\n');
   },
 
   // 读摄像机当前状态

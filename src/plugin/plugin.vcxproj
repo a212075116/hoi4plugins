@@ -48,11 +48,11 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)SDK_RVA\camera;$(ProjectDir)SDK_RVA\console;$(ProjectDir)SDK_RVA\effect;..\carrier;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)SDK_RVA\camera;$(ProjectDir)SDK_RVA\console;$(ProjectDir)SDK_RVA\effect;$(ProjectDir)SDK_RVA\hook;..\carrier;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>kernel32.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>kernel32.lib;user32.lib;shell32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
 
@@ -64,13 +64,13 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)SDK_RVA\camera;$(ProjectDir)SDK_RVA\console;$(ProjectDir)SDK_RVA\effect;..\carrier;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)SDK_RVA\camera;$(ProjectDir)SDK_RVA\console;$(ProjectDir)SDK_RVA\effect;$(ProjectDir)SDK_RVA\hook;..\carrier;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>kernel32.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>kernel32.lib;user32.lib;shell32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
 
@@ -80,11 +80,13 @@
     <ClCompile Include="SDK_RVA\camera\camera_height.c" />
     <ClCompile Include="SDK_RVA\effect\effect_reg.c" />
     <ClCompile Include="SDK_RVA\effect\effect_camera.c" />
+    <ClCompile Include="SDK_RVA\hook\file_redirect.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="SDK_RVA\console\console_cmd.h" />
     <ClInclude Include="SDK_RVA\camera\camera_height.h" />
     <ClInclude Include="SDK_RVA\effect\effect_reg.h" />
+    <ClInclude Include="SDK_RVA\hook\file_redirect.h" />
   </ItemGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
