@@ -15,6 +15,17 @@ typedef void (__fastcall *EffectExecFn)(void* self, void* scope);
 #define EFF_VT_EXEC         0x68
 #define EFF_VT_DTOR         0x00
 #define EFF_ENTRY_VT_FACTORY 0x08
+#define RVA_STAB_TOOLTIP    0x0378500u
+#define RVA_EFF_GETPARAM    0x00544C90u
+#define RVA_EFF_PACKKEY     0x2245E60u
+#define RVA_EFF_FORMAT      0x10E48A0u
+#define RVA_EFF_PARAM_CTOR  0x0029DAD0u
+#define RVA_EFF_PARAM_DTOR  0x0029DFE0u
+#define RVA_EFF_PARAM_TAG   0x2745A00u
+#define RVA_EFF_STR_APPEND  0x011DBC0u
+#define EFF_VT_TOOLTIP      0x38
+#define EFF_PARAMDESC_SIZE  0x68
+
 #define EFF_OFF_PARAM        0x108
 #define EFF_OFF_PARAM_SIZE   0x10
 #define EFF_OFF_PARAM_CAP    0x18

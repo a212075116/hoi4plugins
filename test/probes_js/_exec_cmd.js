@@ -101,7 +101,7 @@ rpc.exports = {
       if (cam.isNull()) return { ok: false, why: 'cam NULL', idler: idler.toString() };
       if (cam.toUInt32() < 0x10000) return { ok: false, why: 'cam bogus', idler: idler.toString() };
       const h = cam.add(0x69C).readFloat();
-      if (!(h > 0.0 && h < 100000.0)) return { ok: false, why: 'height bogus ' + h };
+      if (!(h >= 50.0 && h <= 3000.0)) return { ok: false, why: 'height out of range ' + h };
       return { ok: true, idler: idler.toString(), cam: cam.toString(), h: h };
     } catch (e) { return { ok: false, why: String(e) }; }
   },

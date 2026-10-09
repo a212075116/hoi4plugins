@@ -63,6 +63,107 @@ int Effect_AddToken(const char* name, int* outId)
     return id != 0;
 }
 
+typedef void* (__fastcall *GetParamFn)(void* a1, void* out, void* ctx, long long a4, unsigned char a5);
+typedef void* (__fastcall *PackKeyFn)(void* out, const char* key, void* params, int count);
+typedef void* (__fastcall *FormatFn)(void* out, void* ctx, void* packed);
+typedef void  (__fastcall *ParamCtorFn)(void* p);
+typedef void  (__fastcall *ParamDtorFn)(void* p);
+typedef void* (__fastcall *OrigTooltipFn)(void* self, void* out, void* ctx);
+typedef void  (__fastcall *StrAppendFn)(void* str, unsigned long long n);
+
+static void Wstr(void* p, const char* s);
+
+static const char* g_locKey = "EFFECT_SET_CAMERA_HEIGHT";
+static int g_tipMode = 0;
+static int g_tipCalls = 0;
+
+static void* __fastcall MyGetTooltip(void* self, void* out, void* ctx)
+{
+    unsigned char* img = Img();
+    unsigned char paramDesc[EFF_PARAMDESC_SIZE];
+    unsigned char packed[32];
+    unsigned char fin[32];
+    long long v18 = 0;
+    unsigned long long sz;
+    unsigned long long cap;
+    unsigned char* src;
+    unsigned char* dst;
+    unsigned long long i;
+
+    if (img == NULL) return out;
+
+    ++g_tipCalls;
+
+    if (g_tipMode == 1) {
+        return ((OrigTooltipFn)(img + RVA_STAB_TOOLTIP))(self, out, ctx);
+    }
+
+    if (!ConsoleCmd_IsReadable(img + RVA_EFF_PACKKEY, 16)) return out;
+
+    memset(packed, 0, sizeof(packed));
+    memset(fin, 0, sizeof(fin));
+    (void)v18;
+    (void)paramDesc;
+
+    ((PackKeyFn)(img + RVA_EFF_PACKKEY))(packed, g_locKey, NULL, 0);
+
+    if (g_tipCalls <= 8) {
+        unsigned long long pkSz = *(unsigned long long*)(packed + 0x10);
+        unsigned long long pkCap = *(unsigned long long*)(packed + 0x18);
+        unsigned char* pk = (pkCap <= EFF_SSO_MAX) ? packed : *(unsigned char**)packed;
+        if (pkSz < 200) Plugin_Log("[efftip] call#%d packed=[%s] sz=%llu cap=%llu",
+                                   g_tipCalls, (char*)pk, pkSz, pkCap);
+    }
+
+    ((FormatFn)(img + RVA_EFF_FORMAT))(fin, ctx, packed);
+
+    if (g_tipCalls <= 8) {
+        unsigned long long fs = *(unsigned long long*)(fin + 0x10);
+        unsigned long long fc = *(unsigned long long*)(fin + 0x18);
+        unsigned char* fp = (fc <= EFF_SSO_MAX) ? fin : *(unsigned char**)fin;
+        if (fs < 200) Plugin_Log("[efftip] call#%d formatted=[%s]", g_tipCalls, (char*)fp);
+    }
+
+    sz = *(unsigned long long*)(fin + 0x10);
+    cap = *(unsigned long long*)(fin + 0x18);
+    src = (cap <= EFF_SSO_MAX) ? fin : *(unsigned char**)fin;
+
+    *(unsigned long long*)((unsigned char*)out + 0x10) = 0;
+    *(unsigned long long*)((unsigned char*)out + 0x18) = 0;
+    *(unsigned long long*)out = 0;
+    *((unsigned char*)out + 0x18) = 15;
+    *(unsigned char*)out = 0;
+
+    if (sz > 0 && sz < 200 && ConsoleCmd_IsReadable(src, (size_t)sz)) {
+        ((StrAppendFn)(img + RVA_EFF_STR_APPEND))(out, sz);
+        cap = *(unsigned long long*)((unsigned char*)out + 0x18);
+        dst = (cap <= EFF_SSO_MAX) ? (unsigned char*)out : *(unsigned char**)out;
+        for (i = 0; i < sz; ++i) dst[i] = src[i];
+        dst[sz] = 0;
+        *(unsigned long long*)((unsigned char*)out + 0x10) = sz;
+    }
+
+    if (g_tipCalls <= 8) {
+        unsigned long long osz = *(unsigned long long*)((unsigned char*)out + 0x10);
+        unsigned long long ocap = *(unsigned long long*)((unsigned char*)out + 0x18);
+        unsigned char* op = (ocap <= EFF_SSO_MAX) ? (unsigned char*)out : *(unsigned char**)out;
+        char dtxt[256];
+        int dn = 0;
+        unsigned long long j;
+        if (osz < 200 && ConsoleCmd_IsReadable(op, (size_t)osz + 1)) {
+            for (j = 0; j < osz && dn < 240; ++j) {
+                char ch = (char)op[j];
+                dtxt[dn++] = (ch == 10 || ch == 13) ? ' ' : ch;
+            }
+            dtxt[dn] = 0;
+            Plugin_Log("[efftip] call#%d key=%s len=%llu text=[%s]",
+                       g_tipCalls, g_locKey, osz, dtxt);
+        }
+    }
+
+    return out;
+}
+
 static void* __fastcall MyFactory(void)
 {
     unsigned char* img = Img();
@@ -75,6 +176,25 @@ static void* __fastcall MyFactory(void)
     inst = make();
     if (inst != NULL) *(void**)inst = g_execVt;
     return inst;
+}
+
+static void Wstr(void* p, const char* s)
+{
+    unsigned char* d = (unsigned char*)p;
+    size_t n = 0;
+    size_t i;
+    while (s[n] != 0) ++n;
+    if (n <= EFF_SSO_MAX) {
+        for (i = 0; i <= EFF_SSO_MAX; ++i) d[i] = 0;
+        for (i = 0; i < n; ++i) d[i] = (unsigned char)s[i];
+        *(unsigned long long*)(d + 0x10) = n;
+        *(unsigned long long*)(d + 0x18) = EFF_SSO_MAX;
+    } else {
+        for (i = 0; i < n; ++i) d[i] = (unsigned char)s[i];
+        d[n] = 0;
+        *(unsigned long long*)(d + 0x10) = n;
+        *(unsigned long long*)(d + 0x18) = n;
+    }
 }
 
 static float ParamAsFloat(void* self)
@@ -142,29 +262,6 @@ static void __fastcall ExecSetCamHeight(void* self, void* scope)
     if (!ConsoleCmd_IsReadable((unsigned char*)cam + 0x69C, 8)) return;
 
     {
-        unsigned char* p = (unsigned char*)self;
-        char line[512];
-        int off = 0;
-        int k;
-        for (k = 0; k < 0x140; k += 4) {
-            unsigned int v;
-            if (!ConsoleCmd_IsReadable(p + k, 4)) break;
-            v = *(unsigned int*)(p + k);
-            if (off < 400) {
-                int w = _snprintf_s(line + off, sizeof(line) - (size_t)off, _TRUNCATE,
-                                    "%03X:%08X ", k, v);
-                if (w > 0) off += w;
-            }
-            if ((k & 0x1F) == 0x1C) {
-                Plugin_Log("[effdump] %s", line);
-                off = 0;
-                line[0] = 0;
-            }
-        }
-        if (off > 0) Plugin_Log("[effdump] %s", line);
-    }
-
-    {
         float want = ParamAsFloat(self);
         before = *(float*)((unsigned char*)cam + 0x69C);
         ((CamSetHeightFn)(img + RVA_CAM_SETH))(cam, want);
@@ -201,6 +298,7 @@ int Effect_Register(const char* name, const char* desc, EffectExecFn exec, int* 
         g_execVt[i] = *(void**)(img + RVA_STAB_VT + (unsigned)i * 8);
     }
     g_execVt[EFF_VT_EXEC / 8] = (void*)exec;
+    g_execVt[EFF_VT_TOOLTIP / 8] = (void*)MyGetTooltip;
 
     g_entryVt[0] = *(void**)(img + RVA_STAB_ENTRY_VT);
     g_entryVt[1] = (void*)MyFactory;
