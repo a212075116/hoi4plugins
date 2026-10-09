@@ -309,3 +309,61 @@ hook `0xf9b4b0` 得到 `total=158681, 返回非 0 = 115842`。
   说明引擎会把 owner 自动纳入 core。
 - ComputeOccupiedTag 有两个分支都可能返回有效 tag: 精确匹配 (f9874e) 与回退遍历 (f9877f),
   列表为空时才走到 f988c0 那条真正不命中的路径。
+### 第五轮：定位到「保持 tag」与「变 0」的两类州
+
+在进地图后读两类州的状态，得到完全分离的相关性：
+
+    保持 tag 的州 (11 个): core count = 0 (core 列表为空)
+    变 0 的州 (435 个):   core count >= 1
+
+逐字段对照（进图 4 秒后读）：
+
+    --- 保持 tag id=7 ---
+      CState+0xc8(owner)=33  core count=0 列表=(空)   tag=33  flag208=1
+    --- 保持 tag id=31 ---
+      CState+0xc8(owner)=33  core count=0 列表=(空)   tag=33  flag208=1
+    --- 变 0 id=1 ---
+      CState+0xc8(owner)=23  core count=2 列表=23,45  tag=0   flag208=0
+    --- 变 0 id=2 ---
+      CState+0xc8(owner)=33  core count=1 列表=33     tag=0   flag208=0
+
+注意 flag208 在进图数秒后也会变成 0，也就是说清零这一步同时收拾了 tag 与标志;
+而报错(609 行, 435 条)发生在这之前 —— 那时标志还是 1、tag 已经是 0。
+
+### state 文件的 owner 分布（446 个州）
+
+    owner=WS1 (SnowlandNorth) 17 个: 2,5,7,8,11,12,14,15,17,18,20,24,26,29,31,35,49
+    owner=WS2 (SnowlandSouth) 13 个
+    owner=W00 (MapUtilities)  10 个: 423,425,426,427,430,431,432,433,434,435
+    owner=WS3 (SnowlandWest)   7 个
+    owner=WV1 (Volcano)        6 个
+    owner=WLH                 11 个
+
+这 5 类文件全部没有 add_core_of。
+
+### 与 capital 的对应
+
+    W00-MapUtilities.txt:  capital = 431
+    WS1-SnowlandNorth.txt: capital = 18
+
+而 431 与 18 恰好都是变 0 的州，其余同 owner 的州保持 tag。
+（W00 的 10 个州里唯独 431 变 0；WS1 的 17 个里只有 7 与 31 保持。）
+
+### 删除 add_core_of 的对照实验
+
+把 393 个 state 文件里的 753 行 add_core_of 全部删除后进图：
+
+    删除前: resistance.cpp:609 = 435 条
+    删除后: resistance.cpp:609 = 397 条
+
+**减少但不归零**，说明 core 列表是相关因素之一而不是唯一因素。
+（实验已回滚，753 行 add_core_of 全部恢复。）
+
+### ComputeOccupiedTag 的三条返回路径
+
+    1) 精确匹配 (f9874e):  owner 命中 core 列表 -> 返回该元素
+    2) 回退遍历 (f9877f):  遍历 core 列表, 用 0xf9c4b0 判定后返回
+    3) 空列表   (f988c0):  再次确认 core count == 0, 从另一来源 (rsi) 取值
+                          经 0xf9c4b0 判定后返回 [rsi]
+
+三条路径都可能产出非 0 的 tag，所以「谁的 core 为空」并不能单独决定结果。
