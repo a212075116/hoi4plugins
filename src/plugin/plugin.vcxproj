@@ -48,7 +48,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir);..\carrier;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)SDK_RVA\camera;$(ProjectDir)SDK_RVA\console;..\carrier;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -64,7 +64,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir);..\carrier;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)SDK_RVA\camera;$(ProjectDir)SDK_RVA\console;..\carrier;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -75,13 +75,13 @@
   </ItemDefinitionGroup>
 
   <ItemGroup>
-    <ClCompile Include="console_cmd.c" />
     <ClCompile Include="plugin_main.c" />
-    <ClCompile Include="camera_height.c" />
+    <ClCompile Include="SDK_RVA\console\console_cmd.c" />
+    <ClCompile Include="SDK_RVA\camera\camera_height.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="console_cmd.h" />
-    <ClInclude Include="camera_height.h" />
+    <ClInclude Include="SDK_RVA\console\console_cmd.h" />
+    <ClInclude Include="SDK_RVA\camera\camera_height.h" />
   </ItemGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
