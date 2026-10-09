@@ -43,11 +43,76 @@ static void __fastcall ExecSetGameDate(void* self, void* scope)
                g_execCalls, text, before, after, y, mo, d);
 }
 
+static void RunAdd(void* self, void* scope, int unit, const char* tag)
+{
+    int delta;
+    int before;
+    int after;
+    int y;
+    int mo;
+    int d;
+    int h;
+
+    (void)scope;
+    Effect_FlushPendingTooltip();
+    ++g_execCalls;
+
+    delta = (int)Effect_ParamFloat(self, scope);
+    before = GameDate_GetRaw();
+    if (!GameDate_Add(unit, delta)) {
+        Plugin_Log("[eff] %s #%d: add failed delta=%d", tag, g_execCalls, delta);
+        return;
+    }
+    after = GameDate_GetRaw();
+    y = 0;
+    mo = 0;
+    d = 0;
+    h = 0;
+    GameDate_GetParts4(&y, &mo, &d, &h);
+    Plugin_Log("[eff] %s #%d  delta=%d  raw %d -> %d  now %d.%d.%d.%d",
+               tag, g_execCalls, delta, before, after, y, mo, d, h);
+}
+
+static void __fastcall ExecAddYears(void* self, void* scope)
+{
+    RunAdd(self, scope, GD_UNIT_YEAR, "add_time_for_years");
+}
+
+static void __fastcall ExecAddMonths(void* self, void* scope)
+{
+    RunAdd(self, scope, GD_UNIT_MONTH, "add_time_for_months");
+}
+
+static void __fastcall ExecAddDays(void* self, void* scope)
+{
+    RunAdd(self, scope, GD_UNIT_DAY, "add_time_for_days");
+}
+
+static void __fastcall ExecAddHours(void* self, void* scope)
+{
+    RunAdd(self, scope, GD_UNIT_HOUR, "add_time_for_hours");
+}
 EFF_DEF(setgamedate, "set_game_date", "Sets the in-game date",
         "EFFECT_SET_GAME_DATE", &ExecSetGameDate)
 
+EFF_DEF(addyears, "add_time_for_years", "Adds years to the in-game date",
+        "EFFECT_ADD_TIME_FOR_YEARS", &ExecAddYears)
+
+EFF_DEF(addmonths, "add_time_for_months", "Adds months to the in-game date",
+        "EFFECT_ADD_TIME_FOR_MONTHS", &ExecAddMonths)
+
+EFF_DEF(adddays, "add_time_for_days", "Adds days to the in-game date",
+        "EFFECT_ADD_TIME_FOR_DAYS", &ExecAddDays)
+
+EFF_DEF(addhours, "add_time_for_hours", "Adds hours to the in-game date",
+        "EFFECT_ADD_TIME_FOR_HOURS", &ExecAddHours)
+
 static EffectDef* g_dateEffects[] = {
-    &setgamedate_def
+    &setgamedate_def,
+    &addyears_def,
+    &addmonths_def,
+    &adddays_def,
+    &addhours_def
 };
 
 #define EFF_DATE_COUNT (int)(sizeof(g_dateEffects) / sizeof(g_dateEffects[0]))
@@ -56,6 +121,10 @@ int EffectGameDate_Register(void)
 {
     int n;
     setgamedate_fill();
+    addyears_fill();
+    addmonths_fill();
+    adddays_fill();
+    addhours_fill();
     n = Effect_RegistryRegisterAll(g_dateEffects, EFF_DATE_COUNT);
     Plugin_Log("[eff] date effects registered: %d/%d", n, EFF_DATE_COUNT);
     return n;
