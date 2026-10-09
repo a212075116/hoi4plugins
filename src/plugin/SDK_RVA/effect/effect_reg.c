@@ -100,12 +100,45 @@ static void* __fastcall MyGetTooltip(void* self, void* out, void* ctx)
 
     if (!ConsoleCmd_IsReadable(img + RVA_EFF_PACKKEY, 16)) return out;
 
+    memset(paramDesc, 0, sizeof(paramDesc));
     memset(packed, 0, sizeof(packed));
     memset(fin, 0, sizeof(fin));
     (void)v18;
-    (void)paramDesc;
 
-    ((PackKeyFn)(img + RVA_EFF_PACKKEY))(packed, g_locKey, NULL, 0);
+    {
+        long long fixed = 0;
+        float pf = ParamAsFloat(self);
+
+        ((GetParamFn)(img + RVA_EFF_GETPARAM))((unsigned char*)self + 0x58, &fixed, ctx, 0, 0);
+
+        if (g_tipCalls <= 8) {
+            unsigned long long s108 = *(unsigned long long*)((unsigned char*)self + 0x110);
+            unsigned long long c108 = *(unsigned long long*)((unsigned char*)self + 0x118);
+            unsigned char* d108 = (c108 <= EFF_SSO_MAX)
+                                  ? ((unsigned char*)self + 0x108)
+                                  : *(unsigned char**)((unsigned char*)self + 0x108);
+            char buf[80];
+            int bn = 0;
+            unsigned long long j;
+            buf[0] = 0;
+            if (s108 < 60 && ConsoleCmd_IsReadable(d108, (size_t)s108 + 1)) {
+                for (j = 0; j < s108 && bn < 70; ++j) {
+                    char ch = (char)d108[j];
+                    buf[bn++] = (ch >= 32 && ch < 127) ? ch : '.';
+                }
+            }
+            buf[bn] = 0;
+            Plugin_Log("[efftip] call#%d ParamAsFloat=%.2f getParam=%lld +0x108sz=%llu str=[%s]",
+                       g_tipCalls, pf, fixed, s108, buf);
+        }
+
+        ((ParamCtorFn)(img + RVA_EFF_PARAM_CTOR))(paramDesc);
+        *(int*)(paramDesc + 0x00) = 9;
+        *(void**)(paramDesc + 0x08) = (void*)(img + RVA_EFF_PARAM_TAG);
+        *(long long*)(paramDesc + 0x50) = fixed;
+        ((PackKeyFn)(img + RVA_EFF_PACKKEY))(packed, g_locKey, paramDesc, 1);
+        ((ParamDtorFn)(img + RVA_EFF_PARAM_DTOR))(paramDesc);
+    }
 
     if (g_tipCalls <= 8) {
         unsigned long long pkSz = *(unsigned long long*)(packed + 0x10);
