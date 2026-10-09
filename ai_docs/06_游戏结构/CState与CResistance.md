@@ -126,3 +126,89 @@ hook `0xf9b4b0` 得到 `total=158681, 返回非 0 = 115842`。
   但它不是唯一出路 —— 上面的 Frida 探针可以完全替代 IDA 做反汇编与 xref。
 - Frida 的 `Interceptor` 在 `onEnter` 里用 `args[i]` 对应 `rcx/rdx/r8/r9`；
   尾调用（`jmp`）不会出现在 backtrace 里。
+## CResistance 启用标志的完整机制（深挖第二轮）
+
+### 相关函数
+
+| RVA | 语义 |
+|---|---|
+| **`0xf9ae60`** | **`CResistance::UpdateOccupation()`** — 决定 tag 与启用标志 |
+| **`0xf986b0`** | **`ComputeOccupiedTag()`** — 在列表里查找并算出占领国 tag |
+| `0xf9b050` | 真正把 tag 和 `+0x208` 写下去 |
+| `0xf9c4b0` | 附加检查（返回 byte） |
+| `0xf9c800` / `0xf97890` | 后续处理 |
+
+### UpdateOccupation 的反汇编骨架（0xf9ae60）
+
+    f9ae6f:  cmp dword ptr [rcx + 0x50], 0      ; tag > 0 ?
+    f9ae76:  jle 0xf9ae94                       ; tag<=0 -> 去计算
+    f9ae87:  call 0xf9c4b0                      ; 已有 tag: 检查
+    f9ae8e:  jne 0xf9b039
+
+    f9ae94:  call 0xf986b0                      ; computed = ComputeOccupiedTag()
+    f9aeac:  cmp dword ptr [rsp + 0x48], 0      ; computed > 0 ?
+    f9aeb1:  jle 0xf9b039                       ; <=0 -> 什么都不做
+    f9aeca:  call 0xf9c4b0
+    f9aed1:  je  0xf9b039
+    f9aee0:  call 0xf97890                      ; tag>0 时的附加处理
+    f9aef8:  call 0xf9b050                      ; ← 设置 tag 与 +0x208
+    f9af05:  cmp byte ptr [rdi + 0x208], 0      ; 用标志决定后续
+
+### 写 +0x208 的那一小段（0xf9b448 附近）
+
+    f9b448:  cmp dword ptr [rbp + 0x50], 0      ; tag > 0 ?
+    f9b44c:  jg  0xf9b452
+    f9b44e:  xor al, al                         ; tag<=0 -> al = 0
+    f9b450:  jmp 0xf9b46e
+    f9b452:  lea r8, [rbp + 0x50]
+    f9b464:  call 0xf9c4b0
+    f9b46b:  setne al
+    f9b46e:  mov byte ptr [rbp + 0x208], al     ; ← 写标志
+
+即 **标志 = (tag > 0) && 检查通过**。
+
+### ComputeOccupiedTag 的逻辑（0xf986b0）
+
+    f986d3:  rcx = [this + 8]; rcx += 0xc8
+    f986f7:  call 0xbb48f0                      ; CCurrentGameState
+    f986ff:  call 0x6ec3e0
+    f98704:  key = [rax]                        ; 存到 [rbp+0x40]
+    f98712:  cmp dword ptr [rax + 0x484], 0     ; 上限 <= 0 -> 失败
+    f9871d:  r14 = [this + 8]
+    f98742:  rcx = [r14 + 0xb0]                 ; ★ 列表数据指针
+    f9874c:  eax = [rcx]                        ; 列表元素
+    f9874e:  cmp ebx, eax                       ; 与 key 比较
+    f98750:  je  0xf988fd                       ; ★ 命中 -> 返回有效 tag
+    f98763:  cmp r12d, eax                      ; 或用转换后的值比较
+    f98766:  je  0xf988fd
+    f98772:  cmp edi, [r14 + 0xbc]              ; 列表长度在 [r14+0xbc]
+
+**它在一个列表（`[this+8]` 的 `+0xb0`，长度 `+0xbc`）里查找，命中才返回有效 tag。**
+
+### 运行时实测（spawn + hook，446 个州）
+
+    hook 0xf9ae60 入口:  calls=446  tag0=446      所有州入口时 tag 都是 0
+    hook 0xf9ae60 出口:  入口 tag=0/flag=0  ->  出口 tag=45/flag=1
+    hook 0xf9b46e (写标志): total=446, tag 全部有效(45/33/57/44/...)
+    出口记录 446 个地址, 稍后再读:  tag!=0 = 11   tag==0 = 435
+
+**结论：初始化阶段 446 个州都被算出并写入 tag 且标志置 1；随后其中 435 个的 tag
+变为 0，而标志没有跟着重算，于是后续每日更新在 tag=0 时调用 GetOccupationLaw 而报错。**
+
+### 排查用探针
+
+| 文件 | 用途 |
+|---|---|
+| `test/probes_js/_judge.js` | hook `0xf9ae60` 入口，统计 tag 分布 |
+| `test/probes_js/_exit.js` | hook `0xf9ae60` 出口，对比入口/出口的 tag 与标志 |
+| `test/probes_js/_wr.js` / `_wrbt.js` | hook `0xf9b46e` 写标志点，看 tag 与调用栈 |
+| `test/probes_js/_poll.js` | 记录对象地址后周期读 tag，观察何时变 0 |
+| `test/probes_js/_clr50.js` | 扫写 `[reg+0x50]` 的指令 |
+
+### 方法论提示
+
+- **hook 出口比 hook 入口更能说明状态变化**：入口 tag=0、出口 tag=45，一次就看出该函数自己会设置 tag。
+- **判断「谁改了字段」**：先记录对象地址再周期读，比直接扫指令更快定位「何时变」；
+  指令扫描对 `+disp32` 的多种编码（`89`/`88`/`c7`、SIB、REX 前缀）覆盖不全，容易漏。
+- **`MemoryAccessMonitor` 是页级粒度**，且若目标在 hook 安装前就已改变，会完全抓不到；
+  要与 hook 出口配合，在第一次出口时就装好。

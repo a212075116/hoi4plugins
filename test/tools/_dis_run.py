@@ -5,5 +5,5 @@ fh = importlib.util.module_from_spec(spec); spec.loader.exec_module(fh)
 pid, session, sc, fresh = fh.connect(r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/probes_js/_dis.js', force_spawn=False)
 time.sleep(0.5)
 e = sc.exports_sync
-print('=== CResistance 构造 0xf9133f 起 60 条 ===')
-print(e.dis(0xf9133f, 60))
+print('=== 0xf986b0 起 60 条 (计算占领国 tag) ===')
+print(e.dis(0xf986b0, 60))
