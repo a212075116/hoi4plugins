@@ -8,7 +8,8 @@
 #define OFF_CAM_MINH      0x6D0u
 #define OFF_CAM_MAXH      0x6D4u
 #define RVA_CAM_SETH      0x12643F0u
-#define CAM_TRUE_LOWER    1
+#define CAM_TRUE_LOWER    35
+#define OFF_CAM_PARAM_FIXED 0x98u
 #define CAM_TRUE_UPPER_FALLBACK 3000u
 #define OFF_CAM_INTERP    0x698u
 

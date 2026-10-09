@@ -53,6 +53,7 @@ int  Effect_RegistryRegisteredCount(void);
 void* Effect_NewInstance(void* vt);
 void* Effect_BuildTooltip(void* self, void* out, void* ctx, const char* locKey);
 float Effect_ParamFloat(void* self, void* ctx);
+void  Effect_SetParamFixed(void* self, double value);
 void  Effect_FlushPendingTooltip(void);
 
 #define EFF_DEF(sym, NM, DS, LK, FN)                                        \

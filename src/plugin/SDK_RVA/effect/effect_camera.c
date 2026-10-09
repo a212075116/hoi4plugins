@@ -117,6 +117,7 @@ static void __fastcall ExecSetLowerLimit(void* self, void* scope)
     Camera_SetLowerLimit(cam, want);
     Camera_GetLimits(cam, &lo, &hi);
     if (lo > hi) Camera_SetUpperLimit(cam, lo);
+    Effect_SetParamFixed(self, (double)lo);
     {
         int moved = 0;
         float now;
@@ -156,6 +157,7 @@ static void __fastcall ExecSetUpperLimit(void* self, void* scope)
     Camera_SetUpperLimit(cam, want);
     Camera_GetLimits(cam, &lo, &hi);
     if (hi < lo) Camera_SetLowerLimit(cam, hi);
+    Effect_SetParamFixed(self, (double)hi);
     {
         int moved = 0;
         float now;

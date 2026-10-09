@@ -96,6 +96,14 @@ float Effect_ParamFloat(void* self, void* ctx)
     return (float)((double)fixed / EFF_FIXED_SCALE);
 }
 
+void Effect_SetParamFixed(void* self, double value)
+{
+    unsigned char* p = (unsigned char*)self;
+    if (self == NULL) return;
+    if (!ConsoleCmd_IsReadable(p + 0x98, 8)) return;
+    *(long long*)(p + 0x98) = (long long)(value * EFF_FIXED_SCALE);
+}
+
 void* Effect_BuildTooltip(void* self, void* out, void* ctx, const char* locKey)
 {
     unsigned char* img = Img();
