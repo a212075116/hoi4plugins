@@ -14,8 +14,20 @@ import frida, time, json, os, sys
 W = r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV'
 LOG = r'C:/Users/a2120/Documents/Paradox Interactive/Hearts of Iron IV/logs/game.log'
 EXE = W + '/hoi4.exe'
-ARGS = [EXE, '-gdpr-compliant', '-start_tag=CHI', '-nolauncher']
+# 初始国家 tag 由环境变量 HOI4_START_TAG 决定 (默认 CHI)。
+# 用 mod 地图时, 必须换成该地图上真实存在的 tag, 否则进图会失败。
+DEFAULT_START_TAG = os.environ.get('HOI4_START_TAG', 'CHI')
+ARGS = [EXE, '-gdpr-compliant', '-start_tag=' + DEFAULT_START_TAG, '-nolauncher']
 IN_GAME_MARK = 'Launching SINGLEPLAYER-game'
+
+
+def set_start_tag(tag):
+    """显式指定初始国家 tag (覆盖环境变量)"""
+    global ARGS, DEFAULT_START_TAG
+    DEFAULT_START_TAG = tag
+    ARGS = [a for a in ARGS if not a.startswith('-start_tag=')]
+    ARGS = [ARGS[0], ARGS[1], '-start_tag=' + tag] + ARGS[2:]
+    return ARGS
 
 
 def find_pid():
