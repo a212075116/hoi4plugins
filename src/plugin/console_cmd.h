@@ -10,18 +10,22 @@ typedef struct {
     size_t cap;
 } CmdString;
 
+#define CMD_MAX_ALIAS 3
+
 typedef struct {
-    int       flag;
-    int       unknown04;
-    CmdString name;
-    CmdString usage;
-    CmdString description;
-    void*     handler;
-    void*     p70;
-    void*     p78;
-    int       argCount;
-    int       p84;
-    CmdString args[10];
+    int         flag;
+    int         unknown04;
+    CmdString   name;
+    int         aliasCount;
+    int         p2C;
+    const char* aliases[CMD_MAX_ALIAS];
+    CmdString   description;
+    void*       handler;
+    void*       p70;
+    void*       p78;
+    int         argCount;
+    int         p84;
+    CmdString   args[10];
 } CmdEntry;
 
 typedef struct {
@@ -53,7 +57,7 @@ typedef long long (__fastcall *CmdHandlerFn)(CmdResult* out, CmdArgs* args);
 typedef struct {
     const char*  name;
     const char*  description;
-    const char*  usage;
+    const char*  alias;
     int          argCount;
     const char*  argNames[CMD_MAX_ARGS];
     CmdHandlerFn handler;

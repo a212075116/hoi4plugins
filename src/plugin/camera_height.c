@@ -73,6 +73,10 @@ static long long __fastcall Handler_SetCamHeight(CmdResult* out, CmdArgs* args)
     unsigned char* cam;
     char arg[128];
     float want;
+    float cur;
+    int lo;
+    int hi;
+    int used;
 
     if (out == NULL) return 0;
     ConsoleCmd_InitResult(out);
@@ -84,50 +88,49 @@ static long long __fastcall Handler_SetCamHeight(CmdResult* out, CmdArgs* args)
         return (long long)out;
     }
 
-    {
-        float cur = *(float*)(cam + OFF_CAM_HEIGHT);
-        int lo = *(int*)(cam + OFF_CAM_MINH);
-        int hi = *(int*)(cam + OFF_CAM_MAXH);
+    cur = *(float*)(cam + OFF_CAM_HEIGHT);
+    lo = *(int*)(cam + OFF_CAM_MINH);
+    hi = *(int*)(cam + OFF_CAM_MAXH);
 
-        if (!ConsoleCmd_GetArg(args, 0, arg, sizeof(arg))) {
-            char msg[160];
-            _snprintf_s(msg, sizeof(msg), _TRUNCATE,
-                        "Currently,Camera Height is %.2f", cur);
-            ConsoleCmd_SetMessage(out, msg);
-            out->ok = 1;
-            Plugin_Log("[setcamheight] no arg, %s (range [%d,%d])", msg, lo, hi);
-            return (long long)out;
-        }
+    if (!ConsoleCmd_GetArg(args, 0, arg, sizeof(arg))) {
+        char msg[160];
+        _snprintf_s(msg, sizeof(msg), _TRUNCATE, "Currently,Camera Height is %.2f", cur);
+        ConsoleCmd_SetMessage(out, msg);
+        out->ok = 1;
+        Plugin_Log("[setcamheight] no arg, %s (range [%d,%d])", msg, lo, hi);
+        return (long long)out;
+    }
 
-        if (!ParseFloat(arg, &want)) {
-            ConsoleCmd_SetMessage(out, "Currently,Camera Height is unchanged");
-            Plugin_Log("[setcamheight] bad number: %s", arg);
-            return (long long)out;
-        }
+    if (!ParseFloat(arg, &want)) {
+        ConsoleCmd_SetMessage(out, "Currently,Camera Height is unchanged");
+        Plugin_Log("[setcamheight] bad number: %s", arg);
+        return (long long)out;
+    }
 
+    used = Camera_SetHeight(cam, want);
+    if (!used) {
         if (lo > 0 && want < (float)lo) want = (float)lo;
         if (hi > 0 && want > (float)hi) want = (float)hi;
+        *(float*)(cam + OFF_CAM_HEIGHT) = want;
+        Plugin_Log("[setcamheight] setter unavailable, wrote field directly");
+        used = 0;
+    } else {
+        want = *(float*)(cam + OFF_CAM_HEIGHT);
+    }
 
-        if (!Camera_SetHeight(cam, want)) {
-            *(float*)(cam + OFF_CAM_HEIGHT) = want;
-            Plugin_Log("[setcamheight] setter unavailable, wrote field directly");
-        }
-
-        {
-            char msg[160];
-            _snprintf_s(msg, sizeof(msg), _TRUNCATE,
-                        "Currently,Camera Height is %.2f", want);
-            ConsoleCmd_SetMessage(out, msg);
-            out->ok = 1;
-            Plugin_Log("[setcamheight] %.2f -> %.2f (arg=%s range [%d,%d])",
-                       cur, want, arg, lo, hi);
-        }
+    {
+        char msg[160];
+        _snprintf_s(msg, sizeof(msg), _TRUNCATE, "Currently,Camera Height is %.2f", want);
+        ConsoleCmd_SetMessage(out, msg);
+        out->ok = 1;
+        Plugin_Log("[setcamheight] %.2f -> %.2f (arg=%s setter=%d range [%d,%d])",
+                   cur, want, arg, used, lo, hi);
     }
     return (long long)out;
 }
 
 static const CmdDef kCamCmds[] = {
-    { "setcamheight", "Set camera", "<height>", 1, { "<height>" }, &Handler_SetCamHeight },
+    { "setcamheight", "Set camera height", "sch", 1, { "<height>" }, &Handler_SetCamHeight },
 };
 
 unsigned char* Camera_GetObject(void)

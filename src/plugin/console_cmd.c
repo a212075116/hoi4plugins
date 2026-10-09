@@ -82,6 +82,23 @@ static void WriteShort(CmdString* s, const char* str) {
     s->u.buf[n] = 0;
 }
 
+typedef void** (__fastcall *AssignFn)(void** dst, const void* src, size_t len);
+
+static void WriteStr(CmdString* s, const char* str) {
+    HMODULE base;
+    AssignFn assign;
+    size_t n = 0;
+
+    if (s == NULL || str == NULL) return;
+    while (str[n] != 0) ++n;
+    if (n <= CMD_SSO_MAX) { WriteShort(s, str); return; }
+
+    base = GetModuleHandleA(NULL);
+    if (base == NULL) { WriteShort(s, str); return; }
+    assign = (AssignFn)((unsigned char*)base + RVA_STR_ASSIGN);
+    assign((void**)s, str, n);
+}
+
 void ConsoleCmd_SetMessage(CmdResult* out, const char* s) {
     HMODULE base;
     typedef void** (__fastcall *AssignFn)(void** dst, const void* src, size_t len);
@@ -147,24 +164,31 @@ static void FillEntry(CmdEntry* e, const CmdDef* d) {
     e->flag     = 1;
     e->handler  = (void*)d->handler;
     e->argCount = d->argCount;
-    WriteShort(&e->name, d->name);
-    WriteShort(&e->usage, d->usage ? d->usage : "");
-    WriteShort(&e->description, d->description ? d->description : "");
+    WriteStr(&e->name, d->name);
+    if (d->alias != NULL && d->alias[0] != 0) {
+        e->aliases[0] = d->alias;
+        e->aliasCount = 1;
+    }
+    WriteStr(&e->description, d->description ? d->description : "");
     if (d->argCount > 0) {
         int i;
         for (i = 0; i < d->argCount && i < CMD_MAX_ARGS; ++i) {
-            if (d->argNames[i] != NULL) WriteShort(&e->args[i], d->argNames[i]);
+            if (d->argNames[i] != NULL) WriteStr(&e->args[i], d->argNames[i]);
         }
     }
 }
 
 static int CheckDef(const CmdDef* d) {
-    static const char* kFields[4] = { "name", "usage", "description", "argName" };
+    static const char* kFields[4] = { "name", "alias", "description", "argName" };
     const char* vals[4];
     int k;
 
     if (d->name == NULL || d->handler == NULL) {
         g_CmdLog("[cmdreg] skip: name or handler is null");
+        return 0;
+    }
+    if (d->alias != NULL && d->alias[0] != 0 && CMD_MAX_ALIAS < 1) {
+        g_CmdLog("[cmdreg] skip %s: alias not supported", d->name);
         return 0;
     }
     if (d->argCount < 0 || d->argCount > CMD_MAX_ARGS) {
@@ -173,26 +197,18 @@ static int CheckDef(const CmdDef* d) {
         return 0;
     }
     vals[0] = d->name;
-    vals[1] = d->usage ? d->usage : "";
+    vals[1] = d->alias ? d->alias : "";
     vals[2] = d->description ? d->description : "";
     for (k = 0; k < 3; ++k) {
-        size_t n = 0;
-        while (vals[k][n] != 0) ++n;
-        if (n > CMD_SSO_MAX) {
-            g_CmdLog("[cmdreg] skip %s: %s len %llu > SSO max %d",
-                     d->name, kFields[k], (unsigned long long)n, CMD_SSO_MAX);
+        if (vals[k][0] == 0 && k != 1) {
+            g_CmdLog("[cmdreg] skip %s: %s is empty", d->name, kFields[k]);
             return 0;
         }
     }
     for (k = 0; k < d->argCount; ++k) {
-        if (d->argNames[k] != NULL) {
-            size_t n = 0;
-            while (d->argNames[k][n] != 0) ++n;
-            if (n > CMD_SSO_MAX) {
-                g_CmdLog("[cmdreg] skip %s: argNames[%d] len %llu > SSO max %d",
-                         d->name, k, (unsigned long long)n, CMD_SSO_MAX);
-                return 0;
-            }
+        if (d->argNames[k] != NULL && d->argNames[k][0] == 0) {
+            g_CmdLog("[cmdreg] skip %s: argNames[%d] is empty", d->name, k);
+            return 0;
         }
     }
     return 1;
