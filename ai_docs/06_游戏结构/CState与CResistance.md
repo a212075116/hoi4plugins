@@ -212,3 +212,50 @@ hook `0xf9b4b0` 得到 `total=158681, 返回非 0 = 115842`。
   指令扫描对 `+disp32` 的多种编码（`89`/`88`/`c7`、SIB、REX 前缀）覆盖不全，容易漏。
 - **`MemoryAccessMonitor` 是页级粒度**，且若目标在 hook 安装前就已改变，会完全抓不到；
   要与 hook 出口配合，在第一次出口时就装好。
+
+### 时序实测（第三轮，决定性）
+
+用 spawn 模式从进程创建起 hook，得到精确的调用与状态时间线：
+
+    hook 0xf9b050 (SetTagAndFlag):
+      calls=446  不同对象=446  被多次调用的=0  进入时 tag=0 的次数=446
+    => 每个州只被设置一次, 进入时 tag=0, 出口时 tag 是有效值
+
+    hook 0xf9ae60 期间周期检查已记录对象:
+      第 20/40/.../446 次调用时, 其中 tag==0 的始终为 0
+      446 次全部结束后:  recorded=446  tag0=435  tag!=0=11
+
+    在 0xf9b050 第 446 次出口立刻装监控时读到:
+      calls=446  res=446  tag0=435     <- 此刻前 435 个已经被清零
+
+    SetTagAndFlag 逐次观察:
+      37.0s  calls=446  不同对象=446  进入时tag=0=446
+      40.0s  同上 (无重复调用)
+
+游戏进地图约需 37~39 秒（spawn 起算），清零紧随其后、秒级内完成。
+
+**结论：`UpdateOccupation` 对全部 446 个州都算出并写入了有效 tag、同时置启用标志；
+随后 435 个州的 tag 被清零，而启用标志没有跟着重算。**
+
+### 未解与已排除
+
+- **未解**：清零那一步的具体代码尚未定位。
+  `MemoryAccessMonitor` 在监控了 272/440 个页面的情况下仍抓不到对该字段的写入，
+  说明它对这种高频短窗口场景不可靠；guard page + `Process.setExceptionHandler` 会干扰
+  游戏自身的异常处理并导致进程退出，不可用。
+- **已排除**（都做了对照实验）：
+  - 覆盖 `common/occupation_laws`（整个目录禁用）—— 无效
+  - 覆盖 `common/resistance_activity`（整个目录禁用）—— 无效
+  - state 文件 owner / add_core_of 的 tag 合法性 —— 446 个文件全部合法
+  - 移走重复的 bookmark 文件 —— 无效
+  - 给 state 补 controller —— 无效（**注意：原版的 controller 必须写在日期块里**，
+    形如 `1938.10.25 = { controller = JAP }`；裸写 `controller = X` 在 `history = {}` 里不生效，
+    这也是那次实验无效的原因）
+
+### 附加结构事实
+
+- `CState + 0x0b0` = core tag 数组指针，`+0x0bc` = core 数量（实测 1 或 2）
+- `CState + 0x0c8` / `+0x0cc` = 该州的 owner tag（等于 core 数组首元素）
+- `CResistance + 0x008` = 指向所属 `CState` 的指针（反查很方便）
+- `ComputeOccupiedTag` 就是拿 `CState+0xc8` 去 core 数组里找，**owner 必定在其中**，
+  所以它对每个州都会返回有效 tag
