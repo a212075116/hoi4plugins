@@ -1,0 +1,27 @@
+import sys, time, importlib.util, os
+os.chdir(r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV')
+spec = importlib.util.spec_from_file_location('fh', r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/probes_frida/frida_host.py')
+fh = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(fh)
+pid, session, sc, fresh = fh.connect(r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/probes_js/_cmp.js', force_spawn=False)
+time.sleep(0.5)
+e = sc.exports_sync
+
+print('=== A) 直接写 +0x69C = 800 ===')
+print('  起始: ' + e.snap())
+print('  ' + e.directWrite(800.0))
+print('  跟踪 2 秒:')
+print(e.track(11))
+time.sleep(0.5)
+
+print()
+print('=== B) 调 setter = 1800 ===')
+print('  起始: ' + e.snap())
+print('  ' + e.callSetter(1800.0))
+print('  跟踪 2 秒:')
+print(e.track(11))
+time.sleep(0.5)
+
+print()
+print('=== 最终 ===')
+print('  ' + e.snap())

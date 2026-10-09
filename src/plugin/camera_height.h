@@ -7,6 +7,8 @@
 #define OFF_CAM_HEIGHT    0x69Cu
 #define OFF_CAM_MINH      0x6D0u
 #define OFF_CAM_MAXH      0x6D4u
+#define RVA_CAM_SETH      0x12643F0u
+#define OFF_CAM_INTERP    0x698u
 
 typedef struct {
     void*  base;

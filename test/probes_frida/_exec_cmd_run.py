@@ -1,0 +1,18 @@
+import sys, time, importlib.util, os
+os.chdir(r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV')
+spec = importlib.util.spec_from_file_location('fh', r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/probes_frida/frida_host.py')
+fh = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(fh)
+pid, session, sc, fresh = fh.connect(r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/probes_js/_exec_cmd.js', force_spawn=False)
+time.sleep(0.5)
+e = sc.exports_sync
+print('=== 起始 ===')
+print('  ' + e.cam())
+print()
+print('=== 1) 无参数 (查当前值) ===')
+print(e.exec('setcamheight', []))
+print()
+print('=== 2) 设 1200 (范围内) ===')
+print(e.exec('setcamheight', ['1200']))
+time.sleep(2.0)
+print('  2s 后: ' + e.cam())

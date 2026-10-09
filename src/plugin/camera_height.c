@@ -9,6 +9,24 @@
 
 extern void Plugin_Log(const char* fmt, ...);
 
+typedef void (__fastcall *CamSetHeightFn)(void* cam, float height);
+
+int Camera_SetHeight(void* cam, float want)
+{
+    HMODULE base;
+    unsigned char* img;
+    unsigned char* fn;
+
+    if (cam == NULL) return 0;
+    base = GetModuleHandleA(NULL);
+    if (base == NULL) return 0;
+    img = (unsigned char*)base;
+    if (!ConsoleCmd_IsReadable(img + RVA_CAM_SETH, sizeof(void*))) return 0;
+    fn = img + RVA_CAM_SETH;
+    ((CamSetHeightFn)fn)(cam, want);
+    return 1;
+}
+
 static unsigned char* CamObj(void)
 {
     HMODULE base = GetModuleHandleA(NULL);
@@ -90,7 +108,10 @@ static long long __fastcall Handler_SetCamHeight(CmdResult* out, CmdArgs* args)
         if (lo > 0 && want < (float)lo) want = (float)lo;
         if (hi > 0 && want > (float)hi) want = (float)hi;
 
-        *(float*)(cam + OFF_CAM_HEIGHT) = want;
+        if (!Camera_SetHeight(cam, want)) {
+            *(float*)(cam + OFF_CAM_HEIGHT) = want;
+            Plugin_Log("[setcamheight] setter unavailable, wrote field directly");
+        }
 
         {
             char msg[160];
