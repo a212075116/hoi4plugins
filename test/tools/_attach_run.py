@@ -1,0 +1,17 @@
+import sys, time, importlib.util
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
+spec = importlib.util.spec_from_file_location('fh', r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/probes_frida/frida_host.py')
+fh = importlib.util.module_from_spec(spec); spec.loader.exec_module(fh)
+pid = fh.find_pid()
+print('attach 到已有进程 pid=%s' % pid, flush=True)
+pid, session, sc, fresh = fh.connect(r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/probes_js/_date.js', force_spawn=False)
+print('fresh=%s (False 表示 attach 而非 spawn)' % fresh, flush=True)
+e = sc.exports_sync
+time.sleep(0.5)
+print('当前: ' + e.getDate(), flush=True)
+print(e.setRaw(48271368), flush=True)
+time.sleep(2)
+print('读回: ' + e.getDate(), flush=True)
+print('派生: ' + e.peek(0x478, 5), flush=True)
+fh.detach(session)
+print('已 detach, 脚本即将退出', flush=True)
