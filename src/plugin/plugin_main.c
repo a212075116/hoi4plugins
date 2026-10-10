@@ -15,6 +15,7 @@
 
 int EffectCameras_Register(void);
 int EffectGameDate_Register(void);
+int Var64_RegisterEffects(void);
 
 #define RVA_GS_GLOBAL   0x332F260u
 #define RVA_VT_MAIN     0x2721158u
@@ -178,6 +179,10 @@ static DWORD WINAPI PluginThread(LPVOID p)
                 if (ok) {
                     int nd = EffectGameDate_Register();
                     Plugin_Log("[plugin] date effects registered: %d", nd);
+                }
+                if (ok) {
+                    int nv = Var64_RegisterEffects();
+                    Plugin_Log("[plugin] var64 effects registered: %d", nv);
                 }
             }
             if (!ok) Sleep(10);
