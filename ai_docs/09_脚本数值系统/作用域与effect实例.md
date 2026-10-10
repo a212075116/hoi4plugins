@@ -93,3 +93,89 @@ void* inst = ((void* (*)())(img + 0x341F60))();   /* 造 CSetVariableEffect，ma
 另一条更省事的路径：既然 `CScopedVariable` 在 `inst + 88`，而 `sub_140542280` 就是
 「按名字取值的地址」，那么**造好实例、填好名字、直接调 `sub_140542280`** 即可，
 不必碰参数读取。
+
+## 十六、借游戏机制读写变量：实例化成功（第5轮）
+
+### 16.1 做法
+
+不再猜 scope 的字段，而是**直接复现游戏自己的调用链**：
+
+```c
+/* 1. 用工厂造一个 CSetVariableEffect 实例 */
+typedef void* (__fastcall *Var64FactoryFn)(void);
+inst = ((Var64FactoryFn)(img + 0x341F60))();      /* malloc 0x220 + 构造 + 设虚表 */
+
+/* 2. 把变量名写进实例 +512 的 std::string 字段（SSO） */
+nameDst = inst + 512;
+memset(nameDst, 0, 32);
+memcpy(nameDst, name, n);
+*(unsigned long long*)(nameDst + 16) = n;          /* size */
+*(unsigned long long*)(nameDst + 24) = 15ULL;      /* cap  */
+
+/* 3. 调 lookup：CScopedVariable 在实例 +88 */
+typedef void* (__fastcall *Var64LookupFn)(void* scopedVar, void* ctx, void* a3);
+addr = ((Var64LookupFn)(img + 0x542280))(inst + 88, scope, NULL);
+```
+
+工厂 `sub_140341F60` 的反汇编确认它是**无参数**的：
+
+```asm
+mov  ecx, 220h              ; 544 字节
+call malloc
+call sub_14032D260          ; 构造函数
+lea  rax, CSetVariableEffect::vftable
+mov  [rbx], rax
+retn                        ; 返回实例
+```
+
+`sub_140542280` 的参数也确认了（rcx=CScopedVariable*、rdx=ctx、r8=a3）：
+
+```asm
+cmp  byte ptr [rcx+0Eh], 0  ; a1+14 的标志，与构造函数吻合
+mov  rsi, r8                ; a3
+mov  rdi, rdx               ; a2 = ctx
+mov  rbx, rcx               ; a1
+```
+
+### 16.2 实测结果
+
+```
+[v64diag] *** GAME-API OK: inst=00000151724D66F0 addr=00000151717420C8 dshprobe=0 (0.00000)
+
+game.log: DIAG set dshprobe 1847293651
+```
+
+| 项 | 结果 |
+|---|---|
+| 造实例 | ✅ 成功（`inst=0x151724D66F0`），游戏未崩溃 |
+| 调 lookup | ✅ 成功，返回地址 `0x151717420C8` |
+| 读值 | ❌ 读回 `0`，而游戏日志显示 `1847293651` |
+
+### 16.3 对「读回 0」的分析
+
+`sub_140BC3F10` 在**没找到变量时会走插入分支**（`LABEL_10`），
+创建新节点、值默认 0。所以最可能的原因是：
+
+**lookup 没有找到已有的 `dshprobe`，而是新建了一个。**
+
+可能的具体原因（待第6轮验证）：
+
+| 序号 | 假设 | 验证方法 |
+|---|---|---|
+| 1 | 我们传给 lookup 的 `scope` 与游戏执行 `set_variable` 时的 ctx 不是同一个 | 在同一次 exec 里先让游戏写、再让我们读，对比 |
+| 2 | 变量名写入实例的方式有误（虽然 offset 与构造函数吻合） | 读回实例的 `+512` 字段核对 |
+| 3 | 变量的真正容器来自 `sub_140542500`（依赖 ctx），而我们的 ctx 缺少某个绑定 | 反编译 `sub_140542500` |
+| 4 | 游戏的 `set_variable` 在同一事件里写入的位置与我们查询的作用域不同（国家 vs 全局） | 对比 CE 扫描到的实际节点地址 |
+
+### 16.4 已有的可用工具
+
+```c
+/* variable64.c 里已实现 */
+int  Var64_LookupInScope(void* container, const char* name, long long* out);
+int  Var64_MakeGameVarInstance(void* scope, const char* name,
+                               void** outInst, void** outAddr);
+unsigned int Var64_Fnv1a(const char* s);
+```
+
+`Var64_MakeGameVarInstance` 已经能把「变量名 → 值地址」这条链路走通，
+只是拿到的地址指向的还不是那个已存在的变量。**下一次只需定位差异。**

@@ -10,6 +10,13 @@
 extern void Plugin_Log(const char* fmt, ...);
 
 typedef void (__fastcall *Var64GetParamFn)(void* a1, void* out, void* ctx, void* a4, void* a5);
+typedef void* (__fastcall *Var64FactoryFn)(void);
+typedef void* (__fastcall *Var64LookupFn)(void* scopedVar, void* ctx, void* a3);
+
+#define RVA_VARSET_FACTORY 0x341F60u
+#define RVA_VAR_LOOKUP     0x542280u
+#define VAR64_NAME_OFF     512u
+#define VAR64_SUBOBJ_OFF   88u
 
 static const char* const kVar64SlotNames[VAR64_SLOT_COUNT] = {
     "a", "b", "c", "d", "e", "f", "g", "h", "i"
@@ -110,6 +117,55 @@ static int Var64_LookupInScope(void* scope, const char* name, long long* out)
     return 0;
 }
 
+static unsigned char* Var64_Image(void)
+{
+    return (unsigned char*)GetModuleHandleA(NULL);
+}
+
+static int Var64_MakeGameVarInstance(void* scope, const char* name, void** outInst, void** outAddr)
+{
+    unsigned char* img = Var64_Image();
+    unsigned char* inst;
+    unsigned char* nameDst;
+    unsigned char* addr;
+    size_t n;
+
+    if (outInst != NULL) *outInst = NULL;
+    if (outAddr != NULL) *outAddr = NULL;
+    if (img == NULL || scope == NULL || name == NULL) return 0;
+    if (!ConsoleCmd_IsReadable(img + RVA_VARSET_FACTORY, 16)) return 0;
+
+    n = strlen(name);
+    if (n == 0 || n > 15) {
+        Plugin_Log("[var64] name length %u unsupported (need 1..15)", (unsigned)n);
+        return 0;
+    }
+
+    inst = (unsigned char*)((Var64FactoryFn)(img + RVA_VARSET_FACTORY))();
+    if (inst == NULL) return 0;
+
+    nameDst = inst + VAR64_NAME_OFF;
+    if (!ConsoleCmd_IsReadable(nameDst, 32)) {
+        Plugin_Log("[var64] instance name field not writable");
+        return 0;
+    }
+    memset(nameDst, 0, 32);
+    memcpy(nameDst, name, n);
+    *(unsigned long long*)(nameDst + 16) = (unsigned long long)n;
+    *(unsigned long long*)(nameDst + 24) = 15ULL;
+
+    if (!ConsoleCmd_IsReadable(img + RVA_VAR_LOOKUP, 16)) return 0;
+    addr = (unsigned char*)((Var64LookupFn)(img + RVA_VAR_LOOKUP))(inst + VAR64_SUBOBJ_OFF, scope, NULL);
+    if (addr == NULL || !ConsoleCmd_IsReadable(addr, 8)) {
+        Plugin_Log("[var64] lookup returned unusable addr");
+        return 0;
+    }
+
+    if (outInst != NULL) *outInst = inst;
+    if (outAddr != NULL) *outAddr = addr;
+    return 1;
+}
+
 static void __fastcall ExecVar64Diag(void* self, void* scope)
 {
     long long found = 0;
@@ -172,6 +228,17 @@ static void __fastcall ExecVar64Diag(void* self, void* scope)
                 Plugin_Log("[v64diag] *** FOUND via %s: dshprobe = %lld (%.5f)",
                            tags[k], found, (double)found / EFF_FIXED_SCALE);
             }
+        }
+    }
+    {
+        void* inst = NULL;
+        void* addr = NULL;
+        if (Var64_MakeGameVarInstance(scope, "dshprobe", &inst, &addr)) {
+            long long v = *(long long*)addr;
+            Plugin_Log("[v64diag] *** GAME-API OK: inst=%p addr=%p dshprobe=%lld (%.5f)",
+                       inst, addr, v, (double)v / EFF_FIXED_SCALE);
+        } else {
+            Plugin_Log("[v64diag] GAME-API failed for dshprobe");
         }
     }
 }
