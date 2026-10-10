@@ -1,5 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "carrier.h"
@@ -29,6 +30,18 @@ typedef void* (__fastcall *Var64LookupFn)(void* scopedVar, void* ctx, void* a3);
 #define VAR64_SUBOBJ_OFF   88u
 #define VAR64_PARAM_OFF    408u
 #define VAR64_INST_SIZE    544u
+#define RVA_GAMESTATE_GLOBAL   0x332F260u
+#define RVA_APP_GLOBAL         0x332F698u
+#define RVA_SAVEINFO_INIT      0x0BC0880u
+#define RVA_LOAD_SAVEFILE      0x0DA04F0u
+#define RVA_STRING_ASSIGN      0x0129CA0u
+#define VAR64_SAVEINFO_BYTES   256u
+#define VAR64_SAVEINFO_NAME_AT 32u
+#define VAR64_APP_LOADER_SLOT  880u
+#define VAR64_GS_SLOT_PRIMARY  1312u
+#define VAR64_GS_SLOT_FALLBACK 1316u
+#define VAR64_SAVEFILE_SUFFIX  ".hoi4"
+#define VAR64_SAVEFILE_MAX     160u
 
 static const char* const kVar64SlotNames[VAR64_SLOT_COUNT] = {
     "a", "b", "c", "d", "e", "f", "g", "h", "i"
@@ -610,6 +623,119 @@ static void __fastcall ExecVar64ShowA(void* self, void* scope)
 static void __fastcall ExecVar64GameSyntax(void* self, void* scope)
 {
     Var64_GameSyntaxDetour(self, scope);
+}
+
+typedef void (__fastcall *Var64SaveInfoInitFn)(void* self);
+typedef void (__fastcall *Var64LoadSaveFileFn)(void* loader, void* saveInfo, void* slot);
+typedef void* (__fastcall *Var64LoaderGetterFn)(void* app);
+typedef void** (__fastcall *Var64StringAssignFn)(void** dst, const void* src, size_t len);
+
+static int Var64_WriteSaveFileName(CmdString* field, const char* fileName)
+{
+    unsigned char* img;
+    size_t n;
+
+    if (field == NULL || fileName == NULL) return 0;
+    n = strlen(fileName);
+    if (n == 0 || n > 120) return 0;
+    if (n <= CMD_SSO_MAX) {
+        memcpy(field->u.buf, fileName, n);
+        field->u.buf[n] = 0;
+        field->size = n;
+        field->cap = 15;
+        return 1;
+    }
+    img = Var64_Image();
+    if (img == NULL) return 0;
+    if (!ConsoleCmd_IsReadable(img + RVA_STRING_ASSIGN, 16)) return 0;
+    ((Var64StringAssignFn)(img + RVA_STRING_ASSIGN))((void**)field, fileName, n);
+    return 1;
+}
+
+static long long __fastcall Handler_LoadGameSaveFile(CmdResult* out, CmdArgs* args)
+{
+    unsigned char saveInfo[VAR64_SAVEINFO_BYTES];
+    unsigned char* img;
+    void* gs;
+    void* app;
+    void* vtable;
+    void* loader;
+    void* slot;
+    char fileName[VAR64_SAVEFILE_MAX];
+    char msg[160];
+    size_t n;
+
+    if (out == NULL) return 0;
+    ConsoleCmd_InitResult(out);
+
+    if (!ConsoleCmd_GetArg(args, 0, fileName, sizeof(fileName))) {
+        ConsoleCmd_SetMessage(out, "loadgame <savefile>  e.g. loadgame zz_reload_test");
+        return (long long)out;
+    }
+
+    n = strlen(fileName);
+    if (n < 5 || _stricmp(fileName + n - 5, VAR64_SAVEFILE_SUFFIX) != 0) {
+        if (n + 6 > sizeof(fileName)) {
+            ConsoleCmd_SetMessage(out, "savefile name too long");
+            return (long long)out;
+        }
+        memcpy(fileName + n, VAR64_SAVEFILE_SUFFIX, 6);
+    }
+
+    img = Var64_Image();
+    if (img == NULL) { ConsoleCmd_SetMessage(out, "no module base"); return (long long)out; }
+    if (!ConsoleCmd_IsReadable(img + RVA_GAMESTATE_GLOBAL, 8)
+        || !ConsoleCmd_IsReadable(img + RVA_APP_GLOBAL, 8)
+        || !ConsoleCmd_IsReadable(img + RVA_SAVEINFO_INIT, 16)
+        || !ConsoleCmd_IsReadable(img + RVA_LOAD_SAVEFILE, 16)) {
+        ConsoleCmd_SetMessage(out, "game addresses unreadable");
+        return (long long)out;
+    }
+
+    gs  = *(void**)(img + RVA_GAMESTATE_GLOBAL);
+    app = *(void**)(img + RVA_APP_GLOBAL);
+    if (gs == NULL || app == NULL || !ConsoleCmd_IsReadable(app, 16)) {
+        ConsoleCmd_SetMessage(out, "gamestate or application not ready");
+        return (long long)out;
+    }
+
+    memset(saveInfo, 0, sizeof(saveInfo));
+    ((Var64SaveInfoInitFn)(img + RVA_SAVEINFO_INIT))(saveInfo);
+    if (!Var64_WriteSaveFileName((CmdString*)(saveInfo + VAR64_SAVEINFO_NAME_AT), fileName)) {
+        ConsoleCmd_SetMessage(out, "cannot set savefile name");
+        return (long long)out;
+    }
+
+    vtable = *(void**)app;
+    loader = ((Var64LoaderGetterFn)(*(void**)((char*)vtable + VAR64_APP_LOADER_SLOT)))(app);
+    if (loader == NULL) {
+        ConsoleCmd_SetMessage(out, "save loader not available");
+        return (long long)out;
+    }
+
+    slot = (char*)gs + VAR64_GS_SLOT_FALLBACK;
+    if (*(int*)((char*)gs + VAR64_GS_SLOT_PRIMARY) > 0) slot = (char*)gs + VAR64_GS_SLOT_PRIMARY;
+
+    Plugin_Log("[saveload] loadgame [%s] gs=%p app=%p loader=%p slot=%p",
+               fileName, gs, app, loader, slot);
+    ((Var64LoadSaveFileFn)(img + RVA_LOAD_SAVEFILE))(loader, saveInfo, slot);
+    Plugin_Log("[saveload] loadgame returned for [%s]", fileName);
+
+    _snprintf_s(msg, sizeof(msg), _TRUNCATE, "Loaded %s", fileName);
+    ConsoleCmd_SetMessage(out, msg);
+    out->ok = 1;
+    return (long long)out;
+}
+
+static const CmdDef kVar64CommandDefs[] = {
+    { "loadgame", "Loads a save file by name (scriptable save loading).",
+      NULL, 1, { "savefile", NULL }, Handler_LoadGameSaveFile }
+};
+
+int Var64_RegisterLoadGameCommand(void)
+{
+    return ConsoleCmd_RegisterAll(kVar64CommandDefs,
+        (int)(sizeof(kVar64CommandDefs) / sizeof(kVar64CommandDefs[0])));
 }
 
 EFF_DEF(gamesetvar64, "set_variable64",
