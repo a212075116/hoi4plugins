@@ -1,0 +1,189 @@
+# variable64 的存档验证（第13~14轮）
+
+> 上游：effect 实现见《variable64的effect实现.md》。
+> 本文记录存读档工具链、32 位序列化限制的发现，以及高低位拆分方案及其验证。
+
+## 一、存读档工具链
+
+| 项 | 值 | 来源 |
+|---|---|---|
+| 存档命令 | **`savegame <名字>`** | 字符串 `0x142729728`，描述 `0x142729740` "Creates a save file." |
+| 自动存读档测试 | `savecheck` | `0x142729768`，描述 `0x142729780` |
+| 强制文本存档 | 启动参数 **`-force_text_save`** | `0x142717028` |
+| 存档目录 | `Documents/Paradox Interactive/Hearts of Iron IV/save games/` | 实测 |
+| 二进制存档头 | `HOI4bin5` | 实测 |
+| 文本存档头 | **`HOI4txt`** | 实测 |
+
+调用脚本（本轮新增）：
+
+```
+python hoi4plugins/test/modules/console/numtest_run_command.py savegame zz_v64_save
+```
+
+## 二、发现：游戏变量序列化是 32 位
+
+### 2.1 现象
+
+写入 `set_variable64 = { var = v64save value = 80000000000000 }`（raw `8000000000000000000`），
+文本存档（`zz_v64_split.hoi4`）里是：
+
+```
+185000: v64save=19391.44704
+```
+
+验算：`80000000000000 mod 2^32 = 1939144704`，且 `19391.44704 x 100000 = 1939144704`。
+
+**⇒ 存档存的是 `value mod 2^32`（value = raw / 100000）。**
+
+与 `[?var]` 的 log 行为一致 —— **两处都是 32 位**。
+
+### 2.2 顺带确认：定点上限
+
+测试 `99999999999999` 时读到 `-84467440737096`：
+
+```
+9999999999999900000 - 2^64 = -8446744073709651616   （回绕，完全吻合）
+```
+
+**定点上限 = `2^63 / 100000 = 92233720368547`（约 9.22e13）**，超出会回绕。
+
+## 三、解决方案：高低 32 位拆分
+
+### 3.1 设计
+
+```c
+#define VAR64_HIGH_SUFFIX  "_hi"
+#define VAR64_NAME_LIMIT   15u    /* SSO 上限 */
+
+/* 写入：把 value 拆成两个 32 位，各占一个游戏变量 */
+long long value = rawValue / 100000;
+unsigned long long uv = (unsigned long long)value;
+lo = (unsigned)(uv & 0xFFFFFFFF);
+hi = (unsigned)((uv >> 32) & 0xFFFFFFFF);
+写 lo 到主变量（游戏序列化时会存它的低 32 位，正好是 lo）
+写 hi 到 <名字>_hi
+
+/* 读取：从两个变量重组 */
+value = ((unsigned long long)hi << 32) | lo;
+raw   = value * 100000;
+```
+
+**关键点：拆分的基准必须是 `value`（= `raw / 100000`）而不是 `raw`**，
+因为游戏的序列化先做定点还原再取低 32 位。
+
+### 3.2 新增函数
+
+```c
+static int  Var64_MakeHighPartName(const char* name, char* out, unsigned int outSize);
+static unsigned char* Var64_ResolveAddressByName(void* self, void* ctx, const char* name);
+static void Var64_StoreSplit64(void* self, void* ctx, const char* name,
+                               unsigned char* lowAddr, long long rawValue);
+static long long Var64_LoadSplit64(void* self, void* ctx, const char* name,
+                                   unsigned char* lowAddr, unsigned int* outLo,
+                                   unsigned int* outHi);
+```
+
+三个 effect 都改用拆分逻辑。
+
+## 四、验证
+
+### 4.1 运行期日志
+
+```
+[var64] split v64save: value=80000000000000 lo=1939144704 hi=18626
+[var64] set_variable64 v64save = 80000000000000
+[var64] log_variable64 v64save = 80000000000000 (lo=1939144704 hi=18626)
+```
+
+### 4.2 文本存档（`zz_v64_split.hoi4`，头 `HOI4txt`）
+
+```
+185000: v64save=19391.44704
+185001: v64save_hi=0.18626
+```
+
+`19391.44704 x 100000 = 1939144704`（lo），`0.18626 x 100000 = 18626`（hi）。
+
+### 4.3 二进制存档（`Test_02.hoi4`，头 `HOI4bin5`）
+
+字节级解析：
+
+```
+v64save     名字在 2237514
+  后跟      00 0d 00 00 00 | 00 00 95 73 00 00 00 00
+  值        = 0x73950000 = 1939144704      <-- lo
+
+v64save_hi  名字在 2237537
+  后跟      00 0d 00 | c2 48 00 00 00 00 00 00
+  值        = 0x48C2 = 18626                <-- hi
+```
+
+### 4.4 重组验证
+
+```python
+lo = 1939144704; hi = 18626
+value = (hi << 32) | lo        # = 80000000000000   MATCH
+raw   = value * 100000         # = 8000000000000000000  MATCH
+```
+
+## 五、未完成的验证：真实读档恢复
+
+### 5.1 尝试
+
+用启动参数 `-continuelastsave` 启动（字符串 `0x142717440` 处发现），期望自动读最近的存档。
+
+### 5.2 结果：没有生效
+
+`game.log`：
+
+```
+[23:25:46][no_game_date][gamestate.cpp:2844]: Loaded 9975 provinces.
+[23:26:07][no_game_date][gameapplication.cpp:2968]: Resetting game
+[23:26:08][0500.01.01.01][history.cpp:165]: Executing History from -1.1.1.1 to  2.1.1.1
+[23:26:10][0500.01.01.01][frontend.cpp:682]: [[ Launching SINGLEPLAYER-game ]]
+```
+
+出现 `Resetting game` 和 `Launching SINGLEPLAYER-game` —— **开的是新游戏，不是读档**。
+
+读档后触发 `log_variable64`：
+
+```
+[var64] log_variable64 v64save = 0 (lo=0 hi=0)
+```
+
+### 5.3 中间环节的旁证
+
+`savecheck`（存 Test_01 -> 读档 -> 存 Test_02）执行成功（`out->ok = 1`），
+而且 `Test_02.hoi4` 里**两个变量名和值都在**（见 4.3）。
+
+**说明存档侧的往返是好的**（读档后重新序列化，值仍然正确），
+只是「启动到读档」这一步没有走通。
+
+### 5.4 尚未尝试的读档途径
+
+| 途径 | 说明 |
+|---|---|
+| 主菜单「继续游戏」 | 需要 GUI 操作（用户手动） |
+| 找真正的读档启动开关 | `-continuelastsave` 无效，可能有别的名字 |
+| 从主菜单调用读档 | 需要定位对应的按钮处理函数 |
+
+## 六、需求状态
+
+| 需求 | 状态 | 证据 |
+|---|---|---|
+| 64 位数值化 | ✅ | 插件内 8 字节槽读写完整 64 位 |
+| 与 32 位运算兼容 | ✅ | 游戏读同一槽（截断到 32 位） |
+| **存档中能存住** | ✅ | **文本/二进制存档里两个分量都正确** |
+| 语法与原版相同 | ✅ | 简写 + 完整两种都工作 |
+| log 能输出 64 位 | ✅ | `log_variable64` 输出完整值 |
+| 读档后完整恢复 | ⚠️ | 未验证（读档途径没走通） |
+
+## 七、已知限制
+
+| 限制 | 说明 |
+|---|---|
+| 有效数值上限 | `9.22e13`（定点 `2^63/100000`），超出回绕 |
+| 变量名长度 | 1..15（SSO），且加上 `_hi` 后仍须 <= 15 |
+| 每个变量占两个槽 | 主变量 + `_hi` |
+| 实例未释放 | 每次 effect 调用 malloc 544 字节，当前不回收 |
+| 与游戏的 32 位运算 | 游戏只看到低 32 位（高位在 `_hi` 里） |

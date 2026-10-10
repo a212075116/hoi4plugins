@@ -20,6 +20,8 @@ typedef void* (__fastcall *Var64LookupFn)(void* scopedVar, void* ctx, void* a3);
 #define RVA_VARSET_VT      0x2775698u
 #define RVA_GAME_SET_EXEC  0x364C60u
 #define VAR64_MARK_OFF     505u
+#define VAR64_HIGH_SUFFIX  "_hi"
+#define VAR64_NAME_LIMIT   15u
 #define VAR64_MARK_SET     0x53343656u
 #define VAR64_MARK_ADD     0x53343641u
 #define VAR64_MARK_LOG     0x5334364Cu
@@ -208,6 +210,89 @@ static int Var64_ResolveGameVariable(void* self, void* ctx, long long* outValue,
     return 1;
 }
 
+static int Var64_MakeHighPartName(const char* name, char* out, unsigned int outSize)
+{
+    size_t n;
+
+    if (name == NULL || out == NULL) return 0;
+    n = strlen(name);
+    if (n == 0 || n + 4 > outSize) return 0;
+    if (n + 3 > VAR64_NAME_LIMIT) return 0;
+    memcpy(out, name, n);
+    out[n] = '_';
+    out[n + 1] = 'h';
+    out[n + 2] = 'i';
+    out[n + 3] = 0;
+    return 1;
+}
+
+static unsigned char* Var64_ResolveAddressByName(void* self, void* ctx, const char* name)
+{
+    unsigned char* img = Var64_Image();
+    unsigned char* p = (unsigned char*)self;
+    unsigned char* nm;
+    unsigned char* addr;
+    size_t n;
+
+    if (img == NULL || p == NULL || name == NULL) return NULL;
+    n = strlen(name);
+    if (n == 0 || n > VAR64_NAME_LIMIT) return NULL;
+    nm = p + VAR64_NAME_OFF;
+    if (!ConsoleCmd_IsReadable(nm, 32)) return NULL;
+    memcpy(nm, name, n + 1);
+    *(unsigned long long*)(nm + 16) = (unsigned long long)n;
+    *(unsigned long long*)(nm + 24) = (unsigned long long)VAR64_NAME_LIMIT;
+    if (!ConsoleCmd_IsReadable(img + RVA_VAR_LOOKUP, 16)) return NULL;
+    addr = (unsigned char*)((Var64LookupFn)(img + RVA_VAR_LOOKUP))
+               ((void*)(p + VAR64_SUBOBJ_OFF), ctx, NULL);
+    if (addr == NULL || !ConsoleCmd_IsReadable(addr, 8)) return NULL;
+    return addr;
+}
+
+static void Var64_StoreSplit64(void* self, void* ctx, const char* name,
+                               unsigned char* lowAddr, long long rawValue)
+{
+    long long value = rawValue / 100000;
+    unsigned long long uv = (unsigned long long)value;
+    unsigned int lo = (unsigned int)(uv & 0xFFFFFFFFu);
+    unsigned int hi = (unsigned int)((uv >> 32) & 0xFFFFFFFFu);
+    char hiName[40];
+
+    if (lowAddr != NULL) *(long long*)lowAddr = (long long)lo;
+
+    if (!Var64_MakeHighPartName(name, hiName, sizeof(hiName))) {
+        Plugin_Log("[var64] name too long for high part: [%s]", name);
+        return;
+    }
+    {
+        unsigned char* hiAddr = Var64_ResolveAddressByName(self, ctx, hiName);
+        if (hiAddr != NULL) {
+            *(long long*)hiAddr = (long long)hi;
+        } else {
+            Plugin_Log("[var64] cannot store high part [%s]", hiName);
+        }
+    }
+    Plugin_Log("[var64] split %s: value=%lld lo=%u hi=%u", name, value, lo, hi);
+}
+
+static long long Var64_LoadSplit64(void* self, void* ctx, const char* name,
+                                   unsigned char* lowAddr, unsigned int* outLo,
+                                   unsigned int* outHi)
+{
+    unsigned int lo = 0;
+    unsigned int hi = 0;
+    char hiName[40];
+
+    if (lowAddr != NULL) lo = (unsigned int)(*(long long*)lowAddr);
+    if (Var64_MakeHighPartName(name, hiName, sizeof(hiName))) {
+        unsigned char* hiAddr = Var64_ResolveAddressByName(self, ctx, hiName);
+        if (hiAddr != NULL) hi = (unsigned int)(*(long long*)hiAddr);
+    }
+    if (outLo != NULL) *outLo = lo;
+    if (outHi != NULL) *outHi = hi;
+    return (long long)(((unsigned long long)hi << 32) | (unsigned long long)lo) * 100000;
+}
+
 static long long __fastcall Var64_DoSetVariable64(void* self, void* ctx)
 {
     long long delta = 0;
@@ -218,8 +303,8 @@ static long long __fastcall Var64_DoSetVariable64(void* self, void* ctx)
         Plugin_Log("[var64] set_variable64 failed to resolve");
         return 0;
     }
-    *(long long*)addr = delta;
-    Plugin_Log("[var64] set_variable64 %s = %lld (raw %lld)", name, delta / 100000, delta);
+    Var64_StoreSplit64(self, ctx, name, addr, delta);
+    Plugin_Log("[var64] set_variable64 %s = %lld", name, delta / 100000);
     return delta;
 }
 
@@ -235,9 +320,9 @@ static long long __fastcall Var64_DoAddToVariable64(void* self, void* ctx)
         Plugin_Log("[var64] add_to_variable64 failed to resolve");
         return 0;
     }
-    before = *(long long*)addr;
+    before = Var64_LoadSplit64(self, ctx, name, addr, NULL, NULL);
     after = before + delta;
-    *(long long*)addr = after;
+    Var64_StoreSplit64(self, ctx, name, addr, after);
     Plugin_Log("[var64] add_to_variable64 %s: %lld + %lld = %lld",
                name, before / 100000, delta / 100000, after / 100000);
     return after;
@@ -247,14 +332,17 @@ static long long __fastcall Var64_DoLogVariable64(void* self, void* ctx)
 {
     unsigned char* addr = NULL;
     char name[40];
+    unsigned int lo = 0;
+    unsigned int hi = 0;
     long long current;
 
     if (!Var64_ResolveGameVariable(self, ctx, NULL, &addr, name, sizeof(name))) {
         Plugin_Log("[var64] log_variable64 failed to resolve");
         return 0;
     }
-    current = *(long long*)addr;
-    Plugin_Log("[var64] log_variable64 %s = %lld (raw %lld)", name, current / 100000, current);
+    current = Var64_LoadSplit64(self, ctx, name, addr, &lo, &hi);
+    Plugin_Log("[var64] log_variable64 %s = %lld (lo=%u hi=%u)",
+               name, current / 100000, lo, hi);
     return current;
 }
 
