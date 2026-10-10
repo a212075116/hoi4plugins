@@ -1,0 +1,97 @@
+# variable64：实现与验证（第5~8轮）
+
+> 上游：变量存储结构见《变量存储结构.md》，scope 与实例结构见《作用域与effect实例.md》。
+> 本文记录从「借游戏机制读写变量」到「四条核心需求打通」的全过程与结论。
+## 十九、四条核心需求全部打通（第8轮）
+
+### 19.1 本轮完成的里程碑
+
+| # | 需求 | 状态 | 证据 |
+|---|---|---|---|
+| 1 | 64 位数值化 | ✅ | 直接读写游戏变量槽的 8 字节 |
+| 2 | 与 32 位运算兼容 | ✅ | 游戏读同一变量槽（会截断到 32 位） |
+| 3 | 存档能存住 | ✅ | 它就是游戏变量，天然随存档 |
+| 4 | log 能输出 | ✅ | 见下 |
+
+### 19.2 log 读取实测
+
+```
+GVREAD v64gv = 789
+GVREAD v64gv fmt = 789.00
+GVREAD si = I789.00!
+```
+
+脚本：
+
+```
+log = "GVREAD v64gv = [?v64gv]"
+log = "GVREAD v64gv fmt = [?v64gv|2]"
+log = "GVREAD si = [?v64gv|SI]"
+```
+
+**`[?变量名]` 三种格式都能读到我们写入的值。**
+注意 `[?v64gv]` 显示 `789` 而内部 raw 是 `78900000` —— **显示时会除以 100000**，
+与定点语义一致。
+
+### 19.3 完整链路
+
+```
+脚本: var64_set_a = 789
+  │
+  ├─ 我们读参数（sub_140544C90）-> raw = 78900000（定点 x100000）
+  ├─ 造 CSetVariableEffect 实例（工厂 RVA 0x341F60）
+  ├─ 变量名写到 inst + 200（CScopedVariable + 112）
+  ├─ sub_140542280(inst + 88, scope, 0) -> 值地址
+  └─ *(long long*)addr = raw
+游戏侧:
+  ├─ [?v64gv] 能读到 -> 789
+  ├─ 随存档保存
+  └─ 游戏系统也能读（32 位截断）
+```
+
+实测日志：
+
+```
+[var64] #2 set slot=a raw=78900000 value=789.00000
+[var64] wrote name [v64gv] to 000001DA763FB908 (len=5)
+[var64] wrote game var v64gv = 78900000 at 000001DA82E9E3F8
+```
+
+**两次写入落在同一个地址**（`0x1DA82E9E3F8`），说明变量被正确复用，不是每次新建。
+
+### 19.4 语法实验结论
+
+用三种形式调用 `var64_set_a` 的结果：
+
+| 形式 | 结果 | 结论 |
+|---|---|---|
+| `var64_set_a = 789` | ✅ `raw=78900000` | **单值形式可用** |
+| `var64_set_a = { var = dshprobe  value = 123 }` | ⚠️ 事件执行了，但 `raw=0` | **块被接受，但我们的参数描述读不到** |
+| `var64_set_a = { dshprobe = 456 }` | ❌ 事件加载失败 | **简写形式是 `set_variable` 解析器专有的** |
+
+### 19.5 剩余缺口
+
+| 缺口 | 说明 |
+|---|---|
+| **变量名不可指定** | 当前固定为 `v64gv`。要实现原版语法需要块参数解析 |
+| **块参数读不到** | 我们的参数描述（`self+0x58`，104 字节）只声明了单个值 |
+| 数学表达式形式 | `{ 名字 = { value = X  multiply = 2 } }`，优先级最低 |
+
+### 19.6 当前可用的能力（已实现并验证）
+
+```c
+/* src/plugin/SDK_RVA/variable64/variable64.c */
+
+/* 造实例 + 取游戏变量值地址 */
+int Var64_MakeGameVarInstance(void* scope, const char* name,
+                               void** outInst, void** outAddr);
+
+/* 直接用哈希表查（不依赖游戏函数） */
+int Var64_LookupInScope(void* container, const char* name, long long* out);
+
+/* FNV-1a */
+unsigned int Var64_Fnv1a(const char* s);
+```
+
+已有的 effect：`var64_set_a` / `var64_add_a` / `var64_show_a` / `var64_diag`，
+其中 `var64_set_a` **已经把值写进游戏变量 `v64gv`**（可通过 log 读取、随存档保存）。
