@@ -97,18 +97,11 @@ static void __fastcall ExecSetLowerLimit(void* self, void* scope)
         if (want < tlo) want = tlo;
         if (want > thi) want = thi;
     }
-    Camera_SetLowerLimit(cam, want);
+    Camera_SetLowerLimitSmooth(cam, want);
     Camera_GetLimits(cam, &lo, &hi);
-    if (lo > hi) Camera_SetUpperLimit(cam, lo);
     Effect_SetParamFixed(self, (double)lo);
-    {
-        int moved = 0;
-        float now;
-        Camera_ApplyLimits(cam, &lo, &hi, &moved);
-        now = CameraEffect_ReadCurrentHeight(cam);
-        Plugin_Log("[eff] set_camera_height_lowerlimit  want=%d  lo %d -> %d  hi=%d  height=%.2f  moved=%d",
-                   want, old, lo, hi, now, moved);
-    }
+    Plugin_Log("[eff] set_camera_height_lowerlimit  want=%d  lo %d -> %d  hi=%d  height=%.2f",
+               want, old, lo, hi, CameraEffect_ReadCurrentHeight(cam));
 }
 
 static void __fastcall ExecSetUpperLimit(void* self, void* scope)
@@ -137,18 +130,11 @@ static void __fastcall ExecSetUpperLimit(void* self, void* scope)
         if (want > thi) want = thi;
         if (want < tlo) want = tlo;
     }
-    Camera_SetUpperLimit(cam, want);
+    Camera_SetUpperLimitSmooth(cam, want);
     Camera_GetLimits(cam, &lo, &hi);
-    if (hi < lo) Camera_SetLowerLimit(cam, hi);
     Effect_SetParamFixed(self, (double)hi);
-    {
-        int moved = 0;
-        float now;
-        Camera_ApplyLimits(cam, &lo, &hi, &moved);
-        now = CameraEffect_ReadCurrentHeight(cam);
-        Plugin_Log("[eff] set_camera_height_upperlimit  want=%d  hi %d -> %d  lo=%d  height=%.2f  moved=%d",
-                   want, old, hi, lo, now, moved);
-    }
+    Plugin_Log("[eff] set_camera_height_upperlimit  want=%d  hi %d -> %d  lo=%d  height=%.2f",
+               want, old, hi, lo, CameraEffect_ReadCurrentHeight(cam));
 }
 
 EFF_DEF(setcamheight, "set_camera_height", "Sets the camera height",

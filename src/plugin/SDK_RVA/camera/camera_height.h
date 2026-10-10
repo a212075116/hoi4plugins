@@ -13,6 +13,8 @@
 #define OFF_CAM_PARAM_FIXED 0x98u
 #define CAM_TRUE_UPPER_FALLBACK 3000u
 #define CAM_MIN_SPAN      50
+#define CAM_SMOOTH_STEPS  18
+#define CAM_SMOOTH_STEP_MS 16
 #define OFF_CAM_INTERP    0x698u
 
 typedef struct {
@@ -27,6 +29,8 @@ int            Camera_SetHeight(void* cam, float want);
 int            Camera_GetLimits(void* cam, int* lo, int* hi);
 int            Camera_SetLowerLimit(void* cam, int lo);
 int            Camera_SetUpperLimit(void* cam, int hi);
+int            Camera_SetLowerLimitSmooth(void* cam, int lo);
+int            Camera_SetUpperLimitSmooth(void* cam, int hi);
 int            Camera_TrueLower(void);
 int            Camera_TrueUpper(void* cam);
 int            Camera_CaptureTrueUpperLimit(void);

@@ -79,11 +79,138 @@ void Camera_NudgeInputToSyncLiveHeight(void)
     InterlockedExchange(&g_nudgeLock, 0);
 }
 
-int Camera_SetHeight(void* cam, float want)
+static volatile LONG g_smoothBusy = 0;
+static volatile LONG g_smoothKind = 0;
+static volatile LONG g_smoothFromBits = 0;
+static volatile LONG g_smoothToBits = 0;
+static volatile LONG g_smoothWithHeight = 0;
+static volatile LONG g_smoothHeightFromBits = 0;
+static volatile LONG g_smoothHeightToBits = 0;
+
+static void CameraSmoothApply(unsigned char* cam, int kind, float v)
+{
+    if (kind == 2) {
+        Camera_SetLowerLimit(cam, (int)v);
+    } else if (kind == 3) {
+        Camera_SetUpperLimit(cam, (int)v);
+    } else {
+        *(float*)(cam + OFF_CAM_HEIGHT) = v;
+    }
+}
+
+static float CameraSmoothRead(unsigned char* cam, int kind)
+{
+    if (kind == 2) return (float)(*(int*)(cam + OFF_CAM_MINH));
+    if (kind == 3) return (float)(*(int*)(cam + OFF_CAM_MAXH));
+    return *(float*)(cam + OFF_CAM_HEIGHT);
+}
+
+static DWORD WINAPI CameraSmoothThreadProc(LPVOID param)
+{
+    float from;
+    float target;
+    float step;
+    unsigned char* cam;
+    int kind;
+    int i;
+
+    (void)param;
+    kind = (int)g_smoothKind;
+    from = *(float*)&g_smoothFromBits;
+    target = *(float*)&g_smoothToBits;
+    step = (target - from) / (float)CAM_SMOOTH_STEPS;
+    Plugin_Log("[smooth] kind=%d from=%.2f to=%.2f step=%.2f withHeight=%d",
+               kind, from, target, step, (int)g_smoothWithHeight);
+
+    for (i = 1; i <= CAM_SMOOTH_STEPS; ++i) {
+        cam = Camera_GetObject();
+        if (cam == NULL) { Plugin_Log("[smooth] camera lost at step %d", i); break; }
+        if (g_smoothWithHeight) {
+            float hFrom = *(float*)&g_smoothHeightFromBits;
+            float hTo = *(float*)&g_smoothHeightToBits;
+            float hv = hFrom + (hTo - hFrom) * (float)i / (float)CAM_SMOOTH_STEPS;
+            CameraSmoothApply(cam, 1, hv);
+        }
+        CameraSmoothApply(cam, kind, from + step * (float)i);
+        Sleep(CAM_SMOOTH_STEP_MS);
+    }
+
+    cam = Camera_GetObject();
+    if (cam != NULL) {
+        if (g_smoothWithHeight) {
+            CameraSmoothApply(cam, 1, *(float*)&g_smoothHeightToBits);
+        }
+        CameraSmoothApply(cam, kind, target);
+        Plugin_Log("[smooth] done kind=%d final=%.2f (readback %.2f) height=%.2f",
+                   kind, target, CameraSmoothRead(cam, kind),
+                   *(float*)(cam + OFF_CAM_HEIGHT));
+    }
+
+    InterlockedExchange(&g_smoothBusy, 0);
+    return 0;
+}
+
+static int CameraSmoothStart(void* cam, int kind, float target)
+{
+    HANDLE th;
+
+    if (InterlockedCompareExchange(&g_smoothBusy, 1, 0) != 0) return 0;
+    g_smoothKind = kind;
+    g_smoothFromBits = *(LONG*)&(float){ CameraSmoothRead((unsigned char*)cam, kind) };
+    g_smoothToBits = *(LONG*)&target;
+    th = CreateThread(NULL, 0, CameraSmoothThreadProc, NULL, 0, NULL);
+    if (th == NULL) {
+        InterlockedExchange(&g_smoothBusy, 0);
+        return 0;
+    }
+    CloseHandle(th);
+    return 1;
+}
+
+int Camera_SetHeightImmediate(void* cam, float want)
 {
     if (cam == NULL) return 0;
     if (!ConsoleCmd_IsReadable((unsigned char*)cam + OFF_CAM_HEIGHT, 4)) return 0;
     *(float*)((unsigned char*)cam + OFF_CAM_HEIGHT) = want;
+    return 1;
+}
+
+int Camera_SetHeight(void* cam, float want)
+{
+    if (cam == NULL) return 0;
+    if (!ConsoleCmd_IsReadable((unsigned char*)cam + OFF_CAM_HEIGHT, 4)) return 0;
+    if (CameraSmoothStart(cam, 1, want)) return 1;
+    Plugin_Log("[smooth] busy, immediate height %.2f", want);
+    *(float*)((unsigned char*)cam + OFF_CAM_HEIGHT) = want;
+    return 1;
+}
+
+int Camera_SetLowerLimitSmooth(void* cam, int lo)
+{
+    float hFrom;
+    float hTo;
+
+    if (cam == NULL) return 0;
+    if (!ConsoleCmd_IsReadable((unsigned char*)cam + OFF_CAM_MINH, 4)) return 0;
+    hFrom = *(float*)((unsigned char*)cam + OFF_CAM_HEIGHT);
+    hTo = (hFrom < (float)lo) ? (float)lo : hFrom;
+    g_smoothWithHeight = 1;
+    g_smoothHeightFromBits = *(LONG*)&hFrom;
+    g_smoothHeightToBits = *(LONG*)&hTo;
+    if (CameraSmoothStart(cam, 2, (float)lo)) return 1;
+    Plugin_Log("[smooth] busy, immediate lower %d", lo);
+    g_smoothWithHeight = 0;
+    Camera_SetLowerLimit(cam, lo);
+    return 1;
+}
+
+int Camera_SetUpperLimitSmooth(void* cam, int hi)
+{
+    if (cam == NULL) return 0;
+    if (!ConsoleCmd_IsReadable((unsigned char*)cam + OFF_CAM_MAXH, 4)) return 0;
+    if (CameraSmoothStart(cam, 3, (float)hi)) return 1;
+    Plugin_Log("[smooth] busy, immediate upper %d", hi);
+    Camera_SetUpperLimit(cam, hi);
     return 1;
 }
 
@@ -300,14 +427,9 @@ static long long __fastcall Handler_SetLowerLimit(CmdResult* out, CmdArgs* args)
         if (v > thi) { v = thi; Plugin_Log("[setcamlower] clamp %d -> true upper %d", (int)want, thi); }
         want = (float)v;
     }
-    Camera_SetLowerLimit(cam, (int)want);
+    Camera_SetLowerLimitSmooth(cam, (int)want);
     Camera_GetLimits(cam, &lo, &hi);
-    if (lo > hi) {
-        Camera_SetUpperLimit(cam, lo);
-        Plugin_Log("[setcamlower] lo(%d) > hi(%d), hi raised to lo", lo, hi);
-    }
     moved = 0;
-    Camera_ApplyLimits(cam, &lo, &hi, &moved);
     {
         float now = *(float*)(cam + OFF_CAM_HEIGHT);
         char msg[192];
@@ -365,14 +487,9 @@ static long long __fastcall Handler_SetUpperLimit(CmdResult* out, CmdArgs* args)
         if (v < tlo) { v = tlo; Plugin_Log("[setcamupper] clamp %d -> true lower %d", (int)want, tlo); }
         want = (float)v;
     }
-    Camera_SetUpperLimit(cam, (int)want);
+    Camera_SetUpperLimitSmooth(cam, (int)want);
     Camera_GetLimits(cam, &lo, &hi);
-    if (hi < lo) {
-        Camera_SetLowerLimit(cam, hi);
-        Plugin_Log("[setcamupper] hi(%d) < lo(%d), lo lowered to hi", hi, lo);
-    }
     moved = 0;
-    Camera_ApplyLimits(cam, &lo, &hi, &moved);
     {
         float now = *(float*)(cam + OFF_CAM_HEIGHT);
         char msg[192];
