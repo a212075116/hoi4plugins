@@ -159,3 +159,110 @@ static long long Var64_ReadParamRaw2(void* self, void* scope)
 | A. 让参数描述支持两个槽 | 逆向 `sub_140544C90` 的 `a4`/`a5` 参数，看能否按字段名取值 |
 | B. 变量名改用固定前缀 + 数值后缀 | 用参数值本身编码名字（如 `v64_123`），绕开块解析 |
 | C. 维持现状 | 单值形式 + 固定变量名，先把 64 位读写跑通（已可用） |
+
+## 二十一、原版语法的实现路线（第10轮 · 关键实验）
+
+### 21.1 目标
+
+让 `set_variable64` 支持与 `set_variable` 完全相同的两种语法：
+
+```
+set_variable64 = { 名字 = 值 }
+set_variable64 = { var = 名字  value = 值 }
+```
+
+### 21.2 实验一：换 entry 虚表
+
+把 `var64_set_a` 的 `entryVt[0]` 换成 `CEffectEntry<CSetVariableEffect>` 的虚表（RVA `0x277C418`）。
+
+结果：单值形式 `var64_set_a = 111` 报错
+
+```
+Error: "Non assign effect is not enclosed in {}: var64_set_a"
+```
+
+**说明 entry 虚表决定参数形态**（单值 vs 块）。
+
+### 21.3 实验二：再换实例虚表
+
+factory 造 `CSetVariableEffect` 实例（544 字节），并把实例虚表换成我们自己的（25 槽里 24 个取自
+`CSetVariableEffect::vftable`，只把 exec 槽 `+0x68` 换成我们的函数）。
+
+结果：exec 被正确调用了，但变量名不对：
+
+```
+[v64par] nameField(+200) size=1 ; nameField text = [{]
+```
+
+**游戏把块的 `{` 当成了变量名** —— 说明实例虚表也参与块内键的解析。
+
+### 21.4 实验三：entryVt 的 patch 时机
+
+`Effect_RegistryRegister` 内部会重设 `entryVt[0]`：
+
+```c
+def->entryVt[0] = *(void**)(img + RVA_STAB_ENTRY_VT);   // 覆盖我们之前的修改
+def->entryVt[1] = (void*)def->factory;
+```
+
+所以必须在 `Effect_RegistryRegisterAll` **之后** patch。改到之后，patch 确实生效了
+（`0x7FF6C63B2FF0` = RVA `0x2E2FF0`），但结果仍和实验二一样。
+
+### 21.5 实验四（决定性）：完全复用游戏
+
+注册一个 effect `var64_gm`，**entry 虚表、factory、实例虚表、exec 全部用游戏的**。
+
+脚本：
+
+```
+set_variable = { gmprobe = 0 }
+var64_gm = { var = gmprobe value = 555 }
+log = "GMPROBE after = [?gmprobe]"
+```
+
+输出：
+
+```
+GMPROBE after = 555
+```
+
+**完全成功，没有任何错误。**
+
+### 21.6 结论
+
+| 项 | 结论 |
+|---|---|
+| entry 虚表 | 决定参数形态（单值 / 块） |
+| 实例虚表 | 决定块内键的解析（换掉就会错乱） |
+| **三者必须全部是游戏的** | **entry + 实例 + exec**，缺一不可 |
+
+因此**不能**用一个「换了 exec 的实例」来继承游戏的块解析。
+
+### 21.7 定下的实现路线：MinHook 挂 exec
+
+```
+1. set_variable64 的 entry / factory / 实例虚表 全部保持游戏的
+   -> 块解析完全正确，变量名进 +200，参数进 +408
+
+2. 在 factory 里给实例打标记（实例 +505 有 7 字节空隙未被构造函数使用）
+
+3. 用 MinHook 挂 CSetVariableEffect::exec（RVA 0x364C60）
+   - self+505 有标记 -> 我们的逻辑：
+       sub_140542280(self+88, ctx, 0) 拿值地址
+       写入完整 64 位
+       返回
+   - 无标记 -> 调原函数（set_variable 不受影响）
+```
+
+### 21.8 CSetVariableEffect 实例布局（本轮更新）
+
+| 偏移 | 内容 |
+|---|---|
+| `+0` | 虚表（**必须是 CSetVariableEffect 的**） |
+| `+88` | **CScopedVariable A** —— 变量名在 `+200`（= `+88 + 112`） |
+| `+296` | **CScopedVariable B** —— 参数在 `+408`（= `+296 + 112`） |
+| `+504` | byte 标志（exec 据它选分支） |
+| `+505`..`+511` | 空隙（可用作标记） |
+| `+512` | std::string（data `+512` / size `+528` / cap `+536`） |
+
+构造函数 `sub_14032D260` 只初始化到 `+536`，所以 `+505`..`+511` 是安全空隙。

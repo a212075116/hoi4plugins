@@ -15,8 +15,12 @@ typedef void* (__fastcall *Var64LookupFn)(void* scopedVar, void* ctx, void* a3);
 
 #define RVA_VARSET_FACTORY 0x341F60u
 #define RVA_VAR_LOOKUP     0x542280u
+#define RVA_VARSET_ENTRYVT 0x277C418u
+#define RVA_VARSET_VT      0x2775698u
 #define VAR64_NAME_OFF     200u
 #define VAR64_SUBOBJ_OFF   88u
+#define VAR64_PARAM_OFF    408u
+#define VAR64_INST_SIZE    544u
 
 static const char* const kVar64SlotNames[VAR64_SLOT_COUNT] = {
     "a", "b", "c", "d", "e", "f", "g", "h", "i"
@@ -120,6 +124,33 @@ static int Var64_LookupInScope(void* scope, const char* name, long long* out)
 static unsigned char* Var64_Image(void)
 {
     return (unsigned char*)GetModuleHandleA(NULL);
+}
+
+static void* g_var64SetAVt = NULL;
+
+static void* __fastcall Var64_PureGameFactory(void)
+{
+    unsigned char* img = Var64_Image();
+    if (img == NULL) return NULL;
+    if (!ConsoleCmd_IsReadable(img + RVA_VARSET_FACTORY, 16)) return NULL;
+    return ((Var64FactoryFn)(img + RVA_VARSET_FACTORY))();
+}
+
+static void* __fastcall Var64_GameStyleFactory(void)
+{
+    unsigned char* img = Var64_Image();
+    void* inst;
+
+    if (img == NULL) return NULL;
+    if (!ConsoleCmd_IsReadable(img + RVA_VARSET_FACTORY, 16)) return NULL;
+    inst = ((Var64FactoryFn)(img + RVA_VARSET_FACTORY))();
+    if (inst == NULL) return NULL;
+    if (!ConsoleCmd_IsReadable(inst, VAR64_INST_SIZE)) {
+        Plugin_Log("[var64] game-style instance too small");
+        return inst;
+    }
+    if (g_var64SetAVt != NULL) *(void**)inst = g_var64SetAVt;
+    return inst;
 }
 
 static int Var64_MakeGameVarInstance(void* scope, const char* name, void** outInst, void** outAddr)
@@ -288,9 +319,39 @@ static void __fastcall ExecVar64SetA(void* self, void* scope)
         unsigned char* p = (unsigned char*)self;
         int i;
         Plugin_Log("[v64par] self=%p raw=%lld", self, raw);
-        if (ConsoleCmd_IsReadable(p + 0x40, 0x100)) {
-            for (i = 0x40; i < 0x140; i += 8) {
+        if (ConsoleCmd_IsReadable(p + 0x40, 0x1E0)) {
+            for (i = 0x40; i < 0x220; i += 8) {
+                if (i == 0x58 || i == 0x60) continue;
                 Plugin_Log("[v64par] self+0x%03X = %p", i, *(void**)(p + i));
+            }
+        }
+        {
+            unsigned char* nm = p + VAR64_NAME_OFF;
+            unsigned char* pm = p + VAR64_PARAM_OFF;
+            unsigned long long c1 = 0, s1 = 0, c2 = 0, s2 = 0;
+            if (ConsoleCmd_IsReadable(nm, 32)) {
+                s1 = *(unsigned long long*)(nm + 16);
+                c1 = *(unsigned long long*)(nm + 24);
+            }
+            if (ConsoleCmd_IsReadable(pm, 32)) {
+                s2 = *(unsigned long long*)(pm + 16);
+                c2 = *(unsigned long long*)(pm + 24);
+            }
+            Plugin_Log("[v64par] nameField(+200) size=%u cap=%u ; paramField(+408) size=%u cap=%u",
+                       (unsigned)s1, (unsigned)c1, (unsigned)s2, (unsigned)c2);
+            if (s1 > 0 && s1 < 32 && ConsoleCmd_IsReadable(nm, (unsigned long long)s1)) {
+                char t1[40];
+                unsigned long long k;
+                for (k = 0; k < s1; ++k) t1[k] = (char)nm[k];
+                t1[s1] = 0;
+                Plugin_Log("[v64par] nameField text = [%s]", t1);
+            }
+            if (s2 > 0 && s2 < 32 && ConsoleCmd_IsReadable(pm, (unsigned long long)s2)) {
+                char t2[40];
+                unsigned long long k;
+                for (k = 0; k < s2; ++k) t2[k] = (char)pm[k];
+                t2[s2] = 0;
+                Plugin_Log("[v64par] paramField text = [%s]", t2);
             }
         }
     }
@@ -333,11 +394,15 @@ EFF_DEF(var64showa, "var64_show_a", "Logs 64-bit variable slot a",
 EFF_DEF(var64diag, "var64_diag", "Diagnoses the effect scope", 
         "EFFECT_VAR64_DIAG", &ExecVar64Diag)
 
+EFF_DEF(var64gm, "var64_gm", "Pure game-style probe",
+        "EFFECT_VAR64_GM", &ExecVar64Diag)
+
 static EffectDef* g_var64EffectDefs[] = {
     &var64seta_def,
     &var64adda_def,
     &var64showa_def,
-    &var64diag_def
+    &var64diag_def,
+    &var64gm_def
 };
 
 #define VAR64_EFFECT_COUNT (int)(sizeof(g_var64EffectDefs) / sizeof(g_var64EffectDefs[0]))
@@ -346,10 +411,41 @@ int Var64_RegisterEffects(void)
 {
     int n;
     var64seta_fill();
+    var64seta_def.factory = Var64_GameStyleFactory;
+    var64seta_def.entryVt[0] = *(void**)(Var64_Image() + RVA_VARSET_ENTRYVT);
+    {
+        unsigned char* img2 = Var64_Image();
+        void** gameVt = (void**)(img2 + RVA_VARSET_VT);
+        int k;
+        if (ConsoleCmd_IsReadable(img2 + RVA_VARSET_VT, EFF_VT_SLOTS * 8)) {
+            for (k = 0; k < EFF_VT_SLOTS; ++k) {
+                if (k * 8 == EFF_VT_EXEC) continue;
+                var64seta_def.vt[k] = gameVt[k];
+            }
+        }
+        Plugin_Log("[var64] set_a vt patched: exec->ours(0x%X) keep-tooltip->game(0x%X)",
+                   (unsigned)(unsigned long long)var64seta_def.vt[EFF_VT_EXEC / 8],
+                   (unsigned)(unsigned long long)var64seta_def.vt[EFF_VT_TOOLTIP / 8]);
+    }
+    g_var64SetAVt = var64seta_def.vt;
     var64adda_fill();
     var64showa_fill();
     var64diag_fill();
+    var64gm_fill();
+    var64gm_def.factory = Var64_PureGameFactory;
     n = Effect_RegistryRegisterAll(g_var64EffectDefs, VAR64_EFFECT_COUNT);
+    if (var64seta_def.state == EFF_STATE_OK) {
+        unsigned char* img3 = Var64_Image();
+        var64seta_def.entryVt[0] = *(void**)(img3 + RVA_VARSET_ENTRYVT);
+        Plugin_Log("[var64] entryVt patched AFTER register: %p %p (game=%p)",
+                   var64seta_def.entryVt[0], var64seta_def.entryVt[1],
+                   *(void**)(img3 + RVA_VARSET_ENTRYVT));
+    }
+    if (var64gm_def.state == EFF_STATE_OK) {
+        var64gm_def.entryVt[0] = *(void**)(Var64_Image() + RVA_VARSET_ENTRYVT);
+        Plugin_Log("[var64] gm entryVt patched: %p %p",
+                   var64gm_def.entryVt[0], var64gm_def.entryVt[1]);
+    }
     Plugin_Log("[eff] var64 effects registered: %d/%d", n, VAR64_EFFECT_COUNT);
     return n;
 }
