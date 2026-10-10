@@ -286,3 +286,75 @@ int Var64_MakeGameVarInstance(void* scope, const char* name,
 - 变量名长度限制 **1..15**（SSO），超长需要另走堆分配路径，当前未实现。
 - 每次调用会 **malloc 544 字节**，当前未做释放（测试期可接受，正式版需要处理）。
 - 调用后游戏**不崩溃**（已多轮验证）。
+
+## 十八、`set_variable` 的三种语法（第7轮 · 从注册函数读出）
+
+### 18.1 官方文档原文
+
+`set_variable` 的注册函数 `sub_14001E1C0`（92 字节）里，entry 的 `+8` 字段存着这段文档：
+
+```
+![MD]
+Sets a variable to a value, another variable, or a [math expression](script_math_expression.md).
+`tooltip` can be used to override tooltip title with LEFT and RIGHT tokens.
+
+### Examples
+```
+set_variable = { num_dogs = 42 }
+set_variable = {
+	var = num_dogs
+	value = 42
+	tooltip = loc_str_id_with_LEFT_and_RIGHT
+}
+set_variable = {
+	num_dogs = { value = num_cats  multiply = 2  add = 1 }
+}
+```
+```
+
+### 18.2 三种语法
+
+| # | 形式 | 说明 |
+|---|---|---|
+| 1 | `set_variable = { 名字 = 值 }` | **简写**。键就是变量名 |
+| 2 | `set_variable = { var = 名字  value = 值  tooltip = ... }` | **完整**。`tooltip` 可选 |
+| 3 | `set_variable = { 名字 = { value = X  multiply = 2  add = 1 } }` | **数学表达式** |
+
+要求我们实现的 variable64 至少覆盖 1 和 2。**3 需要表达式求值，优先级最低。**
+
+### 18.3 注册模式（与我们已有框架一致）
+
+```c
+__int64 sub_14001E1C0()
+{
+    v0 = qword_143330000;                   // _EffectEntries
+    if (!v0) { sub_14053D840(); v0 = qword_143330000; }
+    v1 = malloc(0x10);                      // entry 16 字节
+    v1[1] = <上面的文档字符串>;              // entry +8 = 描述
+    *v1 = &CEffectEntry<CSetVariableEffect>::`vftable';   // entry +0 = 虚表
+    return sub_1405415A0(v0, 10163LL, v1);  // 注册，id = 10163
+}
+```
+
+**注册里没有参数元数据。** 参数由通用的脚本解析器读入。
+
+这解释了为什么我们的框架只读得到一个数值参数 ——
+我们的 `EFF_DEF` 构造的参数描述（`self + 0x58`，104 字节）只声明了单个值。
+
+### 18.4 当前的实现边界
+
+| 能力 | 状态 |
+|---|---|
+| 造 `CSetVariableEffect` 实例 | ✅ 已实现（`Var64_MakeGameVarInstance`） |
+| 按名字拿到游戏变量的值地址 | ✅ 已验证（读到 `184729365100000`） |
+| 直接读写那个 8 字节槽 | ✅ 可做（`*(long long*)addr = v`） |
+| 值随存档保存 | ✅ 天然获得（它就是游戏变量） |
+| 与 32 位系统运算交互 | ✅ 天然获得（游戏读同一槽，会截断） |
+| **effect 语法与原版一致（简写 / 完整）** | ❌ **未实现**（块参数解析） |
+| **log 完整输出 64 位** | ⚠️ 需分档方案（原版用 T/B/M 三变量） |
+
+### 18.5 下一步（第8轮）
+
+**先做一个实验**：注册一个 effect，脚本里用块形式调用它
+（`var64_test = { var = dshprobe  value = 123 }`），看我们的参数读取能不能拿到东西、
+或者游戏会不会报参数错误。这决定块解析是「改参数描述」还是「另找解析 API」。
