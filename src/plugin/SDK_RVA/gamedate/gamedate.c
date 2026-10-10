@@ -327,9 +327,7 @@ static long long __fastcall Handler_AddTime(CmdResult* out, CmdArgs* args, int u
     ConsoleCmd_InitResult(out);
 
     if (!ConsoleCmd_GetArg(args, 0, arg, sizeof(arg))) {
-        _snprintf_s(msg, sizeof(msg), _TRUNCATE,
-                    "%s <int>  e.g. %s 5  |  %s -3",
-                    commandName, commandName, commandName);
+        _snprintf_s(msg, sizeof(msg), _TRUNCATE, "%s <int>", commandName);
         ConsoleCmd_SetMessage(out, msg);
         Plugin_Log("[gamedate] %s called without argument", label);
         return (long long)out;
