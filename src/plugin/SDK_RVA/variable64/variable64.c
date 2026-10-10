@@ -53,6 +53,129 @@ static long long Var64_ReadParamRaw(void* self, void* scope)
     return fixed;
 }
 
+static unsigned int Var64_Fnv1a(const char* s)
+{
+    unsigned int h = 0x811C9DC5u;
+    while (*s) {
+        h ^= (unsigned char)*s++;
+        h *= 0x01000193u;
+    }
+    return h;
+}
+
+static int Var64_LookupInScope(void* scope, const char* name, long long* out)
+{
+    unsigned char* tbl;
+    unsigned char* buckets;
+    unsigned char* bucket;
+    unsigned char* node;
+    unsigned char* namep;
+    unsigned long long cap;
+    unsigned long long size;
+    unsigned int h;
+    int mask;
+    int count;
+    int i;
+
+    if (scope == NULL || name == NULL) return 0;
+    tbl = (unsigned char*)scope + 16;
+    if (!ConsoleCmd_IsReadable(tbl + 24, 4)) return 0;
+    buckets = *(unsigned char**)(tbl + 8);
+    mask = *(int*)(tbl + 20);
+    if (buckets == NULL) return 0;
+    if (mask <= 0 || mask > 0x100000) return 0;
+    if (!ConsoleCmd_IsReadable(buckets, 48)) return 0;
+
+    h = Var64_Fnv1a(name);
+    bucket = buckets + 48 * (h & (unsigned int)mask);
+    if (!ConsoleCmd_IsReadable(bucket, 48)) return 0;
+    count = (int)*(unsigned char*)(bucket + 4);
+    if (count <= 0 || count > 64) return 0;
+
+    for (i = 0; i < count; ++i) {
+        node = bucket + 48 * i;
+        if (!ConsoleCmd_IsReadable(node, 48)) return 0;
+        if (*(int*)node != (int)h) continue;
+        cap = *(unsigned long long*)(node + 32);
+        size = *(unsigned long long*)(node + 24);
+        if (size == 0 || size > 250) continue;
+        namep = (cap <= 15) ? (node + 8) : *(unsigned char**)(node + 8);
+        if (namep == NULL) continue;
+        if (!ConsoleCmd_IsReadable(namep, (unsigned long long)size)) continue;
+        if ((unsigned long long)strlen(name) != size) continue;
+        if (memcmp(namep, name, (size_t)size) != 0) continue;
+        if (out != NULL) *out = *(long long*)(node + 40);
+        return 1;
+    }
+    return 0;
+}
+
+static void __fastcall ExecVar64Diag(void* self, void* scope)
+{
+    long long found = 0;
+    int i;
+
+    Effect_FlushPendingTooltip();
+    Plugin_Log("[v64diag] self=%p scope=%p", self, scope);
+    if (scope != NULL && ConsoleCmd_IsReadable(scope, 0x200)) {
+        for (i = 0; i < 0x200; i += 8) {
+            void* v = *(void**)((unsigned char*)scope + i);
+            unsigned char* p = (unsigned char*)v;
+            int looksPtr = 0;
+            if (v != NULL && ConsoleCmd_IsReadable(p, 8)) {
+                looksPtr = 1;
+            }
+            if (looksPtr || i < 0x40) {
+                Plugin_Log("[v64diag] scope+0x%03X = %p", i, v);
+            }
+        }
+    } else {
+        Plugin_Log("[v64diag] scope not readable");
+    }
+    if (self != NULL && ConsoleCmd_IsReadable(self, 0x200)) {
+        for (i = 0; i < 0x200; i += 8) {
+            void* v = *(void**)((unsigned char*)self + i);
+            if (v != NULL && ConsoleCmd_IsReadable((unsigned char*)v, 8)) {
+                Plugin_Log("[v64diag] self+0x%03X = %p", i, v);
+            }
+        }
+    }
+    {
+        void* cands[6];
+        const char* tags[6] = { "scope", "s1C8", "s1E0", "s160", "s168", "s130" };
+        int k;
+
+        cands[0] = scope;
+        cands[1] = (scope != NULL && ConsoleCmd_IsReadable((unsigned char*)scope + 0x1C8, 8))
+                   ? *(void**)((unsigned char*)scope + 0x1C8) : NULL;
+        cands[2] = (scope != NULL && ConsoleCmd_IsReadable((unsigned char*)scope + 0x1E0, 8))
+                   ? *(void**)((unsigned char*)scope + 0x1E0) : NULL;
+        cands[3] = (scope != NULL && ConsoleCmd_IsReadable((unsigned char*)scope + 0x160, 8))
+                   ? *(void**)((unsigned char*)scope + 0x160) : NULL;
+        cands[4] = (scope != NULL && ConsoleCmd_IsReadable((unsigned char*)scope + 0x168, 8))
+                   ? *(void**)((unsigned char*)scope + 0x168) : NULL;
+        cands[5] = (self != NULL && ConsoleCmd_IsReadable((unsigned char*)self + 0x130, 8))
+                   ? *(void**)((unsigned char*)self + 0x130) : NULL;
+
+        for (k = 0; k < 6; ++k) {
+            unsigned char* c = (unsigned char*)cands[k];
+            int mask = 0;
+            void* buckets = NULL;
+            if (c == NULL) { Plugin_Log("[v64diag] %s = NULL", tags[k]); continue; }
+            if (ConsoleCmd_IsReadable(c + 24, 8)) {
+                buckets = *(void**)(c + 24);
+                mask = *(int*)(c + 36);
+            }
+            Plugin_Log("[v64diag] %s = %p  buckets=%p mask=%d",
+                       tags[k], c, buckets, mask);
+            if (Var64_LookupInScope(c, "dshprobe", &found)) {
+                Plugin_Log("[v64diag] *** FOUND via %s: dshprobe = %lld (%.5f)",
+                           tags[k], found, (double)found / EFF_FIXED_SCALE);
+            }
+        }
+    }
+}
+
 static void Var64_LogOp(int slot, const char* op, long long raw)
 {
     ++g_var64OpCount;
@@ -95,10 +218,14 @@ EFF_DEF(var64adda, "var64_add_a", "Adds to 64-bit variable slot a",
 EFF_DEF(var64showa, "var64_show_a", "Logs 64-bit variable slot a",
         "EFFECT_VAR64_SHOW_A", &ExecVar64ShowA)
 
+EFF_DEF(var64diag, "var64_diag", "Diagnoses the effect scope", 
+        "EFFECT_VAR64_DIAG", &ExecVar64Diag)
+
 static EffectDef* g_var64EffectDefs[] = {
     &var64seta_def,
     &var64adda_def,
-    &var64showa_def
+    &var64showa_def,
+    &var64diag_def
 };
 
 #define VAR64_EFFECT_COUNT (int)(sizeof(g_var64EffectDefs) / sizeof(g_var64EffectDefs[0]))
@@ -109,6 +236,7 @@ int Var64_RegisterEffects(void)
     var64seta_fill();
     var64adda_fill();
     var64showa_fill();
+    var64diag_fill();
     n = Effect_RegistryRegisterAll(g_var64EffectDefs, VAR64_EFFECT_COUNT);
     Plugin_Log("[eff] var64 effects registered: %d/%d", n, VAR64_EFFECT_COUNT);
     return n;
