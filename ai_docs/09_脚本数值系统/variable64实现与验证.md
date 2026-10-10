@@ -266,3 +266,119 @@ GMPROBE after = 555
 | `+512` | std::string（data `+512` / size `+528` / cap `+536`） |
 
 构造函数 `sub_14032D260` 只初始化到 `+536`，所以 `+505`..`+511` 是安全空隙。
+
+## 二十二、`set_variable64` 实现完成（第11轮 · MinHook 方案）
+
+### 22.1 实现结构
+
+```c
+/* 1. 工厂：造游戏实例 + 打标记（实例 +505 有 7 字节空隙） */
+static void* __fastcall Var64_GameSyntaxFactory(void)
+{
+    void* inst = Var64_PureGameFactory();          /* CSetVariableEffect 工厂，虚表保持游戏的 */
+    *(unsigned*)((char*)inst + 505) = 0x53343656;  /* 标记 */
+    return inst;
+}
+
+/* 2. 挂 exec（RVA 0x364C60） */
+orig = InlineHook_Install(img + 0x364C60, (void*)Var64_GameSyntaxDetour);
+
+/* 3. detour：查标记决定接管还是放行 */
+static long long __fastcall Var64_GameSyntaxDetour(void* self, void* ctx)
+{
+    if (*(unsigned*)((char*)self + 505) == 0x53343656)
+        return Var64_HandleGameSyntaxSet(self, ctx);
+    return g_var64OrigGameSetExec(self, ctx);       /* 原版 set_variable 不受影响 */
+}
+
+/* 4. 接管逻辑：读名字、读参数、写 64 位 */
+static long long __fastcall Var64_HandleGameSyntaxSet(void* self, void* ctx)
+{
+    /* 读参数（第二个 CScopedVariable = self + 296，第 5 参数传 1） */
+    ((Var64GetParamFn)(img + 0x544C90))((char*)self + 296, &value, ctx, 0, (void*)1);
+    /* 按名字取变量值地址（第一个 CScopedVariable = self + 88，名字在 +200） */
+    addr = ((Var64LookupFn)(img + 0x542280))((char*)self + 88, ctx, NULL);
+    *(long long*)addr = value;                      /* 写完整 64 位 */
+}
+```
+
+### 22.2 注册要点
+
+| 项 | 设置 |
+|---|---|
+| effect 名 | `set_variable64` |
+| locKey | `EFFECT_SET_VARIABLE64` |
+| `entryVt[0]` | **`CEffectEntry<CSetVariableEffect>` 的虚表**（RVA `0x277C418`），**必须在 `Effect_RegistryRegisterAll` 之后 patch** |
+| `factory` | `Var64_GameSyntaxFactory` |
+| 实例虚表 | **不动**（保持 CSetVariableEffect 的） |
+
+### 22.3 实测结果
+
+插件日志：
+
+```
+[hook] MinHook initialized
+[eff] + set_variable64  tokenId=20163  loc=EFFECT_SET_VARIABLE64
+[var64] set_variable64 entryVt=00007FF6C63B2FF0 factory=00007FFC1B428BA0
+[hook] installed at 00007FF6C6434C60, orig=00007FF6C60C0FC0
+[var64] gamesyntax hook installed
+[var64] gamesyntax name=[v64a]
+[var64] gamesyntax wrote 1234567890123400000 to 000001F973C97268
+[var64] gamesyntax name=[v64b]
+[var64] gamesyntax wrote 77700000 to 000001F973C98678
+```
+
+| 脚本 | 变量名 | 写入值 | 判定 |
+|---|---|---|---|
+| `set_variable64 = { var = v64a value = 12345678901234 }` | `v64a` | `1234567890123400000` | ✅ 完整 64 位 |
+| `set_variable64 = { v64b = 777 }` | `v64b` | `77700000` | ✅ |
+
+**两种语法全部工作，与原版 `set_variable` 完全一致。**
+
+### 22.4 log 输出的截断规律（已精确定位）
+
+游戏日志：
+
+```
+V64A log = 1942892530
+V64B log = 777
+```
+
+验算：
+
+```python
+raw    = 1234567890123400000     # 槽里的完整值
+value  = raw / 100000            # = 12345678901234
+value % 2**32                    # = 1942892530   <-- 与 log 完全一致
+```
+
+**所以 `[?变量名]` 的输出 = `(raw / 100000) mod 2^32`** ——
+先按定点比例还原成整数，再截断到 32 位。
+
+| 判定 | 说明 |
+|---|---|
+| 槽里 | **完整 64 位**（已验证） |
+| `[?var]` 显示 | 32 位（截断） |
+| 小值（< 2^31） | 显示正确 |
+| 大值 | 显示为低 32 位 |
+
+### 22.5 全部需求状态
+
+| 需求 | 状态 | 说明 |
+|---|---|---|
+| 64 位数值化 | ✅ | 槽是 8 字节，写入完整 64 位 |
+| 与 32 位运算兼容 | ✅ | 游戏读同一槽，截断到 32 位 |
+| 存档能存住 | ✅ | 就是游戏变量 |
+| 语法与原版相同 | ✅ | 简写 + 完整两种都工作 |
+| **log 完整输出 64 位** | ⚠️ | **`[?var]` 只能显示 32 位，需要分档方案** |
+
+### 22.6 剩余工作
+
+| 任务 | 说明 |
+|---|---|
+| **log 分档方案** | 参照原版 `temp_display_T/B/M`，把 64 位拆成多个 32 位变量供 log 显示 |
+| `add_to_variable64` | 同类实现（同样用 hook + 标记） |
+| effect 改名 | `var64_set_a` -> `set_variable64`（已做）、`var64_add_a` -> `add_to_variable64` |
+| `var64_show_a` 是否需要 | 待定（`log` 已能读） |
+| 实例释放 | 目前每次 malloc 544 字节未回收 |
+| 数学表达式形式 | `{ 名字 = { value = X  multiply = 2 } }`，优先级最低 |
