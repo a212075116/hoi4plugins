@@ -264,7 +264,8 @@ static long long __fastcall Handler_SetGameDate(CmdResult* out, CmdArgs* args)
     ConsoleCmd_InitResult(out);
 
     if (!ConsoleCmd_GetArg(args, 0, arg, sizeof(arg))) {
-        ConsoleCmd_SetMessage(out, "setgamedate: Command expects exactly one argument.");
+        ConsoleCmd_SetMessage(out,
+            "setgamedate Y.M.D[.H]  e.g. setgamedate 1940.1.1  |  setgamedate 1940.1.1.12");
         Plugin_Log("[gamedate] setgamedate called without argument");
         return (long long)out;
     }
@@ -327,7 +328,8 @@ static long long __fastcall Handler_AddTime(CmdResult* out, CmdArgs* args, int u
 
     if (!ConsoleCmd_GetArg(args, 0, arg, sizeof(arg))) {
         _snprintf_s(msg, sizeof(msg), _TRUNCATE,
-                    "%s: Command expects exactly one argument.", commandName);
+                    "%s <int>  e.g. %s 5  |  %s -3",
+                    commandName, commandName, commandName);
         ConsoleCmd_SetMessage(out, msg);
         Plugin_Log("[gamedate] %s called without argument", label);
         return (long long)out;

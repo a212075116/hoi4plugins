@@ -116,7 +116,10 @@ static long long __fastcall Handler_SetCamHeight(CmdResult* out, CmdArgs* args)
     hi = *(int*)(cam + OFF_CAM_MAXH);
 
     if (!ConsoleCmd_GetArg(args, 0, arg, sizeof(arg))) {
-        ConsoleCmd_SetMessage(out, "setcamheight: Command expects exactly one argument.");
+        char msg[160];
+        _snprintf_s(msg, sizeof(msg), _TRUNCATE,
+            "setcamheight <height>  e.g. setcamheight 500  (range %d ~ %d)", lo, hi);
+        ConsoleCmd_SetMessage(out, msg);
         Plugin_Log("[setcamheight] called without argument");
         return (long long)out;
     }
@@ -223,7 +226,8 @@ static long long __fastcall Handler_SetLowerLimit(CmdResult* out, CmdArgs* args)
         return (long long)out;
     }
     if (!ConsoleCmd_GetArg(args, 0, arg, sizeof(arg))) {
-        ConsoleCmd_SetMessage(out, "setcameraheight_lowerlimit: Command expects exactly one argument.");
+        ConsoleCmd_SetMessage(out,
+            "setcameraheight_lowerlimit <value>  e.g. setcameraheight_lowerlimit 35");
         return (long long)out;
     }
     if (!Camera_ParseFloatText(arg, &want)) {
@@ -288,7 +292,8 @@ static long long __fastcall Handler_SetUpperLimit(CmdResult* out, CmdArgs* args)
         return (long long)out;
     }
     if (!ConsoleCmd_GetArg(args, 0, arg, sizeof(arg))) {
-        ConsoleCmd_SetMessage(out, "setcameraheight_upperlimit: Command expects exactly one argument.");
+        ConsoleCmd_SetMessage(out,
+            "setcameraheight_upperlimit <value>  e.g. setcameraheight_upperlimit 3000");
         return (long long)out;
     }
     if (!Camera_ParseFloatText(arg, &want)) {
