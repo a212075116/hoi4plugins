@@ -69,6 +69,7 @@ int GameDate_SetRaw(int raw)
     if (!ConsoleCmd_IsReadable(gs + OFF_GD_RAW, 4)) return 0;
     *(int*)(gs + OFF_GD_RAW) = raw;
     GameDate_SyncDerived(gs, raw);
+    GameDateUi_Refresh();
     return (*(int*)(gs + OFF_GD_RAW) == raw);
 }
 

@@ -204,6 +204,11 @@ static DWORD WINAPI PluginThread(LPVOID p)
     }
 
     {
+        int r = GameDateUi_Init();
+        Plugin_Log("[plugin] GameDateUi_Init -> %d", r);
+    }
+
+    {
         int round;
         int found = 0;
         for (round = 0; round < 2400 && found == 0; ++round) {

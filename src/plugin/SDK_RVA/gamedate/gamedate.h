@@ -11,7 +11,8 @@
 #define OFF_GD_DAY         0x480u
 #define OFF_GD_MONTHDAYS   0x47Cu
 #define OFF_GD_DOY         0x484u
-#define OFF_GD_DIRTY       0x4C0u   /* 防重入状态位, 绝不能写 */
+#define OFF_GD_DIRTY       0x4C0u
+#define RVA_GD_UI_DATE_UPDATE 0x18A1EE0u
 #define OFF_GD_PARAMSTR    0x108u
 #define GD_TEXT_MAX        48
 
@@ -31,3 +32,6 @@ int  GameDate_SetFromText(const char* text);
 int  GameDate_Add(int unit, int delta);
 int  GameDate_ReadParamText(void* effectInstance, char* dst, int dstn);
 int  GameDate_RegisterCommands(void);
+int  GameDateUi_Init(void);
+int  GameDateUi_HasPanel(void);
+int  GameDateUi_Refresh(void);
