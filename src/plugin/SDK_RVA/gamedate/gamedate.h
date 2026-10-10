@@ -10,6 +10,8 @@
 #define OFF_GD_MONTH0      0x488u
 #define OFF_GD_DAY         0x480u
 #define OFF_GD_MONTHDAYS   0x47Cu
+#define OFF_GD_DOY         0x484u
+#define OFF_GD_DIRTY       0x4C0u   /* 防重入状态位, 绝不能写 */
 #define OFF_GD_PARAMSTR    0x108u
 #define GD_TEXT_MAX        48
 

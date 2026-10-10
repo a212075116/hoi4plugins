@@ -14,6 +14,12 @@ static unsigned char* Img(void)
     return (unsigned char*)GetModuleHandleA(NULL);
 }
 
+static const int kMonthDays[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+
+#define GD_BASE_HOURS  43800000
+#define GD_BASE_DAYS   182500
+#define GD_EPOCH_YEAR  500
+
 unsigned char* GameDate_GameState(void)
 {
     unsigned char* img = Img();
@@ -30,20 +36,41 @@ int GameDate_GetRaw(void)
     return *(int*)(gs + OFF_GD_RAW);
 }
 
+static void GameDate_SyncDerived(unsigned char* gs, int raw)
+{
+    int y;
+    int mo;
+    int d;
+    int h;
+    int doy;
+
+    if (gs == NULL) return;
+    if (!ConsoleCmd_IsReadable(gs + OFF_GD_MONTH0, 4)) return;
+    if (!GameDate_DecodeRaw(raw, &y, &mo, &d, &h)) return;
+
+    doy = 0;
+    {
+        int i;
+        for (i = 0; i < mo - 1; ++i) doy += kMonthDays[i];
+        doy += d;
+    }
+
+    *(int*)(gs + OFF_GD_YEAR)      = y;
+    *(int*)(gs + OFF_GD_MONTHDAYS) = kMonthDays[mo - 1];
+    *(int*)(gs + OFF_GD_DAY)       = d;
+    *(int*)(gs + OFF_GD_DOY)       = doy;
+    *(int*)(gs + OFF_GD_MONTH0)    = mo - 1;
+}
+
 int GameDate_SetRaw(int raw)
 {
     unsigned char* gs = GameDate_GameState();
     if (gs == NULL) return 0;
     if (!ConsoleCmd_IsReadable(gs + OFF_GD_RAW, 4)) return 0;
     *(int*)(gs + OFF_GD_RAW) = raw;
+    GameDate_SyncDerived(gs, raw);
     return (*(int*)(gs + OFF_GD_RAW) == raw);
 }
-
-static const int kMonthDays[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
-
-#define GD_BASE_HOURS  43800000
-#define GD_BASE_DAYS   182500
-#define GD_EPOCH_YEAR  500
 
 int GameDate_DecodeRaw(int raw, int* year, int* month, int* day, int* hour)
 {

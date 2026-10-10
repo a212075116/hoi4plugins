@@ -1,0 +1,20 @@
+import sys, time, importlib.util as iu
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
+s = iu.spec_from_file_location('fh', r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/probes_frida/frida_host.py')
+fh = iu.module_from_spec(s); s.loader.exec_module(fh)
+print('find_pid = %s' % fh.find_pid(), flush=True)
+pid, session, sc, fresh = fh.connect(r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/probes_js/_scan2.js', force_spawn=False)
+print('fresh=%s (必须是 False, 否则会杀掉游戏)' % fresh, flush=True)
+e = sc.exports_sync
+time.sleep(0.5)
+GS_JS_DONE = True
+# 等进图 (game.log 标记)
+fh.wait_in_game(timeout=100)
+time.sleep(3)
+print('=== +0x110..0x140 ===', flush=True)
+print('  ' + e.peek(0x110, 12), flush=True)
+print('=== +0x118..0x150 ===', flush=True)
+print('  ' + e.peek(0x118, 14), flush=True)
+print('=== +0x460..0x4A0 ===', flush=True)
+print('  ' + e.peek(0x460, 16), flush=True)
+fh.detach(session)

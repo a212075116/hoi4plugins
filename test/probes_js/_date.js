@@ -12,29 +12,33 @@ rpc.exports = {
     }
     return out.join('  ');
   },
-  // 读日期真源: +0x468 (单位=小时)
   getDate: function () {
     const gs = M().base.add(GS).readPointer();
     const raw = gs.add(0x468).readS32();
-    const days = (raw - 43800000) / 24;
-    return 'raw=' + raw + '  内部小时偏移=' + (raw - 43800000) + '  天数=' + days;
+    return 'raw=' + raw + ' 天数=' + ((raw - 43800000) / 24);
   },
   setRaw: function (v) {
     const gs = M().base.add(GS).readPointer();
     try {
       Memory.protect(gs.add(0x468), 4, 'rw-');
       gs.add(0x468).writeS32(v);
-      return 'wrote +0x468 = ' + v + '  readback=' + gs.add(0x468).readS32();
+      return 'wrote raw=' + v + '  readback=' + gs.add(0x468).readS32();
     } catch (e) { return 'ERR ' + e; }
   },
-  addDays: function (d) {
+  find: function (v, lo, hi) {
+    const gs = M().base.add(GS).readPointer();
+    const out = [];
+    for (let off = lo; off + 4 <= hi; off += 4) {
+      try { if (gs.add(off).readS32() === v) out.push('+0x' + off.toString(16)); } catch (e) { }
+    }
+    return out.join(' ') || '(无)';
+  },
+  poke: function (off, v) {
     const gs = M().base.add(GS).readPointer();
     try {
-      const old = gs.add(0x468).readS32();
-      const nv = old + Math.round(d * 24);
-      Memory.protect(gs.add(0x468), 4, 'rw-');
-      gs.add(0x468).writeS32(nv);
-      return 'old=' + old + ' new=' + nv + ' (+' + d + ' 天)';
+      Memory.protect(gs.add(off), 4, 'rw-');
+      gs.add(off).writeS32(v);
+      return 'wrote +0x' + off.toString(16) + '=' + v + ' rb=' + gs.add(off).readS32();
     } catch (e) { return 'ERR ' + e; }
   }
 };
