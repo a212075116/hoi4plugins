@@ -15,7 +15,7 @@ typedef void* (__fastcall *Var64LookupFn)(void* scopedVar, void* ctx, void* a3);
 
 #define RVA_VARSET_FACTORY 0x341F60u
 #define RVA_VAR_LOOKUP     0x542280u
-#define VAR64_NAME_OFF     512u
+#define VAR64_NAME_OFF     200u
 #define VAR64_SUBOBJ_OFF   88u
 
 static const char* const kVar64SlotNames[VAR64_SLOT_COUNT] = {
@@ -153,6 +153,7 @@ static int Var64_MakeGameVarInstance(void* scope, const char* name, void** outIn
     memcpy(nameDst, name, n);
     *(unsigned long long*)(nameDst + 16) = (unsigned long long)n;
     *(unsigned long long*)(nameDst + 24) = 15ULL;
+    Plugin_Log("[var64] wrote name [%s] to %p (len=%u)", name, nameDst, (unsigned)n);
 
     if (!ConsoleCmd_IsReadable(img + RVA_VAR_LOOKUP, 16)) return 0;
     addr = (unsigned char*)((Var64LookupFn)(img + RVA_VAR_LOOKUP))(inst + VAR64_SUBOBJ_OFF, scope, NULL);
@@ -234,9 +235,35 @@ static void __fastcall ExecVar64Diag(void* self, void* scope)
         void* inst = NULL;
         void* addr = NULL;
         if (Var64_MakeGameVarInstance(scope, "dshprobe", &inst, &addr)) {
+            unsigned char* node = (unsigned char*)addr - 40;
+            unsigned char* namep;
+            unsigned long long cap;
+            unsigned long long size;
             long long v = *(long long*)addr;
-            Plugin_Log("[v64diag] *** GAME-API OK: inst=%p addr=%p dshprobe=%lld (%.5f)",
+
+            Plugin_Log("[v64diag] *** GAME-API OK: inst=%p addr=%p value=%lld (%.5f)",
                        inst, addr, v, (double)v / EFF_FIXED_SCALE);
+            if (ConsoleCmd_IsReadable(node, 48)) {
+                cap = *(unsigned long long*)(node + 32);
+                size = *(unsigned long long*)(node + 24);
+                namep = (cap <= 15) ? (node + 8) : *(unsigned char**)(node + 8);
+                Plugin_Log("[v64diag] node=%p hash=0x%X bucketIdx=%d size=%u cap=%u",
+                           node, *(unsigned int*)node, *(unsigned char*)(node + 4),
+                           (unsigned)size, (unsigned)cap);
+                if (namep != NULL && size > 0 && size < 64 &&
+                    ConsoleCmd_IsReadable(namep, (unsigned long long)size)) {
+                    char tmp[80];
+                    unsigned long long i2;
+                    unsigned long long cn = (size < 79) ? size : 79;
+                    for (i2 = 0; i2 < cn; ++i2) tmp[i2] = (char)namep[i2];
+                    tmp[cn] = 0;
+                    Plugin_Log("[v64diag] node name = [%s]", tmp);
+                } else {
+                    Plugin_Log("[v64diag] node name unreadable");
+                }
+            } else {
+                Plugin_Log("[v64diag] node not readable at %p", node);
+            }
         } else {
             Plugin_Log("[v64diag] GAME-API failed for dshprobe");
         }

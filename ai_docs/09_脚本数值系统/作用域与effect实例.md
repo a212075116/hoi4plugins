@@ -179,3 +179,110 @@ unsigned int Var64_Fnv1a(const char* s);
 
 `Var64_MakeGameVarInstance` 已经能把「变量名 → 值地址」这条链路走通，
 只是拿到的地址指向的还不是那个已存在的变量。**下一次只需定位差异。**
+
+## 十七、读写游戏变量：完全打通（第6轮）
+
+### 17.1 上一轮失败的原因
+
+第 5 轮把变量名写到了 `inst + 512`，结果 lookup 返回的节点是：
+
+```
+node=... hash=0x811C9DC5 bucketIdx=6 size=0 cap=15
+node name unreadable
+```
+
+**`hash = 0x811C9DC5` 正是 FNV-1a 的初始值**，配合 `size = 0`，说明**名字是空的** —— 
+lookup 因此新建了一个空名节点。
+
+### 17.2 名字字段的真正位置
+
+回到 `sub_1405454A0`（造变量名）的第一行：
+
+```c
+sub_14011E010((__int64)a2, a1 + 112);   // a1 = CScopedVariable，名字源在 a1 + 112
+```
+
+而 `CScopedVariable` 在实例的 `+88`，所以：
+
+```
+名字字段 = inst + 88 + 112 = inst + 200
+```
+
+`inst + 512` 是**另一个** std::string（构造时同样初始化为 SSO），但不是变量名。
+
+### 17.3 修正后的做法
+
+```c
+#define VAR64_SUBOBJ_OFF   88u     /* CScopedVariable 在实例内的偏移 */
+#define VAR64_NAME_OFF     200u    /* 88 + 112，变量名 std::string */
+
+/* 1. 造实例 */
+inst = ((Var64FactoryFn)(img + 0x341F60))();
+
+/* 2. 写变量名到 inst + 200（SSO 布局：data +0 / size +16 / cap +24） */
+nameDst = inst + 200;
+memset(nameDst, 0, 32);
+memcpy(nameDst, name, n);
+*(unsigned long long*)(nameDst + 16) = n;
+*(unsigned long long*)(nameDst + 24) = 15ULL;
+
+/* 3. lookup */
+addr = ((Var64LookupFn)(img + 0x542280))(inst + 88, scope, NULL);
+/* addr 就是那个变量的值地址（8 字节槽） */
+```
+
+### 17.4 实测结果（完全成功）
+
+```
+[var64] wrote name [dshprobe] to 000001C2717659B8 (len=8)
+[v64diag] *** GAME-API OK: inst=000001C2717658F0 addr=000001C1E6EBFE28
+          value=184729365100000 (1847293651.00000)
+[v64diag] node=000001C1E6EBFE00 hash=0xB81F1142 bucketIdx=4 size=8 cap=15
+[v64diag] node name = [dshprobe]
+```
+
+| 项 | 值 | 判定 |
+|---|---|---|
+| 读取的值 | `184729365100000` | ✅ 正是游戏里那个变量（`1847293651 x 100000`） |
+| 节点 hash | `0xB81F1142` | ✅ FNV-1a 正确 |
+| 桶序号 | `4` | ✅ |
+| 名字 size | `8` | ✅ |
+| 节点名字 | `dshprobe` | ✅ |
+
+**「按名字拿到游戏变量的值地址」这条路彻底打通。**
+
+### 17.5 值槽的宽度
+
+游戏 exec 里是 `*v6 = v8`，其中 `v8` 是 `long long`（`sub_140544C90` 的输出）。
+**所以值槽是 8 字节宽。**
+
+但游戏自己的 `set_variable` 在**解析阶段**会把它压到 int32（实测 `2^31` 翻负），
+所以：
+
+| 读写方 | 位宽 |
+|---|---|
+| 我们直接读写槽 | **8 字节，完整 64 位** |
+| 游戏 `set_variable` 写入 | 32 位（会截断） |
+| 游戏系统读取（`add_manpower` 等） | 32 位（会截断） |
+| `[?var]` 日志显示 | 32 位（会截断） |
+
+**结论**：我们可以把 64 位值完整存进一个游戏变量，
+**这个值会随存档保存**，也能被游戏系统读到（截断后的 32 位部分）；
+但要**完整读出 64 位**、以及**在 log 里完整显示**，仍需我们自己的路径或分档方案。
+
+### 17.6 新增可用工具
+
+```c
+/* variable64.c */
+int Var64_MakeGameVarInstance(void* scope, const char* name,
+                               void** outInst, void** outAddr);
+/*   outInst -> CSetVariableEffect 实例（可用于后续 free）
+     outAddr -> 该变量的值地址（8 字节槽，可直接读写） */
+*/
+```
+
+注意事项：
+
+- 变量名长度限制 **1..15**（SSO），超长需要另走堆分配路径，当前未实现。
+- 每次调用会 **malloc 544 字节**，当前未做释放（测试期可接受，正式版需要处理）。
+- 调用后游戏**不崩溃**（已多轮验证）。
