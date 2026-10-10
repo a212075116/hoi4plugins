@@ -612,18 +612,6 @@ static void __fastcall ExecVar64GameSyntax(void* self, void* scope)
     Var64_GameSyntaxDetour(self, scope);
 }
 
-EFF_DEF(var64seta, "var64_set_a", "Sets 64-bit variable slot a",
-        "EFFECT_VAR64_SET_A", &ExecVar64SetA)
-
-EFF_DEF(var64adda, "var64_add_a", "Adds to 64-bit variable slot a",
-        "EFFECT_VAR64_ADD_A", &ExecVar64AddA)
-
-EFF_DEF(var64showa, "var64_show_a", "Logs 64-bit variable slot a",
-        "EFFECT_VAR64_SHOW_A", &ExecVar64ShowA)
-
-EFF_DEF(var64diag, "var64_diag", "Diagnoses the effect scope", 
-        "EFFECT_VAR64_DIAG", &ExecVar64Diag)
-
 EFF_DEF(gamesetvar64, "set_variable64",
         "Sets a 64-bit script variable. Same syntax as set_variable.",
         "EFFECT_SET_VARIABLE64", &ExecVar64GameSyntax)
@@ -637,10 +625,6 @@ EFF_DEF(gamelogvar64, "log_variable64",
         "EFFECT_LOG_VARIABLE64", &ExecVar64GameSyntax)
 
 static EffectDef* g_var64EffectDefs[] = {
-    &var64seta_def,
-    &var64adda_def,
-    &var64showa_def,
-    &var64diag_def,
     &gamesetvar64_def,
     &gameaddvar64_def,
     &gamelogvar64_def
@@ -653,10 +637,6 @@ int Var64_RegisterEffects(void)
     unsigned char* img;
     int n;
 
-    var64seta_fill();
-    var64adda_fill();
-    var64showa_fill();
-    var64diag_fill();
     gamesetvar64_fill();
     gameaddvar64_fill();
     gamelogvar64_fill();

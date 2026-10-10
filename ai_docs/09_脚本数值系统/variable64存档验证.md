@@ -187,3 +187,88 @@ raw   = value * 100000         # = 8000000000000000000  MATCH
 | 每个变量占两个槽 | 主变量 + `_hi` |
 | 实例未释放 | 每次 effect 调用 malloc 544 字节，当前不回收 |
 | 与游戏的 32 位运算 | 游戏只看到低 32 位（高位在 `_hi` 里） |
+
+## 八、读档途径的进一步探索（第15轮）
+
+### 8.1 启动参数表
+
+在 `0x142716c00` ~ `0x142717600` 区段 dump 出完整的启动参数名，与存档相关的有：
+
+| 参数 | 地址 | 说明 |
+|---|---|---|
+| `force_text_save` | `0x142717028` | **有效**（让存档变成文本格式） |
+| `allowoldsave` / `allowoldsaves` | `0x142717048` / `0x142717058` | 允许旧存档 |
+| `start_save` | `0x142717068` | 试过，**无效** |
+| `continuelastsave` | `0x142717440` | 试过，**无效** |
+| `autosave` / `autosave_count=` | `0x142716d88` 附近 | 自动存档 |
+| `scenario_testing.run_fixture save_load_exit.txt` | `0x142716e00` | 官方存读档测试夹具 |
+| `scenario_test` / `scenario_testing.run_all_tests` | — | 场景测试框架 |
+
+两个存档参数都只有 1 处引用，落在巨大的命令行解析函数里：
+
+| 参数 | 引用点 | 所在函数 | 函数大小 |
+|---|---|---|---|
+| `start_save` | `0x140126c53` | `sub_140125090` | 7359 字节 |
+| `continuelastsave` | `0x140127d04` | `sub_140126E50` | 7282 字节 |
+
+### 8.2 实测：两个参数都无效
+
+**`-start_save=zz_v64_split`**：
+
+```
+game.log: [23:29:47][no_game_date][gameapplication.cpp:2968]: Resetting game
+          [[ Launching SINGLEPLAYER-game ]]
+读档后 log_variable64 v64save = 0 (lo=0 hi=0)
+```
+
+**`-continuelastsave`**（第 14 轮）：同样开的是新游戏。
+
+⇒ 两者都先进 `Resetting game` + `Launching SINGLEPLAYER-game`，即**新游戏流程**。
+
+### 8.3 `savecheck` 不可用于正常游戏
+
+第 14 轮执行 `savecheck` 成功（生成 `Test_01` / `Test_02`），但第 15 轮再执行时
+**游戏直接崩溃**。
+
+⇒ 它是**自动化测试框架**的一部分，需要特定的测试环境（对应 `scenario_testing` 系列参数）。
+
+### 8.4 `settings.txt` 的存档格式开关
+
+```
+debug_saves=0
+autosave="MONTHLY"
+autosave_tocloud=no
+save_career_to_cloud=yes
+save_as_binary=yes        <-- 存档格式开关
+```
+
+`-force_text_save` 就是覆盖这个开关的。
+
+### 8.5 尚未走通的读档途径
+
+| 途径 | 状态 |
+|---|---|
+| `-continuelastsave` | 无效 |
+| `-start_save=<名字>` | 无效 |
+| `savecheck` | 会崩溃，不可用 |
+| 主菜单「继续游戏」 | 需要 GUI 操作（游戏忽略合成输入，无法脚本化） |
+| 找读档函数直接调用 | 只找到错误报告函数 `sub_142590AE0` / `sub_142590C40` / `sub_140C3B840`，不是入口 |
+
+**下一步可选**：
+
+1. 请用户在游戏里手动读档一次，然后触发 `zzdatetest.46` 校验（最可靠）
+2. 继续追主菜单「继续」按钮的处理函数，用 CE 直接调用
+
+## 九、旧 effect 清理（第15轮）
+
+`set_variable64` / `add_to_variable64` / `log_variable64` 三个 effect 已经完全取代了
+早期的槽位版，因此移除注册：
+
+| 移除的 effect | 原因 |
+|---|---|
+| `var64_set_a` | 被 `set_variable64` 取代 |
+| `var64_add_a` | 被 `add_to_variable64` 取代 |
+| `var64_show_a` | 被 `log_variable64` 取代 |
+| `var64_diag` | 诊断用途已完成 |
+
+现在 `g_var64EffectDefs[]` 只含三个正式 effect。
