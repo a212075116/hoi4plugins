@@ -784,7 +784,23 @@ typedef void* (__fastcall *Var64VarTextHandlerFn)(void* ctx, const char* text,
 
 static Var64VarTextHandlerFn g_var64OrigVarTextHandler = NULL;
 static int Var64_LangResolveSlotValue(void* ctx, const char* name, long long* outValue);
-static void Var64_LangAppendDecimalText(void* out, long long value);
+#define VAR64_FMT_DECIMALS_MAX 5
+#define VAR64_FMT_TEXT_MAX     96
+#define VAR64_SECTION_SIGN     0xA7
+
+typedef struct {
+    int  decimals;
+    int  useSiUnits;
+    int  percentMode;
+    int  signedPrefix;
+    char dynamicColour;
+    char staticColour;
+} Var64TextFormat;
+
+static void Var64_ParseTextFormat(const char* spec, const char* specEnd, Var64TextFormat* out);
+static void Var64_BuildFormattedText(const Var64TextFormat* fmt, long long value,
+                                     char* dst, int dstSize);
+static void Var64_LangAppendText(void* out, const char* text, int len);
 
 static void Var64_CopyVarPath(const char* text, const char* textEnd, char* dst, int dstSize)
 {
@@ -803,6 +819,10 @@ static void* __fastcall Var64_VarTextBridgeDetour(void* ctx, const char* text,
 {
     char name[VAR64_LANG_NAME_MAX];
     char hiName[VAR64_LANG_NAME_MAX + 8];
+    char formatted[VAR64_FMT_TEXT_MAX];
+    Var64TextFormat fmt;
+    const char* spec = NULL;
+    const char* p;
     long long loValue = 0;
     long long hiValue = 0;
     unsigned long long combined;
@@ -837,11 +857,17 @@ static void* __fastcall Var64_VarTextBridgeDetour(void* ctx, const char* text,
         if (!Var64_LangResolveSlotValue(ctx, hiName, &hiValue)) hiValue = 0;
     }
 
+    for (p = text; p < textEnd; ++p) {
+        if (*p == '|') { spec = p + 1; break; }
+    }
+    Var64_ParseTextFormat(spec, textEnd, &fmt);
+
     combined = ((unsigned long long)(unsigned int)hiValue << 32)
              | (unsigned long long)(unsigned int)loValue;
-    Var64_LangAppendDecimalText(out, (long long)combined);
-    Plugin_Log("[v64lang] [%s] lo=%lld hi=%lld full=%lld",
-               name, loValue, hiValue, (long long)combined);
+    Var64_BuildFormattedText(&fmt, (long long)combined, formatted, sizeof(formatted));
+    Var64_LangAppendText(out, formatted, (int)strlen(formatted));
+    Plugin_Log("[v64lang] [%s] full=%lld -> [%s]",
+               name, (long long)combined, formatted);
     return out;
 }
 
@@ -871,32 +897,138 @@ static int Var64_LangResolveSlotValue(void* ctx, const char* name, long long* ou
     return 1;
 }
 
-static void Var64_LangAppendDecimalText(void* out, long long value)
+static void Var64_LangAppendText(void* out, const char* text, int len)
 {
     CmdString* field = (CmdString*)out;
     unsigned char* img;
-    char digits[24];
-    char text[32];
-    int d = 0;
-    int k = 0;
-    int neg = (value < 0);
-    unsigned long long uv = (unsigned long long)(neg ? -value : value);
 
-    if (field == NULL || !ConsoleCmd_IsReadable(field, 32)) return;
+    if (field == NULL || text == NULL || len <= 0) return;
+    if (!ConsoleCmd_IsReadable(field, 32)) return;
     img = Var64_Image();
     if (img == NULL) return;
     if (!ConsoleCmd_IsReadable(img + RVA_STRING_APPEND, 16)) return;
+    ((Var64StringAppendFn)(img + RVA_STRING_APPEND))((void**)field, text, (size_t)len);
+}
 
-    if (uv == 0) digits[d++] = '0';
-    while (uv > 0 && d < 22) {
-        digits[d++] = (char)('0' + (int)(uv % 10ULL));
+static void Var64_ParseTextFormat(const char* spec, const char* specEnd, Var64TextFormat* out)
+{
+    const char* p;
+
+    if (out == NULL) return;
+    memset(out, 0, sizeof(*out));
+    out->decimals = -1;
+    if (spec == NULL || specEnd == NULL) return;
+
+    for (p = spec; p < specEnd && *p != 0; ++p) {
+        char c = *p;
+        if (c >= '0' && c <= '9') {
+            out->decimals = (int)(c - '0');
+            if (out->decimals > VAR64_FMT_DECIMALS_MAX) out->decimals = VAR64_FMT_DECIMALS_MAX;
+        } else if (c == '*' || c == '^') {
+            out->useSiUnits = 1;
+        } else if (c == '%') {
+            out->percentMode = (out->percentMode == 0) ? 1 : 2;
+        } else if (c == '=') {
+            out->signedPrefix = 1;
+        } else if (c == '+') {
+            out->dynamicColour = '+';
+        } else if (c == '-') {
+            out->dynamicColour = '-';
+        } else if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
+            out->staticColour = c;
+        }
+    }
+}
+
+static int Var64_WriteWholePart(char* dst, int dstSize, unsigned long long uv)
+{
+    char tmp[24];
+    int n = 0;
+    int i = 0;
+
+    if (uv == 0) tmp[n++] = '0';
+    while (uv > 0 && n < 22) {
+        tmp[n++] = (char)('0' + (int)(uv % 10ULL));
         uv /= 10ULL;
     }
-    if (neg) text[k++] = '-';
-    while (d > 0) text[k++] = digits[--d];
-    text[k] = 0;
+    while (n > 0 && i + 1 < dstSize) dst[i++] = tmp[--n];
+    return i;
+}
 
-    ((Var64StringAppendFn)(img + RVA_STRING_APPEND))((void**)field, text, (size_t)k);
+static void Var64_BuildFormattedText(const Var64TextFormat* fmt, long long value,
+                                     char* dst, int dstSize)
+{
+    long long divisor = 1;
+    const char* suffix = "";
+    int decimals;
+    int k = 0;
+    int neg;
+    unsigned long long uv;
+    unsigned long long whole;
+    unsigned long long frac;
+    unsigned long long scaled = 0;
+    char colour = 0;
+    long long scaled2 = value;
+    int i;
+
+    if (fmt == NULL || dst == NULL || dstSize < 8) return;
+    if (fmt->percentMode == 1) {
+        long long limit = 9223372036854775807LL / 100;
+        if (scaled2 > limit) scaled2 = limit;
+        else if (scaled2 < -limit) scaled2 = -limit;
+        else scaled2 = scaled2 * 100;
+    }
+    if (fmt->useSiUnits) {
+        unsigned long long a = (unsigned long long)(scaled2 < 0 ? -scaled2 : scaled2);
+        if (a >= 1000000ULL) { divisor = 1000000; suffix = "M"; }
+        else if (a >= 1000ULL) { divisor = 1000; suffix = "K"; }
+    }
+    decimals = fmt->decimals;
+    if (decimals < 0) decimals = (divisor > 1) ? 2 : 0;
+    if (decimals > VAR64_FMT_DECIMALS_MAX) decimals = VAR64_FMT_DECIMALS_MAX;
+
+    neg = (scaled2 < 0);
+    uv = (unsigned long long)(neg ? -scaled2 : scaled2);
+    whole = uv / (unsigned long long)divisor;
+    frac = uv % (unsigned long long)divisor;
+    if (decimals > 0 && divisor > 1) {
+        unsigned long long scale = 1;
+        for (i = 0; i < decimals; ++i) scale *= 10ULL;
+        scaled = frac * scale / (unsigned long long)divisor;
+    }
+
+    if (fmt->dynamicColour != 0) {
+        if (value > 0) colour = (fmt->dynamicColour == '+') ? 'G' : 'R';
+        else if (value == 0) colour = 'Y';
+        else colour = (fmt->dynamicColour == '+') ? 'R' : 'G';
+    } else if (fmt->staticColour != 0) {
+        colour = fmt->staticColour;
+    }
+
+    if (colour != 0 && k + 2 < dstSize) {
+        dst[k++] = (char)VAR64_SECTION_SIGN;
+        dst[k++] = colour;
+    }
+    if (fmt->signedPrefix && !neg && k + 1 < dstSize) dst[k++] = '+';
+    if (neg && k + 1 < dstSize) dst[k++] = '-';
+    k += Var64_WriteWholePart(dst + k, dstSize - k, whole);
+    if (decimals > 0 && k + 1 < dstSize) {
+        unsigned long long scale = 1;
+        dst[k++] = '.';
+        for (i = 0; i < decimals; ++i) scale *= 10ULL;
+        while (scale > 10ULL && k + 1 < dstSize) {
+            scale /= 10ULL;
+            dst[k++] = (char)('0' + (int)((scaled / scale) % 10ULL));
+        }
+        if (k + 1 < dstSize) dst[k++] = (char)('0' + (int)(scaled % 10ULL));
+    }
+    for (i = 0; suffix[i] != 0 && k + 1 < dstSize; ++i) dst[k++] = suffix[i];
+    if (fmt->percentMode != 0 && k + 1 < dstSize) dst[k++] = '%';
+    if (colour != 0 && k + 1 < dstSize) {
+        dst[k++] = (char)VAR64_SECTION_SIGN;
+        dst[k++] = '!';
+    }
+    dst[k] = 0;
 }
 
 void Var64_InstallLanguageBridge(void)
