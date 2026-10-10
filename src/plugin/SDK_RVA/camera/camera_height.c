@@ -182,9 +182,32 @@ int Camera_ClampHeightInto(void* cam, int lo, int hi)
     if (cam == NULL) return 0;
     if (!ConsoleCmd_IsReadable((unsigned char*)cam + OFF_CAM_HEIGHT, 4)) return 0;
     h = *(float*)((unsigned char*)cam + OFF_CAM_HEIGHT);
+    if (h != h) {
+        Camera_SetHeight(cam, (float)lo);
+        Plugin_Log("[cam] height was NaN, pulled to lower %d", lo);
+        return 1;
+    }
     if (h < (float)lo) { Camera_SetHeight(cam, (float)lo); return 1; }
     if (h > (float)hi) { Camera_SetHeight(cam, (float)hi); return 1; }
     return 0;
+}
+
+int Camera_EnsureSpanBetweenLimits(void* cam, int* inOutLo, int* inOutHi)
+{
+    int lo;
+    int hi;
+    int raised = 0;
+
+    if (!Camera_GetLimits(cam, &lo, &hi)) return 0;
+    if (hi - lo < CAM_MIN_SPAN) {
+        hi = lo + CAM_MIN_SPAN;
+        Camera_SetUpperLimit(cam, hi);
+        raised = 1;
+        Plugin_Log("[cam] range too narrow (lo=%d hi=%d), upper raised to %d", lo, hi - CAM_MIN_SPAN, hi);
+    }
+    if (inOutLo != NULL) *inOutLo = lo;
+    if (inOutHi != NULL) *inOutHi = hi;
+    return raised;
 }
 
 int Camera_ApplyLimits(void* cam, int* inOutLo, int* inOutHi, int* moved)
@@ -192,6 +215,7 @@ int Camera_ApplyLimits(void* cam, int* inOutLo, int* inOutHi, int* moved)
     int lo;
     int hi;
     if (moved != NULL) *moved = 0;
+    Camera_EnsureSpanBetweenLimits(cam, &lo, &hi);
     if (!Camera_GetLimits(cam, &lo, &hi)) return 0;
     if (inOutLo != NULL) *inOutLo = lo;
     if (inOutHi != NULL) *inOutHi = hi;

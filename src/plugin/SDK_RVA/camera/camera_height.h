@@ -11,6 +11,7 @@
 #define CAM_TRUE_LOWER    35
 #define OFF_CAM_PARAM_FIXED 0x98u
 #define CAM_TRUE_UPPER_FALLBACK 3000u
+#define CAM_MIN_SPAN      50
 #define OFF_CAM_INTERP    0x698u
 
 typedef struct {
@@ -28,4 +29,5 @@ int            Camera_SetUpperLimit(void* cam, int hi);
 int            Camera_TrueLower(void);
 int            Camera_TrueUpper(void* cam);
 int            Camera_ClampHeightInto(void* cam, int lo, int hi);
+int            Camera_EnsureSpanBetweenLimits(void* cam, int* inOutLo, int* inOutHi);
 int            Camera_ApplyLimits(void* cam, int* inOutLo, int* inOutHi, int* moved);
