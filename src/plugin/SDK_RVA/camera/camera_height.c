@@ -46,19 +46,44 @@ int Camera_CaptureTrueUpperLimit(void)
     return 1;
 }
 
+static volatile long g_nudgeLock = 0;
+
+void Camera_NudgeInputToSyncLiveHeight(void)
+{
+    INPUT in[2];
+    long prev;
+
+    prev = InterlockedExchange(&g_nudgeLock, 1);
+    if (prev != 0) return;
+
+    memset(in, 0, sizeof(in));
+    in[0].type = INPUT_MOUSE;
+    in[0].mi.dx = 1;
+    in[0].mi.dy = 0;
+    in[0].mi.dwFlags = MOUSEEVENTF_MOVE;
+    in[1].type = INPUT_MOUSE;
+    in[1].mi.dx = -1;
+    in[1].mi.dy = 0;
+    in[1].mi.dwFlags = MOUSEEVENTF_MOVE;
+    {
+        UINT sent = SendInput(2, in, sizeof(INPUT));
+        DWORD err = GetLastError();
+        HWND fg = GetForegroundWindow();
+        DWORD fgPid = 0;
+        DWORD myPid = GetCurrentProcessId();
+        if (fg != NULL) GetWindowThreadProcessId(fg, &fgPid);
+        Plugin_Log("[nudge] SendInput sent=%u/%d sizeofInput=%d err=%lu fgPid=%lu myPid=%lu fgIsMine=%d",
+                   sent, 2, (int)sizeof(INPUT), err, fgPid, myPid, (fgPid == myPid));
+    }
+
+    InterlockedExchange(&g_nudgeLock, 0);
+}
+
 int Camera_SetHeight(void* cam, float want)
 {
-    HMODULE base;
-    unsigned char* img;
-    unsigned char* fn;
-
     if (cam == NULL) return 0;
-    base = GetModuleHandleA(NULL);
-    if (base == NULL) return 0;
-    img = (unsigned char*)base;
-    if (!ConsoleCmd_IsReadable(img + RVA_CAM_SETH, sizeof(void*))) return 0;
-    fn = img + RVA_CAM_SETH;
-    ((CamSetHeightFn)fn)(cam, want);
+    if (!ConsoleCmd_IsReadable((unsigned char*)cam + OFF_CAM_HEIGHT, 4)) return 0;
+    *(float*)((unsigned char*)cam + OFF_CAM_HEIGHT) = want;
     return 1;
 }
 
@@ -192,8 +217,8 @@ int Camera_ClampHeightInto(void* cam, int lo, int hi)
 {
     float h;
     if (cam == NULL) return 0;
-    if (!ConsoleCmd_IsReadable((unsigned char*)cam + OFF_CAM_HEIGHT, 4)) return 0;
-    h = *(float*)((unsigned char*)cam + OFF_CAM_HEIGHT);
+    if (!ConsoleCmd_IsReadable((unsigned char*)cam + OFF_CAM_HEIGHT_LIVE, 4)) return 0;
+    h = *(float*)((unsigned char*)cam + OFF_CAM_HEIGHT_LIVE);
     if (h != h) {
         Camera_SetHeight(cam, (float)lo);
         Plugin_Log("[cam] height was NaN, pulled to lower %d", lo);
