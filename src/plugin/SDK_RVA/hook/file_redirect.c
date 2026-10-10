@@ -27,7 +27,7 @@ static char               g_gameRootPath[CRASHPATH_MAX];
 static char               g_redirectSourcePrefix[CRASHPATH_MAX];
 static int                g_redirectHitCount = 0;
 
-static unsigned char* Img(void)
+static unsigned char* FileRedirect_GetModuleBase(void)
 {
     return (unsigned char*)GetModuleHandleA(NULL);
 }
@@ -189,7 +189,7 @@ static BOOL WINAPI Hook_CreateDirectoryA(LPCSTR name, LPSECURITY_ATTRIBUTES sa)
 
 static void** FindIatSlot(const char* moduleName, const char* funcName)
 {
-    unsigned char* img = Img();
+    unsigned char* img = FileRedirect_GetModuleBase();
     IMAGE_DOS_HEADER* dos;
     IMAGE_NT_HEADERS* nt;
     IMAGE_IMPORT_DESCRIPTOR* imp;

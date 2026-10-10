@@ -23,7 +23,7 @@ static int g_hookInstalled = 0;
 static int g_blockingEnabled = 1;
 static int g_blockedProcessCount = 0;
 
-static int EqNoCase(char a, char b)
+static int ProcBlock_CharsEqualIgnoreCase(char a, char b)
 {
     if (a >= 'A' && a <= 'Z') a = (char)(a - 'A' + 'a');
     if (b >= 'A' && b <= 'Z') b = (char)(b - 'A' + 'a');
@@ -37,7 +37,7 @@ static int ContainsNoCaseA(const char* hay, const char* needle)
     if (needle[0] == 0) return 1;
     for (i = 0; hay[i] != 0; ++i) {
         size_t j = 0;
-        while (needle[j] != 0 && hay[i + j] != 0 && EqNoCase(hay[i + j], needle[j])) ++j;
+        while (needle[j] != 0 && hay[i + j] != 0 && ProcBlock_CharsEqualIgnoreCase(hay[i + j], needle[j])) ++j;
         if (needle[j] == 0) return 1;
     }
     return 0;

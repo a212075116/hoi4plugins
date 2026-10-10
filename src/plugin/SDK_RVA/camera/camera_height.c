@@ -340,39 +340,8 @@ static long long __fastcall Handler_SetUpperLimit(CmdResult* out, CmdArgs* args)
     return (long long)out;
 }
 
-static DWORD WINAPI Camera_DebugCrashThread(LPVOID p)
-{
-    volatile unsigned int* q = (volatile unsigned int*)0;
-    (void)p;
-    *q = 1u;
-    return 0;
-}
-
-static long long __fastcall Handler_CrashMeMain(CmdResult* out, CmdArgs* args)
-{
-    volatile unsigned int* q = (volatile unsigned int*)0;
-    (void)out;
-    (void)args;
-    Plugin_Log("[crashme_main] about to dereference NULL on the calling thread");
-    *q = 1u;
-    return 0;
-}
-
-static long long __fastcall Handler_CrashMe(CmdResult* out, CmdArgs* args)
-{
-    HANDLE t;
-    (void)out;
-    (void)args;
-    Plugin_Log("[crashme] spawning a thread that dereferences NULL");
-    t = CreateThread(NULL, 0, Camera_DebugCrashThread, NULL, 0, NULL);
-    if (t != NULL) CloseHandle(t);
-    return 0;
-}
-
 static const CmdDef kCameraCommandDefs[] = {
     { "setcamheight", "Set camera height", "sch", 1, { "<height>" }, &Handler_SetCamHeight },
-    { "crashme", "Deliberately crash in a worker thread (tests the crash reporter)", "crm", 0, { "" }, &Handler_CrashMe },
-    { "crashme_main", "Deliberately crash on the calling thread (tests the crash reporter)", "crmm", 0, { "" }, &Handler_CrashMeMain },
     { "setcameraheight_lowerlimit", "Set camera height lower limit", "schll", 1, { "<value>" }, &Handler_SetLowerLimit },
     { "setcameraheight_upperlimit", "Set camera height upper limit", "schul", 1, { "<value>" }, &Handler_SetUpperLimit },
 };

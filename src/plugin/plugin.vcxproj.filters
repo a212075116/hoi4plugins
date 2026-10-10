@@ -13,6 +13,9 @@
     <Filter Include="SDK_RVA\effect">
       <UniqueIdentifier>{A1B2C3D4-1111-4E5F-9A8B-000000000004}</UniqueIdentifier>
     </Filter>
+    <Filter Include="SDK_RVA\crash_test">
+      <UniqueIdentifier>{A1B2C3D4-1111-4E5F-9A8B-000000000011}</UniqueIdentifier>
+    </Filter>
     <Filter Include="SDK_RVA\gamedate">
       <UniqueIdentifier>{A1B2C3D4-1111-4E5F-9A8B-000000000005}</UniqueIdentifier>
     </Filter>
@@ -55,6 +58,9 @@
     <ClCompile Include="SDK_RVA\gamedate\gamedate_ui.c">
       <Filter>SDK_RVA\gamedate</Filter>
     </ClCompile>
+    <ClCompile Include="SDK_RVA\crash_test\crash_test.c">
+      <Filter>SDK_RVA\crash_test</Filter>
+    </ClCompile>
     <ClCompile Include="SDK_RVA\hook\file_redirect.c">
       <Filter>SDK_RVA\hook</Filter>
     </ClCompile>
@@ -90,6 +96,9 @@
     </ClInclude>
     <ClInclude Include="SDK_RVA\gamedate\gamedate.h">
       <Filter>SDK_RVA\gamedate</Filter>
+    </ClInclude>
+    <ClInclude Include="SDK_RVA\crash_test\crash_test.h">
+      <Filter>SDK_RVA\crash_test</Filter>
     </ClInclude>
     <ClInclude Include="SDK_RVA\hook\file_redirect.h">
       <Filter>SDK_RVA\hook</Filter>

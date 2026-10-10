@@ -11,6 +11,7 @@
 #include "file_redirect.h"
 #include "process_block.h"
 #include "gamedate.h"
+#include "crash_test.h"
 
 int EffectCameras_Register(void);
 int EffectGameDate_Register(void);
@@ -206,6 +207,11 @@ static DWORD WINAPI PluginThread(LPVOID p)
     {
         int r = GameDateUi_Init();
         Plugin_Log("[plugin] GameDateUi_Init -> %d", r);
+    }
+
+    {
+        int n = CrashTest_RegisterCommands();
+        Plugin_Log("[plugin] CrashTest_RegisterCommands -> %d", n);
     }
 
     {
