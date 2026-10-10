@@ -11,7 +11,7 @@ extern void Plugin_Log(const char* fmt, ...);
 
 typedef void (__fastcall *CamSetHeightFn)(void* cam, float height);
 
-static int g_trueUpper = 0;
+static int g_cameraFallbackUpperLimit = 0;
 
 int Camera_TrueLower(void)
 {
@@ -22,16 +22,16 @@ int Camera_TrueUpper(void* cam)
 {
     int lo;
     int hi;
-    if (g_trueUpper <= 0) {
+    if (g_cameraFallbackUpperLimit <= 0) {
         if (cam != NULL && Camera_GetLimits(cam, &lo, &hi) && hi > 0) {
-            g_trueUpper = hi;
+            g_cameraFallbackUpperLimit = hi;
         } else {
-            g_trueUpper = (int)CAM_TRUE_UPPER_FALLBACK;
+            g_cameraFallbackUpperLimit = (int)CAM_TRUE_UPPER_FALLBACK;
         }
         Plugin_Log("[cam] true upper limit captured: %d (true lower = %d)",
-                   g_trueUpper, CAM_TRUE_LOWER);
+                   g_cameraFallbackUpperLimit, CAM_TRUE_LOWER);
     }
-    return g_trueUpper;
+    return g_cameraFallbackUpperLimit;
 }
 
 int Camera_SetHeight(void* cam, float want)
@@ -50,7 +50,7 @@ int Camera_SetHeight(void* cam, float want)
     return 1;
 }
 
-static unsigned char* Camera_GetCameraObject(void)
+unsigned char* Camera_GetObject(void)
 {
     HMODULE base = GetModuleHandleA(NULL);
     unsigned char* img;
@@ -104,7 +104,7 @@ static long long __fastcall Handler_SetCamHeight(CmdResult* out, CmdArgs* args)
     if (out == NULL) return 0;
     ConsoleCmd_InitResult(out);
 
-    cam = Camera_GetCameraObject();
+    cam = Camera_GetObject();
     if (cam == NULL) {
         ConsoleCmd_SetMessage(out, "Currently,Camera Height is unknown");
         Plugin_Log("[setcamheight] no camera object");
@@ -216,7 +216,7 @@ static long long __fastcall Handler_SetLowerLimit(CmdResult* out, CmdArgs* args)
 
     if (out == NULL) return 0;
     ConsoleCmd_InitResult(out);
-    cam = Camera_GetCameraObject();
+    cam = Camera_GetObject();
     if (cam == NULL) {
         ConsoleCmd_SetMessage(out, "Camera lower limit is unknown");
         return (long long)out;
@@ -284,7 +284,7 @@ static long long __fastcall Handler_SetUpperLimit(CmdResult* out, CmdArgs* args)
 
     if (out == NULL) return 0;
     ConsoleCmd_InitResult(out);
-    cam = Camera_GetCameraObject();
+    cam = Camera_GetObject();
     if (cam == NULL) {
         ConsoleCmd_SetMessage(out, "Camera upper limit is unknown");
         return (long long)out;
@@ -369,7 +369,7 @@ static long long __fastcall Handler_CrashMe(CmdResult* out, CmdArgs* args)
     return 0;
 }
 
-static const CmdDef kCamCmds[] = {
+static const CmdDef kCameraCommandDefs[] = {
     { "setcamheight", "Set camera height", "sch", 1, { "<height>" }, &Handler_SetCamHeight },
     { "crashme", "Deliberately crash in a worker thread (tests the crash reporter)", "crm", 0, { "" }, &Handler_CrashMe },
     { "crashme_main", "Deliberately crash on the calling thread (tests the crash reporter)", "crmm", 0, { "" }, &Handler_CrashMeMain },
@@ -377,12 +377,7 @@ static const CmdDef kCamCmds[] = {
     { "setcameraheight_upperlimit", "Set camera height upper limit", "schul", 1, { "<value>" }, &Handler_SetUpperLimit },
 };
 
-unsigned char* Camera_GetObject(void)
-{
-    return Camera_GetCameraObject();
-}
-
 int Camera_RegisterCommands(void)
 {
-    return ConsoleCmd_RegisterAll(kCamCmds, (int)(sizeof(kCamCmds) / sizeof(kCamCmds[0])));
+    return ConsoleCmd_RegisterAll(kCameraCommandDefs, (int)(sizeof(kCameraCommandDefs) / sizeof(kCameraCommandDefs[0])));
 }

@@ -14,7 +14,7 @@ static unsigned char* Img(void)
     return (unsigned char*)GetModuleHandleA(NULL);
 }
 
-static const int kMonthDays[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+static const int kGregorianMonthDayCounts[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
 
 #define GD_BASE_HOURS  43800000
 #define GD_BASE_DAYS   182500
@@ -51,12 +51,12 @@ static void GameDate_SyncDerived(unsigned char* gs, int raw)
     doy = 0;
     {
         int i;
-        for (i = 0; i < mo - 1; ++i) doy += kMonthDays[i];
+        for (i = 0; i < mo - 1; ++i) doy += kGregorianMonthDayCounts[i];
         doy += d;
     }
 
     *(int*)(gs + OFF_GD_YEAR)      = y;
-    *(int*)(gs + OFF_GD_MONTHDAYS) = kMonthDays[mo - 1];
+    *(int*)(gs + OFF_GD_MONTHDAYS) = kGregorianMonthDayCounts[mo - 1];
     *(int*)(gs + OFF_GD_DAY)       = d;
     *(int*)(gs + OFF_GD_DOY)       = doy;
     *(int*)(gs + OFF_GD_MONTH0)    = mo - 1;
@@ -93,12 +93,12 @@ int GameDate_DecodeRaw(int raw, int* year, int* month, int* day, int* hour)
     if (year != NULL)  *year = yr;
     if (hour != NULL)  *hour = hr;
     for (i = 0; i < 12; ++i) {
-        if (rem < kMonthDays[i]) {
+        if (rem < kGregorianMonthDayCounts[i]) {
             if (month != NULL) *month = i + 1;
             if (day != NULL)   *day = rem + 1;
             return 1;
         }
-        rem -= kMonthDays[i];
+        rem -= kGregorianMonthDayCounts[i];
     }
     if (month != NULL) *month = 12;
     if (day != NULL)   *day = 31;
@@ -111,7 +111,7 @@ int GameDate_EncodeParts(int year, int month, int day, int hour)
     int i;
 
     days = 365 * (year - GD_EPOCH_YEAR);
-    for (i = 0; i < month - 1; ++i) days += kMonthDays[i];
+    for (i = 0; i < month - 1; ++i) days += kGregorianMonthDayCounts[i];
     days += (day - 1);
     return GD_BASE_HOURS + (GD_BASE_DAYS + days) * 24 + hour;
 }
@@ -138,7 +138,7 @@ int GameDate_Add(int unit, int delta)
     while (mo < 1)  { mo += 12; --y; }
     if (y < 1) y = 1;
     if (y > 9999) y = 9999;
-    if (d > kMonthDays[mo - 1]) d = kMonthDays[mo - 1];
+    if (d > kGregorianMonthDayCounts[mo - 1]) d = kGregorianMonthDayCounts[mo - 1];
     if (d < 1) d = 1;
     return GameDate_SetRaw(GameDate_EncodeParts(y, mo, d, h));
 }
@@ -215,11 +215,11 @@ int GameDate_SetFromText(const char* text)
     if (!ParseDateText(text, &y, &mo, &d, &h)) return 0;
     if (y < 1 || y > 9999) return 0;
     if (mo < 1 || mo > 12) return 0;
-    if (d < 1 || d > kMonthDays[mo - 1]) return 0;
+    if (d < 1 || d > kGregorianMonthDayCounts[mo - 1]) return 0;
     if (h < 0 || h > 23) return 0;
 
     days = 365 * (y - 500);
-    for (i = 0; i < mo - 1; ++i) days += kMonthDays[i];
+    for (i = 0; i < mo - 1; ++i) days += kGregorianMonthDayCounts[i];
     days += (d - 1);
     raw = GD_BASE_HOURS + (GD_BASE_DAYS + days) * 24 + h;
     return GameDate_SetRaw(raw);

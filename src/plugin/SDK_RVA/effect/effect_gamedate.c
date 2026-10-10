@@ -9,7 +9,7 @@
 
 extern void Plugin_Log(const char* fmt, ...);
 
-static int g_execCalls = 0;
+static int g_dateEffectExecCount = 0;
 
 static void __fastcall ExecSetGameDate(void* self, void* scope)
 {
@@ -22,16 +22,16 @@ static void __fastcall ExecSetGameDate(void* self, void* scope)
 
     (void)scope;
     Effect_FlushPendingTooltip();
-    ++g_execCalls;
+    ++g_dateEffectExecCount;
 
     if (!GameDate_ReadParamText(self, text, sizeof(text))) {
-        Plugin_Log("[eff] set_game_date #%d: param unreadable", g_execCalls);
+        Plugin_Log("[eff] set_game_date #%d: param unreadable", g_dateEffectExecCount);
         return;
     }
 
     before = GameDate_GetRaw();
     if (!GameDate_SetFromText(text)) {
-        Plugin_Log("[eff] set_game_date #%d: apply failed for [%s]", g_execCalls, text);
+        Plugin_Log("[eff] set_game_date #%d: apply failed for [%s]", g_dateEffectExecCount, text);
         return;
     }
     after = GameDate_GetRaw();
@@ -40,7 +40,7 @@ static void __fastcall ExecSetGameDate(void* self, void* scope)
     d = 0;
     GameDate_GetParts(&y, &mo, &d);
     Plugin_Log("[eff] set_game_date #%d  arg=[%s]  raw %d -> %d  now %d.%d.%d",
-               g_execCalls, text, before, after, y, mo, d);
+               g_dateEffectExecCount, text, before, after, y, mo, d);
 }
 
 static void RunAdd(void* self, void* scope, int unit, const char* tag)
@@ -55,12 +55,12 @@ static void RunAdd(void* self, void* scope, int unit, const char* tag)
 
     (void)scope;
     Effect_FlushPendingTooltip();
-    ++g_execCalls;
+    ++g_dateEffectExecCount;
 
     delta = (int)Effect_ParamFloat(self, scope);
     before = GameDate_GetRaw();
     if (!GameDate_Add(unit, delta)) {
-        Plugin_Log("[eff] %s #%d: add failed delta=%d", tag, g_execCalls, delta);
+        Plugin_Log("[eff] %s #%d: add failed delta=%d", tag, g_dateEffectExecCount, delta);
         return;
     }
     after = GameDate_GetRaw();
@@ -70,7 +70,7 @@ static void RunAdd(void* self, void* scope, int unit, const char* tag)
     h = 0;
     GameDate_GetParts4(&y, &mo, &d, &h);
     Plugin_Log("[eff] %s #%d  delta=%d  raw %d -> %d  now %d.%d.%d.%d",
-               tag, g_execCalls, delta, before, after, y, mo, d, h);
+               tag, g_dateEffectExecCount, delta, before, after, y, mo, d, h);
 }
 
 static void __fastcall ExecAddYears(void* self, void* scope)
@@ -107,7 +107,7 @@ EFF_DEF(adddays, "add_time_for_days", "Adds days to the in-game date",
 EFF_DEF(addhours, "add_time_for_hours", "Adds hours to the in-game date",
         "EFFECT_ADD_TIME_FOR_HOURS", &ExecAddHours)
 
-static EffectDef* g_dateEffects[] = {
+static EffectDef* g_dateEffectDefs[] = {
     &setgamedate_def,
     &addyears_def,
     &addmonths_def,
@@ -115,7 +115,7 @@ static EffectDef* g_dateEffects[] = {
     &addhours_def
 };
 
-#define EFF_DATE_COUNT (int)(sizeof(g_dateEffects) / sizeof(g_dateEffects[0]))
+#define EFF_DATE_COUNT (int)(sizeof(g_dateEffectDefs) / sizeof(g_dateEffectDefs[0]))
 
 int EffectGameDate_Register(void)
 {
@@ -125,7 +125,7 @@ int EffectGameDate_Register(void)
     addmonths_fill();
     adddays_fill();
     addhours_fill();
-    n = Effect_RegistryRegisterAll(g_dateEffects, EFF_DATE_COUNT);
+    n = Effect_RegistryRegisterAll(g_dateEffectDefs, EFF_DATE_COUNT);
     Plugin_Log("[eff] date effects registered: %d/%d", n, EFF_DATE_COUNT);
     return n;
 }

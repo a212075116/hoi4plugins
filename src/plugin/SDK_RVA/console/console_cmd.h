@@ -13,18 +13,18 @@ typedef struct {
 #define CMD_MAX_ALIAS 3
 
 typedef struct {
-    int         flag;
-    int         unknown04;
+    int         entryStateFlag;
+    int         reservedField04;
     CmdString   name;
     int         aliasCount;
-    int         p2C;
+    int         reservedField2C;
     const char* aliases[CMD_MAX_ALIAS];
     CmdString   description;
     void*       handler;
-    void*       p70;
-    void*       p78;
+    void*       reservedField70;
+    void*       reservedField78;
     int         argCount;
-    int         p84;
+    int         reservedField84;
     CmdString   args[10];
 } CmdEntry;
 

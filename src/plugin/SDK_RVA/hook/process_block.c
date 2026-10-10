@@ -17,11 +17,11 @@ typedef BOOL (WINAPI *CreateProcessWFn)(LPCWSTR, LPWSTR, LPSECURITY_ATTRIBUTES,
                                         LPSECURITY_ATTRIBUTES, BOOL, DWORD, LPVOID,
                                         LPCWSTR, LPSTARTUPINFOW, LPPROCESS_INFORMATION);
 
-static CreateProcessAFn g_origA = NULL;
-static CreateProcessWFn g_origW = NULL;
-static int g_installed = 0;
-static int g_enabled = 1;
-static int g_blocked = 0;
+static CreateProcessAFn g_originalCreateProcessA = NULL;
+static CreateProcessWFn g_originalCreateProcessW = NULL;
+static int g_hookInstalled = 0;
+static int g_blockingEnabled = 1;
+static int g_blockedProcessCount = 0;
 
 static int EqNoCase(char a, char b)
 {
@@ -97,19 +97,19 @@ static BOOL WINAPI Hook_CreateProcessA(LPCSTR app, LPSTR cmd, LPSECURITY_ATTRIBU
 {
     int hit;
     if (g_hookReentry > 0) {
-        return g_origA(app, cmd, pa, ta, inherit, flags, env, cwd, si, pi);
+        return g_originalCreateProcessA(app, cmd, pa, ta, inherit, flags, env, cwd, si, pi);
     }
     ++g_hookReentry;
-    hit = (g_enabled && ShouldBlockA(app, cmd));
+    hit = (g_blockingEnabled && ShouldBlockA(app, cmd));
     if (hit) {
-        ++g_blocked;
-        Plugin_Log("[pblock] blocked #%d A: %s", g_blocked, cmd != NULL ? cmd : "(null)");
+        ++g_blockedProcessCount;
+        Plugin_Log("[pblock] blocked #%d A: %s", g_blockedProcessCount, cmd != NULL ? cmd : "(null)");
         ClearProcessInfo(pi);
         SetLastError(ERROR_ACCESS_DENIED);
     }
     --g_hookReentry;
     if (hit) return FALSE;
-    return g_origA(app, cmd, pa, ta, inherit, flags, env, cwd, si, pi);
+    return g_originalCreateProcessA(app, cmd, pa, ta, inherit, flags, env, cwd, si, pi);
 }
 
 static BOOL WINAPI Hook_CreateProcessW(LPCWSTR app, LPWSTR cmd, LPSECURITY_ATTRIBUTES pa,
@@ -119,19 +119,19 @@ static BOOL WINAPI Hook_CreateProcessW(LPCWSTR app, LPWSTR cmd, LPSECURITY_ATTRI
 {
     int hit;
     if (g_hookReentry > 0) {
-        return g_origW(app, cmd, pa, ta, inherit, flags, env, cwd, si, pi);
+        return g_originalCreateProcessW(app, cmd, pa, ta, inherit, flags, env, cwd, si, pi);
     }
     ++g_hookReentry;
-    hit = (g_enabled && ShouldBlockW(app, cmd));
+    hit = (g_blockingEnabled && ShouldBlockW(app, cmd));
     if (hit) {
-        ++g_blocked;
-        Plugin_Log("[pblock] blocked #%d W", g_blocked);
+        ++g_blockedProcessCount;
+        Plugin_Log("[pblock] blocked #%d W", g_blockedProcessCount);
         ClearProcessInfo(pi);
         SetLastError(ERROR_ACCESS_DENIED);
     }
     --g_hookReentry;
     if (hit) return FALSE;
-    return g_origW(app, cmd, pa, ta, inherit, flags, env, cwd, si, pi);
+    return g_originalCreateProcessW(app, cmd, pa, ta, inherit, flags, env, cwd, si, pi);
 }
 
 static void* ApiTarget(const WCHAR* module, const char* name)
@@ -145,7 +145,7 @@ int ProcBlock_Install(void)
 {
     void* t1;
     void* t2;
-    if (g_installed) return 1;
+    if (g_hookInstalled) return 1;
 
     t1 = ApiTarget(L"kernel32.dll", "CreateProcessA");
     t2 = ApiTarget(L"kernel32.dll", "CreateProcessW");
@@ -155,23 +155,23 @@ int ProcBlock_Install(void)
     }
 
     if (t1 != NULL) {
-        g_origA = (CreateProcessAFn)InlineHook_Install(t1, (void*)Hook_CreateProcessA);
+        g_originalCreateProcessA = (CreateProcessAFn)InlineHook_Install(t1, (void*)Hook_CreateProcessA);
     }
     if (t2 != NULL) {
-        g_origW = (CreateProcessWFn)InlineHook_Install(t2, (void*)Hook_CreateProcessW);
+        g_originalCreateProcessW = (CreateProcessWFn)InlineHook_Install(t2, (void*)Hook_CreateProcessW);
     }
-    if (g_origA == NULL && g_origW == NULL) {
+    if (g_originalCreateProcessA == NULL && g_originalCreateProcessW == NULL) {
         Plugin_Log("[pblock] install failed");
         return 0;
     }
 
-    g_installed = 1;
+    g_hookInstalled = 1;
     Plugin_Log("[pblock] installed via MinHook A=%p W=%p origA=%p origW=%p",
-               t1, t2, (void*)g_origA, (void*)g_origW);
+               t1, t2, (void*)g_originalCreateProcessA, (void*)g_originalCreateProcessW);
     return 1;
 }
 
-int ProcBlock_Installed(void) { return g_installed; }
-int ProcBlock_BlockedCount(void) { return g_blocked; }
-void ProcBlock_SetEnabled(int on) { g_enabled = on ? 1 : 0; }
-int ProcBlock_Enabled(void) { return g_enabled; }
+int ProcBlock_Installed(void) { return g_hookInstalled; }
+int ProcBlock_BlockedCount(void) { return g_blockedProcessCount; }
+void ProcBlock_SetEnabled(int on) { g_blockingEnabled = on ? 1 : 0; }
+int ProcBlock_Enabled(void) { return g_blockingEnabled; }

@@ -21,11 +21,11 @@ static CreateFileWFn      g_origCreateFileW = NULL;
 static CreateFileAFn      g_origCreateFileA = NULL;
 static CreateDirectoryWFn g_origCreateDirW  = NULL;
 static CreateDirectoryAFn g_origCreateDirA  = NULL;
-static int                g_installed = 0;
-static int                g_enabled = 1;
-static char               g_gameRoot[CRASHPATH_MAX];
-static char               g_sourcePrefix[CRASHPATH_MAX];
-static int                g_hitCount = 0;
+static int                g_hookInstalled = 0;
+static int                g_redirectEnabled = 1;
+static char               g_gameRootPath[CRASHPATH_MAX];
+static char               g_redirectSourcePrefix[CRASHPATH_MAX];
+static int                g_redirectHitCount = 0;
 
 static unsigned char* Img(void)
 {
@@ -91,7 +91,7 @@ static void BuildSourcePrefix(void)
     strncat_s(docs, CRASHPATH_MAX, "\\Paradox Interactive\\Hearts of Iron IV\\crashes", _TRUNCATE);
     NormalizeSlashes(docs);
     TrimSlash(docs);
-    strncpy_s(g_sourcePrefix, CRASHPATH_MAX, docs, _TRUNCATE);
+    strncpy_s(g_redirectSourcePrefix, CRASHPATH_MAX, docs, _TRUNCATE);
 }
 
 static int RedirectA(const char* name, char* out, int cap, int* didRedirect)
@@ -101,20 +101,20 @@ static int RedirectA(const char* name, char* out, int cap, int* didRedirect)
 
     if (didRedirect != NULL) *didRedirect = 0;
     if (name == NULL) return 0;
-    if (g_enabled == 0) return 0;
-    if (g_sourcePrefix[0] == 0 || g_gameRoot[0] == 0) return 0;
+    if (g_redirectEnabled == 0) return 0;
+    if (g_redirectSourcePrefix[0] == 0 || g_gameRootPath[0] == 0) return 0;
 
     strncpy_s(ansi, CRASHPATH_MAX, name, _TRUNCATE);
     NormalizeSlashes(ansi);
-    if (!StartsWithNoCase(ansi, g_sourcePrefix)) return 0;
+    if (!StartsWithNoCase(ansi, g_redirectSourcePrefix)) return 0;
 
-    rest = ansi + strlen(g_sourcePrefix);
+    rest = ansi + strlen(g_redirectSourcePrefix);
     if (*rest != '\\') return 0;
     ++rest;
     if (*rest == 0) return 0;
 
     out[0] = 0;
-    strncat_s(out, cap, g_gameRoot, _TRUNCATE);
+    strncat_s(out, cap, g_gameRootPath, _TRUNCATE);
     strncat_s(out, cap, "\\crashes\\", _TRUNCATE);
     strncat_s(out, cap, rest, _TRUNCATE);
     if (didRedirect != NULL) *didRedirect = 1;
@@ -142,8 +142,8 @@ static HANDLE WINAPI Hook_CreateFileW(LPCWSTR name, DWORD access, DWORD share,
     WCHAR mapped[CRASHPATH_MAX];
     int did = 0;
     if (name != NULL && Redirect(name, mapped, CRASHPATH_MAX, &did) && did) {
-        ++g_hitCount;
-        Plugin_Log("[redir] CreateFileW #%d -> %ls", g_hitCount, mapped);
+        ++g_redirectHitCount;
+        Plugin_Log("[redir] CreateFileW #%d -> %ls", g_redirectHitCount, mapped);
         return g_origCreateFileW(mapped, access, share, sa, disp, flags, tmpl);
     }
     return g_origCreateFileW(name, access, share, sa, disp, flags, tmpl);
@@ -156,8 +156,8 @@ static HANDLE WINAPI Hook_CreateFileA(LPCSTR name, DWORD access, DWORD share,
     char built[CRASHPATH_MAX * 2];
     int did = 0;
     if (RedirectA(name, built, CRASHPATH_MAX * 2, &did) && did) {
-        ++g_hitCount;
-        Plugin_Log("[redir] CreateFileA #%d -> %s", g_hitCount, built);
+        ++g_redirectHitCount;
+        Plugin_Log("[redir] CreateFileA #%d -> %s", g_redirectHitCount, built);
         return g_origCreateFileA(built, access, share, sa, disp, flags, tmpl);
     }
     return g_origCreateFileA(name, access, share, sa, disp, flags, tmpl);
@@ -168,8 +168,8 @@ static BOOL WINAPI Hook_CreateDirectoryW(LPCWSTR name, LPSECURITY_ATTRIBUTES sa)
     WCHAR mapped[CRASHPATH_MAX];
     int did = 0;
     if (name != NULL && Redirect(name, mapped, CRASHPATH_MAX, &did) && did) {
-        ++g_hitCount;
-        Plugin_Log("[redir] CreateDirectoryW #%d -> %ls", g_hitCount, mapped);
+        ++g_redirectHitCount;
+        Plugin_Log("[redir] CreateDirectoryW #%d -> %ls", g_redirectHitCount, mapped);
         return g_origCreateDirW(mapped, sa);
     }
     return g_origCreateDirW(name, sa);
@@ -180,8 +180,8 @@ static BOOL WINAPI Hook_CreateDirectoryA(LPCSTR name, LPSECURITY_ATTRIBUTES sa)
     char built[CRASHPATH_MAX * 2];
     int did = 0;
     if (RedirectA(name, built, CRASHPATH_MAX * 2, &did) && did) {
-        ++g_hitCount;
-        Plugin_Log("[redir] CreateDirectoryA #%d -> %s", g_hitCount, built);
+        ++g_redirectHitCount;
+        Plugin_Log("[redir] CreateDirectoryA #%d -> %s", g_redirectHitCount, built);
         return g_origCreateDirA(built, sa);
     }
     return g_origCreateDirA(name, sa);
@@ -244,21 +244,21 @@ int FileRedirect_Install(void)
     void** s2;
     void** s3;
     void** s4;
-    if (g_installed) return 1;
+    if (g_hookInstalled) return 1;
 
-    GetModuleFileNameA(NULL, g_gameRoot, CRASHPATH_MAX);
+    GetModuleFileNameA(NULL, g_gameRootPath, CRASHPATH_MAX);
     {
-        char* p = g_gameRoot + strlen(g_gameRoot);
-        while (p > g_gameRoot && *p != '\\' && *p != '/') --p;
+        char* p = g_gameRootPath + strlen(g_gameRootPath);
+        while (p > g_gameRootPath && *p != '\\' && *p != '/') --p;
         *p = 0;
     }
-    NormalizeSlashes(g_gameRoot);
-    TrimSlash(g_gameRoot);
+    NormalizeSlashes(g_gameRootPath);
+    TrimSlash(g_gameRootPath);
 
     BuildSourcePrefix();
-    Plugin_Log("[redir] gameRoot=[%s]", g_gameRoot);
-    Plugin_Log("[redir] sourcePrefix=[%s]", g_sourcePrefix);
-    if (g_sourcePrefix[0] == 0) {
+    Plugin_Log("[redir] gameRoot=[%s]", g_gameRootPath);
+    Plugin_Log("[redir] sourcePrefix=[%s]", g_redirectSourcePrefix);
+    if (g_redirectSourcePrefix[0] == 0) {
         Plugin_Log("[redir] cannot build source prefix, abort");
         return 0;
     }
@@ -282,14 +282,14 @@ int FileRedirect_Install(void)
     if (s2 != NULL) PatchSlot(s2, (void*)Hook_CreateFileA);
     if (s4 != NULL) PatchSlot(s4, (void*)Hook_CreateDirectoryA);
 
-    g_installed = 1;
+    g_hookInstalled = 1;
     Plugin_Log("[redir] installed  W=%p A=%p DW=%p DA=%p",
                (void*)s1, (void*)s2, (void*)s3, (void*)s4);
     return 1;
 }
 
-int FileRedirect_Installed(void) { return g_installed; }
-const char* FileRedirect_GameRoot(void) { return g_gameRoot; }
-const char* FileRedirect_SourcePrefix(void) { return g_sourcePrefix; }
-void FileRedirect_SetEnabled(int on) { g_enabled = on ? 1 : 0; }
-int FileRedirect_Enabled(void) { return g_enabled; }
+int FileRedirect_Installed(void) { return g_hookInstalled; }
+const char* FileRedirect_GameRoot(void) { return g_gameRootPath; }
+const char* FileRedirect_SourcePrefix(void) { return g_redirectSourcePrefix; }
+void FileRedirect_SetEnabled(int on) { g_redirectEnabled = on ? 1 : 0; }
+int FileRedirect_Enabled(void) { return g_redirectEnabled; }

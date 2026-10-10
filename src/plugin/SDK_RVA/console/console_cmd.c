@@ -161,7 +161,7 @@ int ConsoleCmd_GetArg(CmdArgs* args, int i, char* dst, size_t dstn) {
 
 static void ConsoleCmd_FillEntry(CmdEntry* e, const CmdDef* d) {
     memset(e, 0, sizeof(*e));
-    e->flag     = 1;
+    e->entryStateFlag     = 1;
     e->handler  = (void*)d->handler;
     e->argCount = d->argCount;
     ConsoleCmd_WriteString(&e->name, d->name);

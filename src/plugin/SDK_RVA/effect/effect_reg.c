@@ -19,17 +19,17 @@ typedef void  (__fastcall *ParamDtorFn)(void* p);
 typedef void  (__fastcall *StrAppendFn)(void* str, unsigned long long n);
 typedef char  assert_ptr64[(sizeof(void*) == 8) ? 1 : -1];
 
-static int g_registeredCount = 0;
-static char g_pendingTip[192];
-static const char* g_pendingLoc = NULL;
-static int g_hasPendingTip = 0;
+static int g_registeredEffectCount = 0;
+static char g_pendingTooltipText[192];
+static const char* g_pendingTooltipLocKey = NULL;
+static int g_hasPendingTooltip = 0;
 
 void Effect_FlushPendingTooltip(void)
 {
-    if (g_hasPendingTip) {
-        Plugin_Log("[efftip] loc=%s text=[%s]", g_pendingLoc ? g_pendingLoc : "?",
-                   g_pendingTip);
-        g_hasPendingTip = 0;
+    if (g_hasPendingTooltip) {
+        Plugin_Log("[efftip] loc=%s text=[%s]", g_pendingTooltipLocKey ? g_pendingTooltipLocKey : "?",
+                   g_pendingTooltipText);
+        g_hasPendingTooltip = 0;
     }
 }
 
@@ -161,17 +161,17 @@ void* Effect_BuildTooltip(void* self, void* out, void* ctx, const char* locKey)
         unsigned long long ocap = *(unsigned long long*)((unsigned char*)out + 0x18);
         unsigned char* op = (ocap <= EFF_SSO_MAX)
                             ? (unsigned char*)out : *(unsigned char**)out;
-        if (g_hasPendingTip == 0 && osz > 0 && osz < 150 &&
+        if (g_hasPendingTooltip == 0 && osz > 0 && osz < 150 &&
             ConsoleCmd_IsReadable(op, (size_t)osz + 1)) {
             unsigned long long j;
             int n = 0;
             for (j = 0; j < osz && n < 180; ++j) {
                 char ch = (char)op[j];
-                g_pendingTip[n++] = (ch == 10 || ch == 13) ? ' ' : ch;
+                g_pendingTooltipText[n++] = (ch == 10 || ch == 13) ? ' ' : ch;
             }
-            g_pendingTip[n] = 0;
-            g_pendingLoc = locKey;
-            g_hasPendingTip = 1;
+            g_pendingTooltipText[n] = 0;
+            g_pendingTooltipLocKey = locKey;
+            g_hasPendingTooltip = 1;
         }
     }
 
@@ -226,7 +226,7 @@ int Effect_RegistryRegister(EffectDef* def)
 
     def->tokenId = id;
     def->state = EFF_STATE_OK;
-    ++g_registeredCount;
+    ++g_registeredEffectCount;
     Plugin_Log("[eff] + %s  tokenId=%d  loc=%s  exec=%p",
                def->name, id, def->locKey, (void*)def->exec);
     return 1;
@@ -250,5 +250,5 @@ int Effect_RegistryRegisterAll(EffectDef** defs, int count)
 
 int Effect_RegistryRegisteredCount(void)
 {
-    return g_registeredCount;
+    return g_registeredEffectCount;
 }
