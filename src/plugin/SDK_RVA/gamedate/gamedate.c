@@ -264,15 +264,8 @@ static long long __fastcall Handler_SetGameDate(CmdResult* out, CmdArgs* args)
     ConsoleCmd_InitResult(out);
 
     if (!ConsoleCmd_GetArg(args, 0, arg, sizeof(arg))) {
-        if (GameDate_GetParts(&y, &mo, &d)) {
-            _snprintf_s(msg, sizeof(msg), _TRUNCATE, "Game date is %d.%d.%d", y, mo, d);
-            ConsoleCmd_SetMessage(out, msg);
-            out->ok = 1;
-            Plugin_Log("[gamedate] read only: %d.%d.%d", y, mo, d);
-        } else {
-            ConsoleCmd_SetMessage(out, "Game date unknown");
-            Plugin_Log("[gamedate] gamestate not ready");
-        }
+        ConsoleCmd_SetMessage(out, "setgamedate: Command expects exactly one argument.");
+        Plugin_Log("[gamedate] setgamedate called without argument");
         return (long long)out;
     }
 
@@ -316,7 +309,8 @@ static int ParseSignedInt(const char* s, int* out)
     return 1;
 }
 
-static long long __fastcall Handler_AddTime(CmdResult* out, CmdArgs* args, int unit, const char* label)
+static long long __fastcall Handler_AddTime(CmdResult* out, CmdArgs* args, int unit,
+                                             const char* label, const char* commandName)
 {
     char arg[64];
     int delta;
@@ -332,15 +326,10 @@ static long long __fastcall Handler_AddTime(CmdResult* out, CmdArgs* args, int u
     ConsoleCmd_InitResult(out);
 
     if (!ConsoleCmd_GetArg(args, 0, arg, sizeof(arg))) {
-        if (GameDate_GetParts4(&y, &mo, &d, &h)) {
-            _snprintf_s(msg, sizeof(msg), _TRUNCATE,
-                        "Game date is %d.%d.%d.%d", y, mo, d, h);
-            ConsoleCmd_SetMessage(out, msg);
-            out->ok = 1;
-            Plugin_Log("[gamedate] %s read only: %d.%d.%d.%d", label, y, mo, d, h);
-        } else {
-            ConsoleCmd_SetMessage(out, "Game date unknown");
-        }
+        _snprintf_s(msg, sizeof(msg), _TRUNCATE,
+                    "%s: Command expects exactly one argument.", commandName);
+        ConsoleCmd_SetMessage(out, msg);
+        Plugin_Log("[gamedate] %s called without argument", label);
         return (long long)out;
     }
 
@@ -371,22 +360,22 @@ static long long __fastcall Handler_AddTime(CmdResult* out, CmdArgs* args, int u
 
 static long long __fastcall Handler_AddYears(CmdResult* out, CmdArgs* args)
 {
-    return Handler_AddTime(out, args, GD_UNIT_YEAR, "add_years");
+    return Handler_AddTime(out, args, GD_UNIT_YEAR, "add_years", "addtimeforyears");
 }
 
 static long long __fastcall Handler_AddMonths(CmdResult* out, CmdArgs* args)
 {
-    return Handler_AddTime(out, args, GD_UNIT_MONTH, "add_months");
+    return Handler_AddTime(out, args, GD_UNIT_MONTH, "add_months", "addtimeformonths");
 }
 
 static long long __fastcall Handler_AddDays(CmdResult* out, CmdArgs* args)
 {
-    return Handler_AddTime(out, args, GD_UNIT_DAY, "add_days");
+    return Handler_AddTime(out, args, GD_UNIT_DAY, "add_days", "addtimefordays");
 }
 
 static long long __fastcall Handler_AddHours(CmdResult* out, CmdArgs* args)
 {
-    return Handler_AddTime(out, args, GD_UNIT_HOUR, "add_hours");
+    return Handler_AddTime(out, args, GD_UNIT_HOUR, "add_hours", "addtimeforhours");
 }
 static const CmdDef kDateCmds[] = {
     { "setgamedate", "Set the in-game date", "sgd", 1, { "<y.m.d.h>" }, &Handler_SetGameDate },
