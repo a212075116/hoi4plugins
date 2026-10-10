@@ -1,0 +1,157 @@
+add_namespace = zzdatetest
+
+country_event = {
+	id = zzdatetest.26
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		set_variable = { test_number = 2 }
+		log = "NUMTEST step00 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step01 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step02 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step03 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step04 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step05 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step06 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step07 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step08 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step09 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step10 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step11 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step12 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step13 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step14 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step15 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step16 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step17 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step18 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step19 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step20 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step21 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step22 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step23 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step24 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step25 value= [?test_number]"
+		add_to_variable = { test_number = 1000000 }
+		log = "NUMTEST step26 value= [?test_number]"
+	}
+	option = { name = zzdatetest.26.a }
+}
+
+country_event = {
+	id = zzdatetest.27
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		set_variable = { test_number = 20000000 }
+		log = "NUMTEST set 20000000 -> [?test_number]"
+		set_variable = { test_number = 21474834 }
+		log = "NUMTEST set 21474834 -> [?test_number]"
+		set_variable = { test_number = 21474835 }
+		log = "NUMTEST set 21474835 -> [?test_number]"
+		set_variable = { test_number = 21474836 }
+		log = "NUMTEST set 21474836 -> [?test_number]"
+		set_variable = { test_number = 21474837 }
+		log = "NUMTEST set 21474837 -> [?test_number]"
+		set_variable = { test_number = 21474838 }
+		log = "NUMTEST set 21474838 -> [?test_number]"
+		set_variable = { test_number = 22000000 }
+		log = "NUMTEST set 22000000 -> [?test_number]"
+		set_variable = { test_number = 30000000 }
+		log = "NUMTEST set 30000000 -> [?test_number]"
+		set_variable = { test_number = 50000000 }
+		log = "NUMTEST set 50000000 -> [?test_number]"
+	}
+	option = { name = zzdatetest.27.a }
+}
+
+country_event = {
+	id = zzdatetest.28
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		set_variable = { test_number = 100000000 }
+		log = "NUMBIG set 100000000 -> [?test_number]"
+		set_variable = { test_number = 1000000000 }
+		log = "NUMBIG set 1000000000 -> [?test_number]"
+		set_variable = { test_number = 2147483647 }
+		log = "NUMBIG set 2147483647 -> [?test_number]"
+		set_variable = { test_number = 2147483648 }
+		log = "NUMBIG set 2147483648 -> [?test_number]"
+		set_variable = { test_number = 10000000000 }
+		log = "NUMBIG set 10000000000 -> [?test_number]"
+		set_variable = { test_number = 100000000000 }
+		log = "NUMBIG set 100000000000 -> [?test_number]"
+		set_variable = { test_number = 1000000000000000 }
+		log = "NUMBIG set 1000000000000000 -> [?test_number]"
+		set_variable = { test_number = 20000000 }
+		add_to_variable = { test_number = 10000000 }
+		log = "NUMBIG add10M #1 -> [?test_number]"
+		add_to_variable = { test_number = 10000000 }
+		log = "NUMBIG add10M #2 -> [?test_number]"
+		add_to_variable = { test_number = 10000000 }
+		log = "NUMBIG add10M #3 -> [?test_number]"
+		add_to_variable = { test_number = 10000000 }
+		log = "NUMBIG add10M #4 -> [?test_number]"
+		add_to_variable = { test_number = 10000000 }
+		log = "NUMBIG add10M #5 -> [?test_number]"
+		set_variable = { test_number = 50000000 }
+		add_to_variable = { test_number = 100000000 }
+		log = "NUMBIG add100M #1 -> [?test_number]"
+		add_to_variable = { test_number = 100000000 }
+		log = "NUMBIG add100M #2 -> [?test_number]"
+		add_to_variable = { test_number = 100000000 }
+		log = "NUMBIG add100M #3 -> [?test_number]"
+		add_to_variable = { test_number = 100000000 }
+		log = "NUMBIG add100M #4 -> [?test_number]"
+		add_to_variable = { test_number = 100000000 }
+		log = "NUMBIG add100M #5 -> [?test_number]"
+	}
+	option = { name = zzdatetest.28.a }
+}
+
+country_event = {
+	id = zzdatetest.29
+	hidden = yes
+	is_triggered_only = yes
+	immediate = {
+		set_variable = { test_number = 1000000 }
+		log = "NUMMUL a start [?test_number]"
+		multiply_variable = { test_number = 100 }
+		log = "NUMMUL b x100 [?test_number]"
+		multiply_variable = { test_number = 1000 }
+		log = "NUMMUL c x1000 [?test_number]"
+		multiply_variable = { test_number = 1000 }
+		log = "NUMMUL d x1000 [?test_number]"
+		set_variable = { test_number = 100000000000 }
+		log = "NUMMUL e set1e11 [?test_number]"
+		divide_variable = { test_number = 1000 }
+		log = "NUMMUL f /1000 [?test_number]"
+	}
+	option = { name = zzdatetest.29.a }
+}
