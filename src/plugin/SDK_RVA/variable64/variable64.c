@@ -20,7 +20,9 @@ typedef void* (__fastcall *Var64LookupFn)(void* scopedVar, void* ctx, void* a3);
 #define RVA_VARSET_VT      0x2775698u
 #define RVA_GAME_SET_EXEC  0x364C60u
 #define VAR64_MARK_OFF     505u
-#define VAR64_MARK_VALUE   0x53343656u
+#define VAR64_MARK_SET     0x53343656u
+#define VAR64_MARK_ADD     0x53343641u
+#define VAR64_MARK_LOG     0x5334364Cu
 #define VAR64_NAME_OFF     200u
 #define VAR64_SUBOBJ_OFF   88u
 #define VAR64_PARAM_OFF    408u
@@ -130,8 +132,6 @@ static unsigned char* Var64_Image(void)
     return (unsigned char*)GetModuleHandleA(NULL);
 }
 
-static void* g_var64SetAVt = NULL;
-
 static void* __fastcall Var64_PureGameFactory(void)
 {
     unsigned char* img = Var64_Image();
@@ -145,74 +145,129 @@ typedef long long (__fastcall *Var64GameSetExecFn)(void* self, void* ctx);
 static Var64GameSetExecFn g_var64OrigGameSetExec = NULL;
 static int g_var64GameSyntaxHookReady = 0;
 
-static void* __fastcall Var64_GameSyntaxFactory(void)
+static void* __fastcall Var64_MarkedFactory(unsigned int mark)
 {
     void* inst = Var64_PureGameFactory();
 
     if (inst != NULL && ConsoleCmd_IsReadable((unsigned char*)inst + VAR64_MARK_OFF, 7)) {
-        *(unsigned int*)((unsigned char*)inst + VAR64_MARK_OFF) = VAR64_MARK_VALUE;
+        *(unsigned int*)((unsigned char*)inst + VAR64_MARK_OFF) = mark;
     }
     return inst;
 }
 
-static void Var64_LogGameSyntaxName(void* self)
+static void* __fastcall Var64_SetVariable64Factory(void)
 {
+    return Var64_MarkedFactory(VAR64_MARK_SET);
+}
+
+static void* __fastcall Var64_AddToVariable64Factory(void)
+{
+    return Var64_MarkedFactory(VAR64_MARK_ADD);
+}
+
+static void* __fastcall Var64_LogVariable64Factory(void)
+{
+    return Var64_MarkedFactory(VAR64_MARK_LOG);
+}
+
+static int Var64_ResolveGameVariable(void* self, void* ctx, long long* outValue,
+                                     unsigned char** outAddr, char* nameBuf,
+                                     unsigned int nameBufSize)
+{
+    unsigned char* img = Var64_Image();
     unsigned char* p = (unsigned char*)self;
     unsigned char* src;
-    char buf[40];
     unsigned long long size;
     unsigned long long cap;
     unsigned long long k;
 
-    if (!ConsoleCmd_IsReadable(p + VAR64_NAME_OFF, 32)) return;
+    if (img == NULL || p == NULL || nameBuf == NULL || nameBufSize < 40) return 0;
+    if (!ConsoleCmd_IsReadable(p + VAR64_NAME_OFF, 32)) return 0;
+
     size = *(unsigned long long*)(p + VAR64_NAME_OFF + 16);
     cap = *(unsigned long long*)(p + VAR64_NAME_OFF + 24);
-    if (size == 0 || size > 32) {
-        Plugin_Log("[var64] gamesyntax name size=%u", (unsigned)size);
-        return;
-    }
+    if (size == 0 || size > 32) return 0;
     src = (cap <= 15) ? (p + VAR64_NAME_OFF) : *(unsigned char**)(p + VAR64_NAME_OFF);
-    if (src == NULL || !ConsoleCmd_IsReadable(src, size)) {
-        Plugin_Log("[var64] gamesyntax name unreadable");
-        return;
+    if (src == NULL || !ConsoleCmd_IsReadable(src, size)) return 0;
+    for (k = 0; k < size; ++k) nameBuf[k] = (char)src[k];
+    nameBuf[size] = 0;
+
+    if (outValue != NULL) {
+        *outValue = 0;
+        if (ConsoleCmd_IsReadable(img + RVA_EFF_GETPARAM, 16)) {
+            ((Var64GetParamFn)(img + RVA_EFF_GETPARAM))((void*)(p + 296), outValue, ctx, 0, (void*)1);
+        }
     }
-    for (k = 0; k < size; ++k) buf[k] = (char)src[k];
-    buf[size] = 0;
-    Plugin_Log("[var64] gamesyntax name=[%s]", buf);
+    if (outAddr != NULL) {
+        *outAddr = NULL;
+        if (!ConsoleCmd_IsReadable(img + RVA_VAR_LOOKUP, 16)) return 0;
+        *outAddr = (unsigned char*)((Var64LookupFn)(img + RVA_VAR_LOOKUP))
+                       ((void*)(p + VAR64_SUBOBJ_OFF), ctx, NULL);
+        if (*outAddr == NULL || !ConsoleCmd_IsReadable(*outAddr, 8)) return 0;
+    }
+    return 1;
 }
 
-static long long __fastcall Var64_HandleGameSyntaxSet(void* self, void* ctx)
+static long long __fastcall Var64_DoSetVariable64(void* self, void* ctx)
 {
-    unsigned char* img = Var64_Image();
-    unsigned char* p = (unsigned char*)self;
-    unsigned char* addr;
-    long long value = 0;
+    long long delta = 0;
+    unsigned char* addr = NULL;
+    char name[40];
 
-    if (img == NULL || p == NULL) return 0;
-    if (ConsoleCmd_IsReadable(img + RVA_EFF_GETPARAM, 16)) {
-        ((Var64GetParamFn)(img + RVA_EFF_GETPARAM))((void*)(p + 296), &value, ctx, 0, (void*)1);
+    if (!Var64_ResolveGameVariable(self, ctx, &delta, &addr, name, sizeof(name))) {
+        Plugin_Log("[var64] set_variable64 failed to resolve");
+        return 0;
     }
-    Var64_LogGameSyntaxName(self);
+    *(long long*)addr = delta;
+    Plugin_Log("[var64] set_variable64 %s = %lld (raw %lld)", name, delta / 100000, delta);
+    return delta;
+}
 
-    if (!ConsoleCmd_IsReadable(img + RVA_VAR_LOOKUP, 16)) return value;
-    addr = (unsigned char*)((Var64LookupFn)(img + RVA_VAR_LOOKUP))
-               ((void*)(p + VAR64_SUBOBJ_OFF), ctx, NULL);
-    if (addr != NULL && ConsoleCmd_IsReadable(addr, 8)) {
-        *(long long*)addr = value;
-        Plugin_Log("[var64] gamesyntax wrote %lld to %p", value, addr);
-    } else {
-        Plugin_Log("[var64] gamesyntax lookup failed");
+static long long __fastcall Var64_DoAddToVariable64(void* self, void* ctx)
+{
+    long long delta = 0;
+    unsigned char* addr = NULL;
+    char name[40];
+    long long before;
+    long long after;
+
+    if (!Var64_ResolveGameVariable(self, ctx, &delta, &addr, name, sizeof(name))) {
+        Plugin_Log("[var64] add_to_variable64 failed to resolve");
+        return 0;
     }
-    return value;
+    before = *(long long*)addr;
+    after = before + delta;
+    *(long long*)addr = after;
+    Plugin_Log("[var64] add_to_variable64 %s: %lld + %lld = %lld",
+               name, before / 100000, delta / 100000, after / 100000);
+    return after;
+}
+
+static long long __fastcall Var64_DoLogVariable64(void* self, void* ctx)
+{
+    unsigned char* addr = NULL;
+    char name[40];
+    long long current;
+
+    if (!Var64_ResolveGameVariable(self, ctx, NULL, &addr, name, sizeof(name))) {
+        Plugin_Log("[var64] log_variable64 failed to resolve");
+        return 0;
+    }
+    current = *(long long*)addr;
+    Plugin_Log("[var64] log_variable64 %s = %lld (raw %lld)", name, current / 100000, current);
+    return current;
 }
 
 static long long __fastcall Var64_GameSyntaxDetour(void* self, void* ctx)
 {
+    unsigned int mark = 0;
+
     if (self != NULL && ConsoleCmd_IsReadable((unsigned char*)self + VAR64_MARK_OFF, 7)) {
-        if (*(unsigned int*)((unsigned char*)self + VAR64_MARK_OFF) == VAR64_MARK_VALUE) {
-            return Var64_HandleGameSyntaxSet(self, ctx);
-        }
+        mark = *(unsigned int*)((unsigned char*)self + VAR64_MARK_OFF);
     }
+    if (mark == VAR64_MARK_SET) return Var64_DoSetVariable64(self, ctx);
+    if (mark == VAR64_MARK_ADD) return Var64_DoAddToVariable64(self, ctx);
+    if (mark == VAR64_MARK_LOG) return Var64_DoLogVariable64(self, ctx);
     if (g_var64OrigGameSetExec != NULL) return g_var64OrigGameSetExec(self, ctx);
     return 0;
 }
@@ -233,23 +288,6 @@ static void Var64_InstallGameSyntaxHook(void)
     g_var64OrigGameSetExec = (Var64GameSetExecFn)orig;
     g_var64GameSyntaxHookReady = 1;
     Plugin_Log("[var64] gamesyntax hook installed, orig=%p", orig);
-}
-
-static void* __fastcall Var64_GameStyleFactory(void)
-{
-    unsigned char* img = Var64_Image();
-    void* inst;
-
-    if (img == NULL) return NULL;
-    if (!ConsoleCmd_IsReadable(img + RVA_VARSET_FACTORY, 16)) return NULL;
-    inst = ((Var64FactoryFn)(img + RVA_VARSET_FACTORY))();
-    if (inst == NULL) return NULL;
-    if (!ConsoleCmd_IsReadable(inst, VAR64_INST_SIZE)) {
-        Plugin_Log("[var64] game-style instance too small");
-        return inst;
-    }
-    if (g_var64SetAVt != NULL) *(void**)inst = g_var64SetAVt;
-    return inst;
 }
 
 static int Var64_MakeGameVarInstance(void* scope, const char* name, void** outInst, void** outAddr)
@@ -483,8 +521,7 @@ static void __fastcall ExecVar64ShowA(void* self, void* scope)
 
 static void __fastcall ExecVar64GameSyntax(void* self, void* scope)
 {
-    Plugin_Log("[var64] gamesyntax exec called without hook");
-    Var64_HandleGameSyntaxSet(self, scope);
+    Var64_GameSyntaxDetour(self, scope);
 }
 
 EFF_DEF(var64seta, "var64_set_a", "Sets 64-bit variable slot a",
@@ -503,12 +540,22 @@ EFF_DEF(gamesetvar64, "set_variable64",
         "Sets a 64-bit script variable. Same syntax as set_variable.",
         "EFFECT_SET_VARIABLE64", &ExecVar64GameSyntax)
 
+EFF_DEF(gameaddvar64, "add_to_variable64",
+        "Adds to a 64-bit script variable. Same syntax as set_variable.",
+        "EFFECT_ADD_TO_VARIABLE64", &ExecVar64GameSyntax)
+
+EFF_DEF(gamelogvar64, "log_variable64",
+        "Logs a 64-bit script variable in full precision. Same syntax as set_variable.",
+        "EFFECT_LOG_VARIABLE64", &ExecVar64GameSyntax)
+
 static EffectDef* g_var64EffectDefs[] = {
     &var64seta_def,
     &var64adda_def,
     &var64showa_def,
     &var64diag_def,
-    &gamesetvar64_def
+    &gamesetvar64_def,
+    &gameaddvar64_def,
+    &gamelogvar64_def
 };
 
 #define VAR64_EFFECT_COUNT (int)(sizeof(g_var64EffectDefs) / sizeof(g_var64EffectDefs[0]))
@@ -523,15 +570,29 @@ int Var64_RegisterEffects(void)
     var64showa_fill();
     var64diag_fill();
     gamesetvar64_fill();
-    gamesetvar64_def.factory = Var64_GameSyntaxFactory;
+    gameaddvar64_fill();
+    gamelogvar64_fill();
+
+    gamesetvar64_def.factory = Var64_SetVariable64Factory;
+    gameaddvar64_def.factory = Var64_AddToVariable64Factory;
+    gamelogvar64_def.factory = Var64_LogVariable64Factory;
 
     n = Effect_RegistryRegisterAll(g_var64EffectDefs, VAR64_EFFECT_COUNT);
 
     img = Var64_Image();
-    if (gamesetvar64_def.state == EFF_STATE_OK && img != NULL) {
-        gamesetvar64_def.entryVt[0] = *(void**)(img + RVA_VARSET_ENTRYVT);
-        Plugin_Log("[var64] set_variable64 entryVt=%p factory=%p",
-                   gamesetvar64_def.entryVt[0], gamesetvar64_def.entryVt[1]);
+    if (img != NULL) {
+        if (gamesetvar64_def.state == EFF_STATE_OK) {
+            gamesetvar64_def.entryVt[0] = *(void**)(img + RVA_VARSET_ENTRYVT);
+        }
+        if (gameaddvar64_def.state == EFF_STATE_OK) {
+            gameaddvar64_def.entryVt[0] = *(void**)(img + RVA_VARSET_ENTRYVT);
+        }
+        if (gamelogvar64_def.state == EFF_STATE_OK) {
+            gamelogvar64_def.entryVt[0] = *(void**)(img + RVA_VARSET_ENTRYVT);
+        }
+        Plugin_Log("[var64] game-syntax entryVt: set=%p add=%p log=%p",
+                   gamesetvar64_def.entryVt[0], gameaddvar64_def.entryVt[0],
+                   gamelogvar64_def.entryVt[0]);
     }
 
     Var64_InstallGameSyntaxHook();
