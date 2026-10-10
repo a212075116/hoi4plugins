@@ -56,7 +56,7 @@ static long long Var64_ReadParamRaw(void* self, void* scope)
 
     if (img == NULL || self == NULL) return 0;
     if (!ConsoleCmd_IsReadable(img + RVA_EFF_GETPARAM, 16)) return 0;
-    ((Var64GetParamFn)(img + RVA_EFF_GETPARAM))((unsigned char*)self + 0x58, &fixed, scope, 0, 0);
+    ((Var64GetParamFn)(img + RVA_EFF_GETPARAM))((unsigned char*)self + 0x58, &fixed, scope, 0, (void*)1);
     return fixed;
 }
 
@@ -286,6 +286,14 @@ static void __fastcall ExecVar64SetA(void* self, void* scope)
     raw = Var64_ReadParamRaw(self, scope);
     Var64_SetSlot(0, raw);
     Var64_LogOp(0, "set", raw);
+    if (scope != NULL) {
+        void* inst2 = NULL;
+        void* addr2 = NULL;
+        if (Var64_MakeGameVarInstance(scope, "v64gv", &inst2, &addr2)) {
+            *(long long*)addr2 = raw;
+            Plugin_Log("[var64] wrote game var v64gv = %lld at %p", *(long long*)addr2, addr2);
+        }
+    }
 }
 
 static void __fastcall ExecVar64AddA(void* self, void* scope)
