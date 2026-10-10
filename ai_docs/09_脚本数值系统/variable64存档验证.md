@@ -272,3 +272,71 @@ save_as_binary=yes        <-- 存档格式开关
 | `var64_diag` | 诊断用途已完成 |
 
 现在 `g_var64EffectDefs[]` 只含三个正式 effect。
+
+## 十、控制台命令表全枚举（第16轮）
+
+### 10.1 命令表结构
+
+从 `test/modules/console/command_check.js` 得到（已在项目中）：
+
+```javascript
+const MGR_RVA = 0x35E1A80;   /* 命令管理器全局 */
+const ENTRY   = 456;         /* 每条命令的字节数 */
+
+mgr     = *(hoi4.exe + 0x35E1A80)
+data    = *(mgr + 0)         /* 命令数组 */
+cap     = *(mgr + 8)
+count   = *(mgr + 12)
+
+/* 每条命令（entry 基址 + 偏移） */
+entry + 0x00  int          flag
+entry + 0x08  CString32    name
+entry + 0x28  CString32    usage
+entry + 0x48  CString32    desc
+entry + 0x68  ptr          handler
+entry + 0x80  int          argCount
+```
+
+CString32 布局：`{union{char[16]; char*}, size_t size, size_t cap}`（cap <= 15 时数据内联）。
+
+### 10.2 实测枚举结果
+
+CE 读取（`count = 386`），筛出含 `save` / `load` / `continue` 的：
+
+```
+mgr=2627623B240 data=26276DAEF00 cap=474 count=386
+[11]  map_icon_reload_type  argc=1
+[74]  reloadinterface       argc=0
+[75]  reloadtechnologies    argc=0
+[78]  reloadoob             argc=1
+[81]  reloadfx              argc=1
+[117] savegame              argc=0
+[118] savecheck             argc=0
+[154] cityreload            argc=0
+[164] reload_textures       argc=1
+[176] reloadweather         argc=1
+[185] gbreload              argc=0
+[256] test_save_mode        argc=0
+[374] reload                argc=1
+matched=13
+```
+
+### 10.3 ★ 结论：控制台没有读档命令
+
+**整张表里没有任何「载入存档」命令。** 与存档相关的只有 `savegame`（存）和 `savecheck`
+（自动化测试，正常游戏会崩）。
+
+⇒ **读档只能从 GUI 主菜单走**，而游戏忽略合成输入 ⇒ **无法脚本化**。
+
+### 10.4 由此得到的判断
+
+| 环节 | 状态 | 证据 |
+|---|---|---|
+| 写入 64 位到槽 | ✅ | 插件日志 `split ... lo=... hi=...` |
+| 存档序列化 | ✅ | 文本存档 `v64save` / `v64save_hi` 都是正确的值 |
+| 二进制存档 | ✅ | 字节级解析出 `0x73950000`（lo）和 `0x48C2`（hi） |
+| 重组数学 | ✅ | `(hi << 32) \| lo` = 原值，Python 验算 MATCH |
+| 读档恢复 | ⏳ | **没有自动化手段**；需要 GUI 手动读档 |
+
+**「读档后写回槽」这一步由游戏自己完成**（它对 `_hi` 变量做与主变量完全一样的处理），
+所以存档内容的正确性是目前能拿到的最强证据。
