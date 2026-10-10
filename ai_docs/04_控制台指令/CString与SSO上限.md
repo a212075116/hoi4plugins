@@ -30,7 +30,7 @@ capacity > 15 时 +0x00 存堆指针。
 
 ## 修正
 
-- FillCStr / WriteShort：硬截断到 15 字符
+- ConsoleCmd_WriteString / ConsoleCmd_WriteShortString：硬截断到 15 字符
 - 编译期断言，让尺寸错误在**编译期**暴露：
 
       typedef char assert_cmdstring[(sizeof(CmdString) == 32) ? 1 : -1];

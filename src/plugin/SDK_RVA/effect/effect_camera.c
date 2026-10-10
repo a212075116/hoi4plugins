@@ -13,11 +13,6 @@ typedef void (__fastcall *CamSetHeightFn)(void* cam, float h);
 
 static int g_cameraEffectExecCount = 0;
 
-static void* CameraEffect_GetCameraObject(void)
-{
-    return (void*)Camera_GetObject();
-}
-
 static float CameraEffect_ReadCurrentHeight(void* cam)
 {
     return *(float*)((unsigned char*)cam + OFF_CAM_HEIGHT);
@@ -35,7 +30,7 @@ static void __fastcall ExecSetCamHeight(void* self, void* scope)
     void* cam;
 
     Effect_FlushPendingTooltip();
-    cam = CameraEffect_GetCameraObject();
+    cam = (void*)Camera_GetObject();
     float before;
     float after;
     float want;
@@ -58,7 +53,7 @@ static void __fastcall ExecAddCamHeight(void* self, void* scope)
     void* cam;
 
     Effect_FlushPendingTooltip();
-    cam = CameraEffect_GetCameraObject();
+    cam = (void*)Camera_GetObject();
     float before;
     float after;
     float delta;
@@ -85,7 +80,7 @@ static void __fastcall ExecSetLowerLimit(void* self, void* scope)
     int old;
 
     Effect_FlushPendingTooltip();
-    cam = CameraEffect_GetCameraObject();
+    cam = (void*)Camera_GetObject();
     if (cam == NULL) {
         Plugin_Log("[eff] set_camera_height_lowerlimit: no camera");
         return;
@@ -125,7 +120,7 @@ static void __fastcall ExecSetUpperLimit(void* self, void* scope)
     int old;
 
     Effect_FlushPendingTooltip();
-    cam = CameraEffect_GetCameraObject();
+    cam = (void*)Camera_GetObject();
     if (cam == NULL) {
         Plugin_Log("[eff] set_camera_height_upperlimit: no camera");
         return;
