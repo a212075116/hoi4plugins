@@ -1,0 +1,27 @@
+import sys, importlib.util as iu, time
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib')
+s = iu.spec_from_file_location('fh', r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib/frida_host.py')
+fh = iu.module_from_spec(s); s.loader.exec_module(fh)
+pid, session, sc, fresh = fh.connect(r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/modules/camera/camera_setter_hook.js', force_spawn=False)
+h = sc.exports_sync
+time.sleep(0.5)
+print('=== 安装 hook ===', flush=True)
+print('  ' + h.install(), flush=True)
+print('  起始: ' + h.state(), flush=True)
+print('', flush=True)
+print('=== A) 用指令 setcamheight (plugin 路径) 设 900 ===', flush=True)
+h.clear()
+print('  ' + h.exec('setcamheight', ['900']), flush=True)
+print('  harness 记录:'); print(h.log(), flush=True)
+for i in range(1, 4):
+    time.sleep(0.6)
+    print('  +%.1fs: %s' % (i*0.6, h.state()), flush=True)
+print('', flush=True)
+print('=== B) 用指令 setcameraheight_lowerlimit (plugin 路径) 拉高到 2000 ===', flush=True)
+h.clear()
+print('  ' + h.exec('setcameraheight_lowerlimit', ['2000']), flush=True)
+print('  harness 记录:'); print(h.log(), flush=True)
+for i in range(1, 4):
+    time.sleep(0.6)
+    print('  +%.1fs: %s' % (i*0.6, h.state()), flush=True)
+fh.detach(session)

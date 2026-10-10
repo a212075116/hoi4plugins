@@ -20,18 +20,30 @@ int Camera_TrueLower(void)
 
 int Camera_TrueUpper(void* cam)
 {
+    if (g_cameraFallbackUpperLimit > 0) return g_cameraFallbackUpperLimit;
+    if (Camera_CaptureTrueUpperLimit() != 0) return g_cameraFallbackUpperLimit;
+    (void)cam;
+    return (int)CAM_TRUE_UPPER_FALLBACK;
+}
+
+int Camera_CaptureTrueUpperLimit(void)
+{
+    void* cam;
     int lo;
     int hi;
-    if (g_cameraFallbackUpperLimit <= 0) {
-        if (cam != NULL && Camera_GetLimits(cam, &lo, &hi) && hi > 0) {
-            g_cameraFallbackUpperLimit = hi;
-        } else {
-            g_cameraFallbackUpperLimit = (int)CAM_TRUE_UPPER_FALLBACK;
-        }
-        Plugin_Log("[cam] true upper limit captured: %d (true lower = %d)",
-                   g_cameraFallbackUpperLimit, CAM_TRUE_LOWER);
-    }
-    return g_cameraFallbackUpperLimit;
+
+    if (g_cameraFallbackUpperLimit > 0) return 1;
+
+    cam = Camera_GetObject();
+    if (cam == NULL) return 0;
+    if (!Camera_GetLimits(cam, &lo, &hi)) return 0;
+    if (hi <= 0) return 0;
+    if (hi <= lo + CAM_MIN_SPAN) return 0;
+
+    g_cameraFallbackUpperLimit = hi;
+    Plugin_Log("[cam] true upper limit captured: %d (true lower = %d)",
+               g_cameraFallbackUpperLimit, CAM_TRUE_LOWER);
+    return 1;
 }
 
 int Camera_SetHeight(void* cam, float want)

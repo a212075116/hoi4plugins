@@ -28,6 +28,7 @@ int            Camera_SetLowerLimit(void* cam, int lo);
 int            Camera_SetUpperLimit(void* cam, int hi);
 int            Camera_TrueLower(void);
 int            Camera_TrueUpper(void* cam);
+int            Camera_CaptureTrueUpperLimit(void);
 int            Camera_ClampHeightInto(void* cam, int lo, int hi);
 int            Camera_EnsureSpanBetweenLimits(void* cam, int* inOutLo, int* inOutHi);
 int            Camera_ApplyLimits(void* cam, int* inOutLo, int* inOutHi, int* moved);

@@ -195,6 +195,16 @@ static DWORD WINAPI PluginThread(LPVOID p)
     VerifyClassStructure();
 
     {
+        int round;
+        int got = 0;
+        for (round = 0; round < 600 && !got; ++round) {
+            got = Camera_CaptureTrueUpperLimit();
+            if (!got) Sleep(50);
+        }
+        if (!got) Plugin_Log("[plugin] true upper limit not captured after %d polls", round);
+    }
+
+    {
         int n = Camera_RegisterCommands();
         Plugin_Log("[plugin] Camera_RegisterCommands -> %d", n);
     }
