@@ -13,7 +13,7 @@ Start-Process -FilePath 'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4
 Start-Sleep -Seconds 40
 $env:PYTHONIOENCODING='utf-8'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-& 'C:/Users/a2120/AppData/Local/Programs/Python/Python313/python.exe' -u 'hoi4plugins/test/tools/_proc3.py' 2>&1 | Select-Object -Last 3
+& 'C:/Users/a2120/AppData/Local/Programs/Python/Python313/python.exe' -u 'hoi4plugins/test/modules/hook/process_probe_3.py' 2>&1 | Select-Object -Last 3
 Start-Sleep -Seconds 15
 '=== WMI 监控结果 ==='
 Receive-Job $job -Keep
