@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="SDK_RVA">
+      <UniqueIdentifier>{A1B2C3D4-1111-4E5F-9A8B-000000000001}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK_RVA\camera">
+      <UniqueIdentifier>{A1B2C3D4-1111-4E5F-9A8B-000000000002}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK_RVA\console">
+      <UniqueIdentifier>{A1B2C3D4-1111-4E5F-9A8B-000000000003}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK_RVA\effect">
+      <UniqueIdentifier>{A1B2C3D4-1111-4E5F-9A8B-000000000004}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK_RVA\gamedate">
+      <UniqueIdentifier>{A1B2C3D4-1111-4E5F-9A8B-000000000005}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK_RVA\hook">
+      <UniqueIdentifier>{A1B2C3D4-1111-4E5F-9A8B-000000000006}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK_RVA\minihook">
+      <UniqueIdentifier>{A1B2C3D4-1111-4E5F-9A8B-000000000007}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK_RVA\minihook\include">
+      <UniqueIdentifier>{A1B2C3D4-1111-4E5F-9A8B-000000000008}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK_RVA\minihook\src">
+      <UniqueIdentifier>{A1B2C3D4-1111-4E5F-9A8B-000000000009}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK_RVA\minihook\src\hde">
+      <UniqueIdentifier>{A1B2C3D4-1111-4E5F-9A8B-000000000010}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="plugin_main.c" />
+    <ClCompile Include="SDK_RVA\console\console_cmd.c">
+      <Filter>SDK_RVA\console</Filter>
+    </ClCompile>
+    <ClCompile Include="SDK_RVA\camera\camera_height.c">
+      <Filter>SDK_RVA\camera</Filter>
+    </ClCompile>
+    <ClCompile Include="SDK_RVA\effect\effect_reg.c">
+      <Filter>SDK_RVA\effect</Filter>
+    </ClCompile>
+    <ClCompile Include="SDK_RVA\effect\effect_camera.c">
+      <Filter>SDK_RVA\effect</Filter>
+    </ClCompile>
+    <ClCompile Include="SDK_RVA\effect\effect_gamedate.c">
+      <Filter>SDK_RVA\effect</Filter>
+    </ClCompile>
+    <ClCompile Include="SDK_RVA\gamedate\gamedate.c">
+      <Filter>SDK_RVA\gamedate</Filter>
+    </ClCompile>
+    <ClCompile Include="SDK_RVA\gamedate\gamedate_ui.c">
+      <Filter>SDK_RVA\gamedate</Filter>
+    </ClCompile>
+    <ClCompile Include="SDK_RVA\hook\file_redirect.c">
+      <Filter>SDK_RVA\hook</Filter>
+    </ClCompile>
+    <ClCompile Include="SDK_RVA\hook\process_block.c">
+      <Filter>SDK_RVA\hook</Filter>
+    </ClCompile>
+    <ClCompile Include="SDK_RVA\hook\inline_hook.c">
+      <Filter>SDK_RVA\hook</Filter>
+    </ClCompile>
+    <ClCompile Include="SDK_RVA\minihook\src\hook.c">
+      <Filter>SDK_RVA\minihook\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SDK_RVA\minihook\src\buffer.c">
+      <Filter>SDK_RVA\minihook\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SDK_RVA\minihook\src\trampoline.c">
+      <Filter>SDK_RVA\minihook\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SDK_RVA\minihook\src\hde\hde64.c">
+      <Filter>SDK_RVA\minihook\src\hde</Filter>
+    </ClCompile>
+    <ClInclude Include="SDK_RVA\console\console_cmd.h">
+      <Filter>SDK_RVA\console</Filter>
+    </ClInclude>
+    <ClInclude Include="SDK_RVA\camera\camera_height.h">
+      <Filter>SDK_RVA\camera</Filter>
+    </ClInclude>
+    <ClInclude Include="SDK_RVA\effect\effect_reg.h">
+      <Filter>SDK_RVA\effect</Filter>
+    </ClInclude>
+    <ClInclude Include="SDK_RVA\effect\effect_gamedate.h">
+      <Filter>SDK_RVA\effect</Filter>
+    </ClInclude>
+    <ClInclude Include="SDK_RVA\gamedate\gamedate.h">
+      <Filter>SDK_RVA\gamedate</Filter>
+    </ClInclude>
+    <ClInclude Include="SDK_RVA\hook\file_redirect.h">
+      <Filter>SDK_RVA\hook</Filter>
+    </ClInclude>
+    <ClInclude Include="SDK_RVA\hook\process_block.h">
+      <Filter>SDK_RVA\hook</Filter>
+    </ClInclude>
+    <ClInclude Include="SDK_RVA\hook\inline_hook.h">
+      <Filter>SDK_RVA\hook</Filter>
+    </ClInclude>
+    <ClInclude Include="SDK_RVA\hook\hook_guard.h">
+      <Filter>SDK_RVA\hook</Filter>
+    </ClInclude>
+    <ClInclude Include="SDK_RVA\minihook\include\MinHook.h">
+      <Filter>SDK_RVA\minihook\include</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

@@ -14,7 +14,7 @@
 typedef char assert_cmdstring[(sizeof(CmdString) == 32) ? 1 : -1];
 typedef char assert_cmdentry [(sizeof(CmdEntry)  == 456) ? 1 : -1];
 
-static void DefaultLog(const char* fmt, ...) {
+static void ConsoleCmd_DefaultLog(const char* fmt, ...) {
     char buf[2048];
     char path[MAX_PATH];
     SYSTEMTIME st;
@@ -44,7 +44,7 @@ static void DefaultLog(const char* fmt, ...) {
     CloseHandle(h);
 }
 
-CmdLogFn g_CmdLog = DefaultLog;
+CmdLogFn g_CmdLog = ConsoleCmd_DefaultLog;
 
 int ConsoleCmd_IsReadable(const void* p, size_t n) {
     MEMORY_BASIC_INFORMATION mbi;
@@ -72,7 +72,7 @@ void ConsoleCmd_InitResult(CmdResult* out) {
     out->message.cap  = 15;
 }
 
-static void WriteShort(CmdString* s, const char* str) {
+static void ConsoleCmd_WriteShortString(CmdString* s, const char* str) {
     size_t n = 0;
     while (str[n] != 0) ++n;
     if (n > CMD_SSO_MAX) n = CMD_SSO_MAX;
@@ -84,17 +84,17 @@ static void WriteShort(CmdString* s, const char* str) {
 
 typedef void** (__fastcall *AssignFn)(void** dst, const void* src, size_t len);
 
-static void WriteStr(CmdString* s, const char* str) {
+static void ConsoleCmd_WriteString(CmdString* s, const char* str) {
     HMODULE base;
     AssignFn assign;
     size_t n = 0;
 
     if (s == NULL || str == NULL) return;
     while (str[n] != 0) ++n;
-    if (n <= CMD_SSO_MAX) { WriteShort(s, str); return; }
+    if (n <= CMD_SSO_MAX) { ConsoleCmd_WriteShortString(s, str); return; }
 
     base = GetModuleHandleA(NULL);
-    if (base == NULL) { WriteShort(s, str); return; }
+    if (base == NULL) { ConsoleCmd_WriteShortString(s, str); return; }
     assign = (AssignFn)((unsigned char*)base + RVA_STR_ASSIGN);
     assign((void**)s, str, n);
 }
@@ -120,12 +120,12 @@ void ConsoleCmd_SetMessage(CmdResult* out, const char* s) {
     while (s[n] != 0) ++n;
 
     if (n <= CMD_SSO_MAX) {
-        WriteShort(&out->message, s);
+        ConsoleCmd_WriteShortString(&out->message, s);
         return;
     }
 
     base = GetModuleHandleA(NULL);
-    if (base == NULL) { WriteShort(&out->message, s); return; }
+    if (base == NULL) { ConsoleCmd_WriteShortString(&out->message, s); return; }
     assign = (AssignFn)((unsigned char*)base + RVA_STR_ASSIGN);
     assign((void**)&out->message, s, n);
 }
@@ -159,26 +159,26 @@ int ConsoleCmd_GetArg(CmdArgs* args, int i, char* dst, size_t dstn) {
     return 0;
 }
 
-static void FillEntry(CmdEntry* e, const CmdDef* d) {
+static void ConsoleCmd_FillEntry(CmdEntry* e, const CmdDef* d) {
     memset(e, 0, sizeof(*e));
     e->flag     = 1;
     e->handler  = (void*)d->handler;
     e->argCount = d->argCount;
-    WriteStr(&e->name, d->name);
+    ConsoleCmd_WriteString(&e->name, d->name);
     if (d->alias != NULL && d->alias[0] != 0) {
         e->aliases[0] = d->alias;
         e->aliasCount = 1;
     }
-    WriteStr(&e->description, d->description ? d->description : "");
+    ConsoleCmd_WriteString(&e->description, d->description ? d->description : "");
     if (d->argCount > 0) {
         int i;
         for (i = 0; i < d->argCount && i < CMD_MAX_ARGS; ++i) {
-            if (d->argNames[i] != NULL) WriteStr(&e->args[i], d->argNames[i]);
+            if (d->argNames[i] != NULL) ConsoleCmd_WriteString(&e->args[i], d->argNames[i]);
         }
     }
 }
 
-static int CheckDef(const CmdDef* d) {
+static int ConsoleCmd_CheckDefinition(const CmdDef* d) {
     static const char* kFields[4] = { "name", "alias", "description", "argName" };
     const char* vals[4];
     int k;
@@ -254,8 +254,8 @@ int ConsoleCmd_RegisterAll(const CmdDef* defs, int n) {
              mgr, *(int*)((char*)mgr + 12), *(int*)((char*)mgr + 8));
 
     for (i = 0; i < n; ++i) {
-        if (!CheckDef(&defs[i])) continue;
-        FillEntry(&entries[ok], &defs[i]);
+        if (!ConsoleCmd_CheckDefinition(&defs[i])) continue;
+        ConsoleCmd_FillEntry(&entries[ok], &defs[i]);
         g_CmdLog("[cmdreg] + [%d] \"%s\" desc=\"%s\" argc=%d handler=%p",
                  ok, defs[i].name, defs[i].description ? defs[i].description : "",
                  defs[i].argCount, (void*)defs[i].handler);

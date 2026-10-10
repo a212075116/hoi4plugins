@@ -50,7 +50,7 @@ int Camera_SetHeight(void* cam, float want)
     return 1;
 }
 
-static unsigned char* CamObj(void)
+static unsigned char* Camera_GetCameraObject(void)
 {
     HMODULE base = GetModuleHandleA(NULL);
     unsigned char* img;
@@ -69,7 +69,7 @@ static unsigned char* CamObj(void)
     return cam;
 }
 
-static int ParseFloat(const char* s, float* out)
+static int Camera_ParseFloatText(const char* s, float* out)
 {
     double v = 0.0;
     double frac = 0.1;
@@ -104,7 +104,7 @@ static long long __fastcall Handler_SetCamHeight(CmdResult* out, CmdArgs* args)
     if (out == NULL) return 0;
     ConsoleCmd_InitResult(out);
 
-    cam = CamObj();
+    cam = Camera_GetCameraObject();
     if (cam == NULL) {
         ConsoleCmd_SetMessage(out, "Currently,Camera Height is unknown");
         Plugin_Log("[setcamheight] no camera object");
@@ -124,7 +124,7 @@ static long long __fastcall Handler_SetCamHeight(CmdResult* out, CmdArgs* args)
         return (long long)out;
     }
 
-    if (!ParseFloat(arg, &want)) {
+    if (!Camera_ParseFloatText(arg, &want)) {
         ConsoleCmd_SetMessage(out, "Currently,Camera Height is unchanged");
         Plugin_Log("[setcamheight] bad number: %s", arg);
         return (long long)out;
@@ -216,7 +216,7 @@ static long long __fastcall Handler_SetLowerLimit(CmdResult* out, CmdArgs* args)
 
     if (out == NULL) return 0;
     ConsoleCmd_InitResult(out);
-    cam = CamObj();
+    cam = Camera_GetCameraObject();
     if (cam == NULL) {
         ConsoleCmd_SetMessage(out, "Camera lower limit is unknown");
         return (long long)out;
@@ -232,7 +232,7 @@ static long long __fastcall Handler_SetLowerLimit(CmdResult* out, CmdArgs* args)
         out->ok = 1;
         return (long long)out;
     }
-    if (!ParseFloat(arg, &want)) {
+    if (!Camera_ParseFloatText(arg, &want)) {
         ConsoleCmd_SetMessage(out, "Camera Lower Limit is unchanged");
         return (long long)out;
     }
@@ -284,7 +284,7 @@ static long long __fastcall Handler_SetUpperLimit(CmdResult* out, CmdArgs* args)
 
     if (out == NULL) return 0;
     ConsoleCmd_InitResult(out);
-    cam = CamObj();
+    cam = Camera_GetCameraObject();
     if (cam == NULL) {
         ConsoleCmd_SetMessage(out, "Camera upper limit is unknown");
         return (long long)out;
@@ -300,7 +300,7 @@ static long long __fastcall Handler_SetUpperLimit(CmdResult* out, CmdArgs* args)
         out->ok = 1;
         return (long long)out;
     }
-    if (!ParseFloat(arg, &want)) {
+    if (!Camera_ParseFloatText(arg, &want)) {
         ConsoleCmd_SetMessage(out, "Camera Upper Limit is unchanged");
         return (long long)out;
     }
@@ -340,7 +340,7 @@ static long long __fastcall Handler_SetUpperLimit(CmdResult* out, CmdArgs* args)
     return (long long)out;
 }
 
-static DWORD WINAPI CrashThread(LPVOID p)
+static DWORD WINAPI Camera_DebugCrashThread(LPVOID p)
 {
     volatile unsigned int* q = (volatile unsigned int*)0;
     (void)p;
@@ -364,7 +364,7 @@ static long long __fastcall Handler_CrashMe(CmdResult* out, CmdArgs* args)
     (void)out;
     (void)args;
     Plugin_Log("[crashme] spawning a thread that dereferences NULL");
-    t = CreateThread(NULL, 0, CrashThread, NULL, 0, NULL);
+    t = CreateThread(NULL, 0, Camera_DebugCrashThread, NULL, 0, NULL);
     if (t != NULL) CloseHandle(t);
     return 0;
 }
@@ -379,7 +379,7 @@ static const CmdDef kCamCmds[] = {
 
 unsigned char* Camera_GetObject(void)
 {
-    return CamObj();
+    return Camera_GetCameraObject();
 }
 
 int Camera_RegisterCommands(void)

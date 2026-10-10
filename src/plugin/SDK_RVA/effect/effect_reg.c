@@ -35,14 +35,14 @@ void Effect_FlushPendingTooltip(void)
 
 void Effect_FlushPendingTooltip(void);
 
-static unsigned char* Img(void)
+static unsigned char* Effect_GetModuleBase(void)
 {
     return (unsigned char*)GetModuleHandleA(NULL);
 }
 
 int Effect_RegistryReady(void)
 {
-    unsigned char* img = Img();
+    unsigned char* img = Effect_GetModuleBase();
     if (img == NULL) return 0;
     if (!ConsoleCmd_IsReadable(img + RVA_LEXER_INIT, 2)) return 0;
     if (img[RVA_LEXER_INIT] == 0) return 0;
@@ -50,10 +50,10 @@ int Effect_RegistryReady(void)
     return 1;
 }
 
-static int AddToken(const char* name, int* outId)
+static int Effect_AddToken(const char* name, int* outId)
 {
     struct NameView { const char* data; unsigned long long len; } view;
-    unsigned char* img = Img();
+    unsigned char* img = Effect_GetModuleBase();
     AddTokenFn fn;
     int id = 0;
     unsigned long long n = 0;
@@ -73,7 +73,7 @@ static int AddToken(const char* name, int* outId)
 
 void* Effect_NewInstance(void* vt)
 {
-    unsigned char* img = Img();
+    unsigned char* img = Effect_GetModuleBase();
     StabFactoryFn make;
     void* inst;
 
@@ -87,7 +87,7 @@ void* Effect_NewInstance(void* vt)
 
 float Effect_ParamFloat(void* self, void* ctx)
 {
-    unsigned char* img = Img();
+    unsigned char* img = Effect_GetModuleBase();
     long long fixed = 0;
 
     if (img == NULL || self == NULL) return 0.0f;
@@ -106,7 +106,7 @@ void Effect_SetParamFixed(void* self, double value)
 
 void* Effect_BuildTooltip(void* self, void* out, void* ctx, const char* locKey)
 {
-    unsigned char* img = Img();
+    unsigned char* img = Effect_GetModuleBase();
     unsigned char paramDesc[EFF_PARAMDESC_SIZE];
     unsigned char packed[32];
     unsigned char fin[32];
@@ -193,12 +193,12 @@ int Effect_RegistryRegister(EffectDef* def)
         return 0;
     }
 
-    img = Img();
+    img = Effect_GetModuleBase();
     if (img == NULL) return 0;
     if (!Effect_RegistryReady()) return 0;
 
-    if (!AddToken(def->name, &id)) {
-        Plugin_Log("[eff] AddToken failed: %s", def->name);
+    if (!Effect_AddToken(def->name, &id)) {
+        Plugin_Log("[eff] Effect_AddToken failed: %s", def->name);
         def->state = EFF_STATE_FAILED;
         return 0;
     }
