@@ -284,6 +284,16 @@ static void __fastcall ExecVar64SetA(void* self, void* scope)
     long long raw;
     Effect_FlushPendingTooltip();
     raw = Var64_ReadParamRaw(self, scope);
+    {
+        unsigned char* p = (unsigned char*)self;
+        int i;
+        Plugin_Log("[v64par] self=%p raw=%lld", self, raw);
+        if (ConsoleCmd_IsReadable(p + 0x40, 0x100)) {
+            for (i = 0x40; i < 0x140; i += 8) {
+                Plugin_Log("[v64par] self+0x%03X = %p", i, *(void**)(p + i));
+            }
+        }
+    }
     Var64_SetSlot(0, raw);
     Var64_LogOp(0, "set", raw);
     if (scope != NULL) {
