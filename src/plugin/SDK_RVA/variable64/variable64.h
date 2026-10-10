@@ -6,6 +6,7 @@
 
 int       Var64_RegisterEffects(void);
 int       Var64_RegisterLoadGameCommand(void);
+void      Var64_InstallLanguageBridge(void);
 long long Var64_GetSlot(int slot);
 void      Var64_SetSlot(int slot, long long value);
 void      Var64_AddSlot(int slot, long long delta);

@@ -35,6 +35,7 @@ typedef void* (__fastcall *Var64LookupFn)(void* scopedVar, void* ctx, void* a3);
 #define RVA_SAVEINFO_INIT      0x0BC0880u
 #define RVA_LOAD_SAVEFILE      0x0DA04F0u
 #define RVA_STRING_ASSIGN      0x0129CA0u
+#define RVA_STRING_APPEND      0x0129C10u
 #define VAR64_SAVEINFO_BYTES   256u
 #define VAR64_SAVEINFO_NAME_AT 32u
 #define VAR64_APP_LOADER_SLOT  880u
@@ -223,6 +224,40 @@ static int Var64_ResolveGameVariable(void* self, void* ctx, long long* outValue,
     return 1;
 }
 
+#define VAR64_KNOWN_NAME_LIMIT 128
+#define VAR64_KNOWN_NAME_BYTES 32
+
+static char g_var64KnownNames[VAR64_KNOWN_NAME_LIMIT][VAR64_KNOWN_NAME_BYTES];
+static int g_var64KnownNameCount = 0;
+
+static void Var64_RememberSixtyFourBitName(const char* name)
+{
+    size_t n;
+    int i;
+
+    if (name == NULL) return;
+    n = strlen(name);
+    if (n == 0 || n >= VAR64_KNOWN_NAME_BYTES) return;
+    for (i = 0; i < g_var64KnownNameCount; ++i) {
+        if (strcmp(g_var64KnownNames[i], name) == 0) return;
+    }
+    if (g_var64KnownNameCount >= VAR64_KNOWN_NAME_LIMIT) return;
+    memcpy(g_var64KnownNames[g_var64KnownNameCount], name, n + 1);
+    ++g_var64KnownNameCount;
+    Plugin_Log("[v64lang] registered 64-bit name [%s] (total=%d)", name, g_var64KnownNameCount);
+}
+
+static int Var64_IsSixtyFourBitName(const char* name)
+{
+    int i;
+
+    if (name == NULL || name[0] == 0) return 0;
+    for (i = 0; i < g_var64KnownNameCount; ++i) {
+        if (strcmp(g_var64KnownNames[i], name) == 0) return 1;
+    }
+    return 0;
+}
+
 static int Var64_MakeHighPartName(const char* name, char* out, unsigned int outSize)
 {
     size_t n;
@@ -317,6 +352,7 @@ static long long __fastcall Var64_DoSetVariable64(void* self, void* ctx)
         return 0;
     }
     Var64_StoreSplit64(self, ctx, name, addr, delta);
+    Var64_RememberSixtyFourBitName(name);
     Plugin_Log("[var64] set_variable64 %s = %lld", name, delta / 100000);
     return delta;
 }
@@ -336,6 +372,7 @@ static long long __fastcall Var64_DoAddToVariable64(void* self, void* ctx)
     before = Var64_LoadSplit64(self, ctx, name, addr, NULL, NULL);
     after = before + delta;
     Var64_StoreSplit64(self, ctx, name, addr, after);
+    Var64_RememberSixtyFourBitName(name);
     Plugin_Log("[var64] add_to_variable64 %s: %lld + %lld = %lld",
                name, before / 100000, delta / 100000, after / 100000);
     return after;
@@ -629,6 +666,7 @@ typedef void (__fastcall *Var64SaveInfoInitFn)(void* self);
 typedef void (__fastcall *Var64LoadSaveFileFn)(void* loader, void* saveInfo, void* slot);
 typedef void* (__fastcall *Var64LoaderGetterFn)(void* app);
 typedef void** (__fastcall *Var64StringAssignFn)(void** dst, const void* src, size_t len);
+typedef void** (__fastcall *Var64StringAppendFn)(void** dst, const void* src, size_t len);
 
 static int Var64_WriteSaveFileName(CmdString* field, const char* fileName)
 {
@@ -736,6 +774,149 @@ int Var64_RegisterLoadGameCommand(void)
 {
     return ConsoleCmd_RegisterAll(kVar64CommandDefs,
         (int)(sizeof(kVar64CommandDefs) / sizeof(kVar64CommandDefs[0])));
+}
+
+#define RVA_VARTEXT_HANDLER     0x12CF2B0u
+#define VAR64_LANG_NAME_MAX     160u
+
+typedef void* (__fastcall *Var64VarTextHandlerFn)(void* ctx, const char* text,
+                                                  const char* textEnd, void* out, int depth);
+
+static Var64VarTextHandlerFn g_var64OrigVarTextHandler = NULL;
+static int Var64_LangResolveSlotValue(void* ctx, const char* name, long long* outValue);
+static void Var64_LangAppendDecimalText(void* out, long long value);
+
+static void Var64_CopyVarPath(const char* text, const char* textEnd, char* dst, int dstSize)
+{
+    int n = 0;
+    const char* p;
+
+    if (dst == NULL || dstSize <= 1) return;
+    dst[0] = 0;
+    if (text == NULL || textEnd == NULL) return;
+    for (p = text; p < textEnd && *p != 0 && *p != '|' && n < dstSize - 1; ++p) dst[n++] = *p;
+    dst[n] = 0;
+}
+
+static void* __fastcall Var64_VarTextBridgeDetour(void* ctx, const char* text,
+                                                   const char* textEnd, void* out, int depth)
+{
+    char name[VAR64_LANG_NAME_MAX];
+    char hiName[VAR64_LANG_NAME_MAX + 8];
+    long long loValue = 0;
+    long long hiValue = 0;
+    unsigned long long combined;
+    size_t n;
+
+    if (g_var64OrigVarTextHandler == NULL) return NULL;
+    if (ctx == NULL || text == NULL || textEnd == NULL || textEnd <= text
+        || out == NULL || depth > 0) {
+        return g_var64OrigVarTextHandler(ctx, text, textEnd, out, depth);
+    }
+
+    Var64_CopyVarPath(text, textEnd, name, sizeof(name));
+    n = strlen(name);
+    if (n == 0 || n > VAR64_NAME_LIMIT) {
+        return g_var64OrigVarTextHandler(ctx, text, textEnd, out, depth);
+    }
+    memcpy(hiName, name, n);
+    memcpy(hiName + n, VAR64_HIGH_SUFFIX, 4);
+
+    if (!Var64_IsSixtyFourBitName(name)) {
+        if (!Var64_LangResolveSlotValue(ctx, hiName, &hiValue) || hiValue == 0) {
+            return g_var64OrigVarTextHandler(ctx, text, textEnd, out, depth);
+        }
+        Var64_RememberSixtyFourBitName(name);
+        if (!Var64_LangResolveSlotValue(ctx, name, &loValue)) {
+            return g_var64OrigVarTextHandler(ctx, text, textEnd, out, depth);
+        }
+    } else {
+        if (!Var64_LangResolveSlotValue(ctx, name, &loValue)) {
+            return g_var64OrigVarTextHandler(ctx, text, textEnd, out, depth);
+        }
+        if (!Var64_LangResolveSlotValue(ctx, hiName, &hiValue)) hiValue = 0;
+    }
+
+    combined = ((unsigned long long)(unsigned int)hiValue << 32)
+             | (unsigned long long)(unsigned int)loValue;
+    Var64_LangAppendDecimalText(out, (long long)combined);
+    Plugin_Log("[v64lang] [%s] lo=%lld hi=%lld full=%lld",
+               name, loValue, hiValue, (long long)combined);
+    return out;
+}
+
+typedef void (__fastcall *Var64CtxResolveFn)(void* ctx, void** outValue, void* nameField);
+
+
+static int Var64_LangResolveSlotValue(void* ctx, const char* name, long long* outValue)
+{
+    unsigned char nameField[32];
+    void* resolved = NULL;
+    void* vtable;
+    size_t n;
+
+    if (ctx == NULL || name == NULL || outValue == NULL) return 0;
+    n = strlen(name);
+    if (n == 0 || n > VAR64_NAME_LIMIT) return 0;
+    vtable = *(void**)ctx;
+    if (!ConsoleCmd_IsReadable(vtable, 0x40)) return 0;
+
+    memset(nameField, 0, sizeof(nameField));
+    memcpy(nameField, name, n);
+    *(unsigned long long*)(nameField + 16) = (unsigned long long)n;
+    *(unsigned long long*)(nameField + 24) = 15ULL;
+
+    ((Var64CtxResolveFn)(*(void**)((char*)vtable + 0x20)))(ctx, &resolved, nameField);
+    *outValue = (long long)(intptr_t)resolved;
+    return 1;
+}
+
+static void Var64_LangAppendDecimalText(void* out, long long value)
+{
+    CmdString* field = (CmdString*)out;
+    unsigned char* img;
+    char digits[24];
+    char text[32];
+    int d = 0;
+    int k = 0;
+    int neg = (value < 0);
+    unsigned long long uv = (unsigned long long)(neg ? -value : value);
+
+    if (field == NULL || !ConsoleCmd_IsReadable(field, 32)) return;
+    img = Var64_Image();
+    if (img == NULL) return;
+    if (!ConsoleCmd_IsReadable(img + RVA_STRING_APPEND, 16)) return;
+
+    if (uv == 0) digits[d++] = '0';
+    while (uv > 0 && d < 22) {
+        digits[d++] = (char)('0' + (int)(uv % 10ULL));
+        uv /= 10ULL;
+    }
+    if (neg) text[k++] = '-';
+    while (d > 0) text[k++] = digits[--d];
+    text[k] = 0;
+
+    ((Var64StringAppendFn)(img + RVA_STRING_APPEND))((void**)field, text, (size_t)k);
+}
+
+void Var64_InstallLanguageBridge(void)
+{
+    unsigned char* img = Var64_Image();
+    void* orig;
+
+    if (g_var64OrigVarTextHandler != NULL) return;
+    if (img == NULL) return;
+    if (!ConsoleCmd_IsReadable(img + RVA_VARTEXT_HANDLER, 16)) {
+        Plugin_Log("[v64lang] handler address unreadable");
+        return;
+    }
+    orig = InlineHook_Install(img + RVA_VARTEXT_HANDLER, (void*)Var64_VarTextBridgeDetour);
+    if (orig == NULL) {
+        Plugin_Log("[v64lang] var text hook install failed");
+        return;
+    }
+    g_var64OrigVarTextHandler = (Var64VarTextHandlerFn)orig;
+    Plugin_Log("[v64lang] var text hook installed, orig=%p", orig);
 }
 
 EFF_DEF(gamesetvar64, "set_variable64",

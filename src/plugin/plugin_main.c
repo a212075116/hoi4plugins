@@ -17,6 +17,7 @@ int EffectCameras_Register(void);
 int EffectGameDate_Register(void);
 int Var64_RegisterEffects(void);
 int Var64_RegisterLoadGameCommand(void);
+void Var64_InstallLanguageBridge(void);
 
 #define RVA_GS_GLOBAL   0x332F260u
 #define RVA_VT_MAIN     0x2721158u
@@ -188,6 +189,9 @@ static DWORD WINAPI PluginThread(LPVOID p)
                 if (ok) {
                     int nl = Var64_RegisterLoadGameCommand();
                     Plugin_Log("[plugin] loadgame command registered: %d", nl);
+                }
+                if (ok) {
+                    Var64_InstallLanguageBridge();
                 }
             }
             if (!ok) Sleep(10);
