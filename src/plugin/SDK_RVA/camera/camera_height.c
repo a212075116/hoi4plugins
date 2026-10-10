@@ -46,39 +46,6 @@ int Camera_CaptureTrueUpperLimit(void)
     return 1;
 }
 
-static volatile long g_nudgeLock = 0;
-
-void Camera_NudgeInputToSyncLiveHeight(void)
-{
-    INPUT in[2];
-    long prev;
-
-    prev = InterlockedExchange(&g_nudgeLock, 1);
-    if (prev != 0) return;
-
-    memset(in, 0, sizeof(in));
-    in[0].type = INPUT_MOUSE;
-    in[0].mi.dx = 1;
-    in[0].mi.dy = 0;
-    in[0].mi.dwFlags = MOUSEEVENTF_MOVE;
-    in[1].type = INPUT_MOUSE;
-    in[1].mi.dx = -1;
-    in[1].mi.dy = 0;
-    in[1].mi.dwFlags = MOUSEEVENTF_MOVE;
-    {
-        UINT sent = SendInput(2, in, sizeof(INPUT));
-        DWORD err = GetLastError();
-        HWND fg = GetForegroundWindow();
-        DWORD fgPid = 0;
-        DWORD myPid = GetCurrentProcessId();
-        if (fg != NULL) GetWindowThreadProcessId(fg, &fgPid);
-        Plugin_Log("[nudge] SendInput sent=%u/%d sizeofInput=%d err=%lu fgPid=%lu myPid=%lu fgIsMine=%d",
-                   sent, 2, (int)sizeof(INPUT), err, fgPid, myPid, (fgPid == myPid));
-    }
-
-    InterlockedExchange(&g_nudgeLock, 0);
-}
-
 static volatile LONG g_smoothBusy = 0;
 static volatile LONG g_smoothKind = 0;
 static volatile LONG g_smoothFromBits = 0;
@@ -297,17 +264,21 @@ static long long __fastcall Handler_SetCamHeight(CmdResult* out, CmdArgs* args)
         if (hi > 0 && want > (float)hi) want = (float)hi;
         *(float*)(cam + OFF_CAM_HEIGHT) = want;
         Plugin_Log("[setcamheight] setter unavailable, wrote field directly");
-        used = 0;
-    } else {
-        want = *(float*)(cam + OFF_CAM_HEIGHT);
     }
 
     {
         char msg[160];
-        _snprintf_s(msg, sizeof(msg), _TRUNCATE, "Currently,Camera Height is %.2f", want);
+        if (cur != want) {
+            _snprintf_s(msg, sizeof(msg), _TRUNCATE,
+                        "Camera Height is %.0f, moving from %.0f (range [%d,%d])",
+                        want, cur, lo, hi);
+        } else {
+            _snprintf_s(msg, sizeof(msg), _TRUNCATE,
+                        "Camera Height is %.0f (range [%d,%d])", want, lo, hi);
+        }
         ConsoleCmd_SetMessage(out, msg);
         out->ok = 1;
-        Plugin_Log("[setcamheight] %.2f -> %.2f (arg=%s setter=%d range [%d,%d])",
+        Plugin_Log("[setcamheight] %.2f -> %.2f (arg=%s smooth=%d range [%d,%d])",
                    cur, want, arg, used, lo, hi);
     }
     return (long long)out;
@@ -344,8 +315,8 @@ int Camera_ClampHeightInto(void* cam, int lo, int hi)
 {
     float h;
     if (cam == NULL) return 0;
-    if (!ConsoleCmd_IsReadable((unsigned char*)cam + OFF_CAM_HEIGHT_LIVE, 4)) return 0;
-    h = *(float*)((unsigned char*)cam + OFF_CAM_HEIGHT_LIVE);
+    if (!ConsoleCmd_IsReadable((unsigned char*)cam + OFF_CAM_HEIGHT, 4)) return 0;
+    h = *(float*)((unsigned char*)cam + OFF_CAM_HEIGHT);
     if (h != h) {
         Camera_SetHeight(cam, (float)lo);
         Plugin_Log("[cam] height was NaN, pulled to lower %d", lo);
@@ -397,7 +368,6 @@ static long long __fastcall Handler_SetLowerLimit(CmdResult* out, CmdArgs* args)
     int lo;
     int hi;
     int oldLo;
-    int moved;
 
     if (out == NULL) return 0;
     ConsoleCmd_InitResult(out);
@@ -427,24 +397,24 @@ static long long __fastcall Handler_SetLowerLimit(CmdResult* out, CmdArgs* args)
         if (v > thi) { v = thi; Plugin_Log("[setcamlower] clamp %d -> true upper %d", (int)want, thi); }
         want = (float)v;
     }
-    Camera_SetLowerLimitSmooth(cam, (int)want);
-    Camera_GetLimits(cam, &lo, &hi);
-    moved = 0;
     {
+        int newLo = (int)want;
         float now = *(float*)(cam + OFF_CAM_HEIGHT);
         char msg[192];
-        if (moved) {
+        Camera_SetLowerLimitSmooth(cam, newLo);
+        Camera_GetLimits(cam, &lo, &hi);
+        if ((float)newLo > now) {
             _snprintf_s(msg, sizeof(msg), _TRUNCATE,
-                        "Lower Limit is %d, Height pulled to %.2f (range [%d,%d])",
-                        lo, now, lo, hi);
+                        "Lower Limit is %d, height rising from %.0f (range [%d,%d])",
+                        newLo, now, newLo, hi);
         } else {
             _snprintf_s(msg, sizeof(msg), _TRUNCATE,
-                        "Currently,Camera Lower Limit is %d (range [%d,%d])", lo, lo, hi);
+                        "Camera Lower Limit is %d (range [%d,%d])", newLo, newLo, hi);
         }
         ConsoleCmd_SetMessage(out, msg);
         out->ok = 1;
-        Plugin_Log("[setcamlower] arg=%s  lo %d -> %d  hi=%d  height=%.2f  moved=%d",
-                   arg, oldLo, lo, hi, now, moved);
+        Plugin_Log("[setcamlower] arg=%s  lo %d -> %d  hi=%d  height=%.2f",
+                   arg, oldLo, newLo, hi, now);
     }
     return (long long)out;
 }
@@ -457,7 +427,6 @@ static long long __fastcall Handler_SetUpperLimit(CmdResult* out, CmdArgs* args)
     int lo;
     int hi;
     int oldHi;
-    int moved;
 
     if (out == NULL) return 0;
     ConsoleCmd_InitResult(out);
@@ -487,24 +456,24 @@ static long long __fastcall Handler_SetUpperLimit(CmdResult* out, CmdArgs* args)
         if (v < tlo) { v = tlo; Plugin_Log("[setcamupper] clamp %d -> true lower %d", (int)want, tlo); }
         want = (float)v;
     }
-    Camera_SetUpperLimitSmooth(cam, (int)want);
-    Camera_GetLimits(cam, &lo, &hi);
-    moved = 0;
     {
+        int newHi = (int)want;
         float now = *(float*)(cam + OFF_CAM_HEIGHT);
         char msg[192];
-        if (moved) {
+        Camera_SetUpperLimitSmooth(cam, newHi);
+        Camera_GetLimits(cam, &lo, &hi);
+        if ((float)newHi < now) {
             _snprintf_s(msg, sizeof(msg), _TRUNCATE,
-                        "Upper Limit is %d, Height pulled to %.2f (range [%d,%d])",
-                        hi, now, lo, hi);
+                        "Upper Limit is %d, height falling from %.0f (range [%d,%d])",
+                        newHi, now, lo, newHi);
         } else {
             _snprintf_s(msg, sizeof(msg), _TRUNCATE,
-                        "Currently,Camera Upper Limit is %d (range [%d,%d])", hi, lo, hi);
+                        "Camera Upper Limit is %d (range [%d,%d])", newHi, lo, newHi);
         }
         ConsoleCmd_SetMessage(out, msg);
         out->ok = 1;
-        Plugin_Log("[setcamupper] arg=%s  hi %d -> %d  lo=%d  height=%.2f  moved=%d",
-                   arg, oldHi, hi, lo, now, moved);
+        Plugin_Log("[setcamupper] arg=%s  hi %d -> %d  lo=%d  height=%.2f",
+                   arg, oldHi, newHi, lo, now);
     }
     return (long long)out;
 }

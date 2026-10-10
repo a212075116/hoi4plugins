@@ -5,7 +5,6 @@
 #define RVA_CAM_SLOT      0x332F698u
 #define OFF_CAM_OBJ2CAM   0x750u
 #define OFF_CAM_HEIGHT    0x69Cu
-#define OFF_CAM_HEIGHT_LIVE 0x678u
 #define OFF_CAM_MINH      0x6D0u
 #define OFF_CAM_MAXH      0x6D4u
 #define RVA_CAM_SETH      0x12643F0u
@@ -34,7 +33,6 @@ int            Camera_SetUpperLimitSmooth(void* cam, int hi);
 int            Camera_TrueLower(void);
 int            Camera_TrueUpper(void* cam);
 int            Camera_CaptureTrueUpperLimit(void);
-void           Camera_NudgeInputToSyncLiveHeight(void);
 int            Camera_ClampHeightInto(void* cam, int lo, int hi);
 int            Camera_EnsureSpanBetweenLimits(void* cam, int* inOutLo, int* inOutHi);
 int            Camera_ApplyLimits(void* cam, int* inOutLo, int* inOutHi, int* moved);

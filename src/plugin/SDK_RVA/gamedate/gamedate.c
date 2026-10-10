@@ -258,6 +258,7 @@ static long long __fastcall Handler_SetGameDate(CmdResult* out, CmdArgs* args)
     int y;
     int mo;
     int d;
+    int hr;
     char msg[96];
 
     if (out == NULL) return 0;
@@ -277,14 +278,14 @@ static long long __fastcall Handler_SetGameDate(CmdResult* out, CmdArgs* args)
         return (long long)out;
     }
     after = GameDate_GetRaw();
-    if (GameDate_GetParts(&y, &mo, &d)) {
-        _snprintf_s(msg, sizeof(msg), _TRUNCATE, "Date set %d.%d.%d", y, mo, d);
+    if (GameDate_GetParts4(&y, &mo, &d, &hr)) {
+        _snprintf_s(msg, sizeof(msg), _TRUNCATE, "Date set %d.%d.%d.%d", y, mo, d, hr);
         ConsoleCmd_SetMessage(out, msg);
     } else {
         ConsoleCmd_SetMessage(out, "Date set");
     }
     out->ok = 1;
-    Plugin_Log("[gamedate] arg=[%s]  raw %d -> %d  now %d.%d.%d", arg, before, after, y, mo, d);
+    Plugin_Log("[gamedate] arg=[%s]  raw %d -> %d  now %d.%d.%d.%d", arg, before, after, y, mo, d, hr);
     return (long long)out;
 }
 
