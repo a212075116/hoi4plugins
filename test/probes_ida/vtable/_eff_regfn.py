@@ -1,5 +1,5 @@
 import sys
-sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib')
 from idalib_cli import send
 for ea, nm in [('0x1424C4B70','sub_1424C4B70 (注册函数)'), ('0x14014BD50','sub_14014BD50 (取id)')]:
     f = send({'op':'func','ea':ea})

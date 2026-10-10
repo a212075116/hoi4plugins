@@ -1,5 +1,5 @@
 import sys
-sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib')
 from idalib_cli import send
 IMG = 0x140000000
 for nm, ea in [('unk_1433A7630 (add_stability 槽)', '0x1433A7630'),

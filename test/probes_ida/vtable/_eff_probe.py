@@ -1,5 +1,5 @@
 import sys
-sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib')
 from idalib_cli import send
 IMG = 0x140000000
 names = ['add_stability','add_manpower','add_war_support','add_political_power','set_global_flag','add_country_leader_trait']

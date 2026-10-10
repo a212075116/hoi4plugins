@@ -1,5 +1,5 @@
 import sys, time
-sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib')
 from idalib_cli import send
 t0 = time.time()
 r = send({'op':'grep_disasm','pattern':'+69Ch','limit':200})

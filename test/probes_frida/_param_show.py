@@ -1,5 +1,5 @@
 import sys, time
-sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib')
 import hoi4_launch as HL, probe_common as PC
 dt, info = HL.build_and_launch(marker='[plugin] Camera_RegisterCommands')
 print('部署 %s  就绪 %.2f 秒' % (info, dt))

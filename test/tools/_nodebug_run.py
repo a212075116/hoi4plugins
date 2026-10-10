@@ -1,6 +1,6 @@
 import sys, time, importlib.util
-sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
-spec = importlib.util.spec_from_file_location('fh', r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/probes_frida/frida_host.py')
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib')
+spec = importlib.util.spec_from_file_location('fh', r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib/frida_host.py')
 fh = importlib.util.module_from_spec(spec); spec.loader.exec_module(fh)
 fh.set_start_tag('ABY')
 fh.ARGS = [fh.ARGS[0], '-gdpr-compliant', '-start_tag=ABY', '-nolauncher', '-debug']

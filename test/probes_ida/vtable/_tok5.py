@@ -1,5 +1,5 @@
 import sys
-sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib')
 from idalib_cli import send
 needles = ['CTokenTable','CTokenDef','TokenTable','CToken','CLexer','CStringTable','_Token','EffectEntries','CTokenHelper']
 for needle in needles:

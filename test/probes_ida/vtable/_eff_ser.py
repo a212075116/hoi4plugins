@@ -1,5 +1,5 @@
 import sys
-sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib')
 from idalib_cli import send
 r = send({'op':'strings','needle':'EFFECT_ADD_STABILITY','limit':10})
 print('=== "EFFECT_ADD_STABILITY" 命中 %s ===' % r.get('count'))

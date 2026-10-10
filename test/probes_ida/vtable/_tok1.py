@@ -1,5 +1,5 @@
 import sys
-sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib')
 from idalib_cli import send
 for ea, nm in [('0x1424C4D80','sub_1424C4D80 (分配字符串缓冲?)'),
                ('0x140145FD0','sub_140145FD0 (构造时调用)')]:

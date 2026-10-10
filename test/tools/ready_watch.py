@@ -1,6 +1,6 @@
 """Start hoi4 and report progress every second until the camera is usable."""
 import sys, time
-sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib')
 import hoi4_launch as HL
 
 t0 = time.time()
@@ -27,7 +27,7 @@ for i in range(240):
     if logmark is not None and e is None:
         try:
             import importlib.util
-            spec = importlib.util.spec_from_file_location('pc', r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools/probe_common.py')
+            spec = importlib.util.spec_from_file_location('pc', r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib/probe_common.py')
             pc = importlib.util.module_from_spec(spec); spec.loader.exec_module(pc)
             e = pc.connect()
             print('%6.1fs  frida 已连接' % t)

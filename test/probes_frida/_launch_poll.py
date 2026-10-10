@@ -1,5 +1,5 @@
 import sys, os, time
-sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib')
 import hoi4_launch as HL
 print('=== 启动, 轮询等 effect 就绪 ===')
 dt1, txt = HL.launch(wait_marker='[eff] camera height effect ready', timeout=120)

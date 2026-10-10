@@ -1,5 +1,5 @@
 import sys, re
-sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib')
 from idalib_cli import send
 cands = ['0x141261320','0x141264150','0x1412642A0','0x1412643F0','0x141263330']
 CAM_FIELDS = ['678h','69Ch','684h','6D0h','6D4h','6F0h','6F4h','6FCh','674h','67Ch','6C8h','6CCh']

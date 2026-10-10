@@ -1,5 +1,5 @@
 import sys, re
-sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib')
 from idalib_cli import send
 r = send({'op':'decompile','ea':'0x1424B5EF0','lines':400})
 t = r.get('text') or ''

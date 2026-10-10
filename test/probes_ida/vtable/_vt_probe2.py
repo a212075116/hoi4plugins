@@ -1,5 +1,5 @@
 import sys, json
-sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib')
 from idalib_cli import send
 print('=== 0x142969118 附近 (往前 20 个槽) ===')
 base = 0x142969118 - 20*8

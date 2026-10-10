@@ -1,5 +1,5 @@
 import sys
-sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib')
 from idalib_cli import send
 print('=== sub_1400831C0 的调用者 (谁初始化 token 表) ===')
 x = send({'op':'xrefs_to','ea':'0x1400831C0'})

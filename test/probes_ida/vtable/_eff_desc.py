@@ -1,5 +1,5 @@
 import sys
-sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib')
 from idalib_cli import send
 print('=== add_stability 描述字符串的引用点附近 (0x140018912) ===')
 d = send({'op':'disasm','ea':'0x140018912','count':24,'back':16})

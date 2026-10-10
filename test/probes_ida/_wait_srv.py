@@ -1,5 +1,5 @@
 import sys, time, socket
-sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib')
 t0 = time.time()
 while time.time() - t0 < 90:
     s = socket.socket()

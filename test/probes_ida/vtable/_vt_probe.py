@@ -1,5 +1,5 @@
 import sys, json
-sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib')
 from idalib_cli import send
 # CCurrentGameState 主虚表 0x2721158, 看看它的所有槽
 r = send({'op':'vtable','ea':'0x2721158','max':40})

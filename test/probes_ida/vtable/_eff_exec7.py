@@ -1,5 +1,5 @@
 import sys
-sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib')
 from idalib_cli import send
 print('=== CAddStabilityEffect 虚表 +0x60 (sub_14053D9E0, 1865B) ===')
 r = send({'op':'decompile','ea':'0x14053D9E0','lines':70})

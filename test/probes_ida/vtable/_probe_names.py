@@ -1,5 +1,5 @@
 import sys, os
-sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib')
 from idalib_cli import send
 print('ping:', send({'op':'ping'}))
 r = send({'op':'names','needle':'??_7','limit':200000})

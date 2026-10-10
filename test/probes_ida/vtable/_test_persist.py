@@ -1,5 +1,5 @@
 import sys, time
-sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib')
 import idalib_cli as C
 print('ping:', C.send({'op':'ping'}).get('funcs'))
 t0 = time.time()

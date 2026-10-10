@@ -1,5 +1,5 @@
 import sys, time, traceback
-sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/tools')
+sys.path.insert(0, r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV/hoi4plugins/test/lib')
 import hoi4_launch as HL
 import probe_common as PC
 
