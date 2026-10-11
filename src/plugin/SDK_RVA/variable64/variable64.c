@@ -335,6 +335,7 @@ static unsigned char* Var64_ResolveAddressByName(void* self, void* ctx, const ch
     return addr;
 }
 
+#define VAR64_SLOT_SCALE  100000LL
 #define VAR64_FRAC_SUFFIX "_f"
 #define VAR64_FRAC_SCALE  100000LL
 #define VAR64_FRAC_BIAS   100000LL
@@ -480,7 +481,7 @@ static void Var64_StoreSplit64(void* self, void* ctx, const char* name,
     char fracName[48];
     char shown[48];
 
-    if (lowAddr != NULL) *(long long*)lowAddr = lo;
+    if (lowAddr != NULL) *(long long*)lowAddr = (long long)lo * VAR64_SLOT_SCALE;
 
     if (!Var64_MakeHighPartName(name, hiName, sizeof(hiName))) {
         Plugin_Log("[var64] name too long for high part: [%s]", name);
@@ -489,7 +490,7 @@ static void Var64_StoreSplit64(void* self, void* ctx, const char* name,
     {
         unsigned char* hiAddr = Var64_ResolveAddressByName(self, ctx, hiName);
         if (hiAddr != NULL) {
-            *(long long*)hiAddr = hi;
+            *(long long*)hiAddr = (long long)hi * VAR64_SLOT_SCALE;
         } else {
             Plugin_Log("[var64] cannot store high part [%s]", hiName);
         }
@@ -501,7 +502,7 @@ static void Var64_StoreSplit64(void* self, void* ctx, const char* name,
     {
         unsigned char* fracAddr = Var64_ResolveAddressByName(self, ctx, fracName);
         if (fracAddr != NULL) {
-            *(long long*)fracAddr = vFrac + VAR64_FRAC_BIAS;
+            *(long long*)fracAddr = (vFrac + VAR64_FRAC_BIAS) * VAR64_SLOT_SCALE;
         } else {
             Plugin_Log("[var64] cannot store frac part [%s]", fracName);
         }
@@ -521,14 +522,14 @@ static long long Var64_LoadSplit64(void* self, void* ctx, const char* name,
     char hiName[48];
     char fracName[48];
 
-    if (lowAddr != NULL) lo = *(long long*)lowAddr;
+    if (lowAddr != NULL) lo = *(long long*)lowAddr / VAR64_SLOT_SCALE;
     if (Var64_MakeHighPartName(name, hiName, sizeof(hiName))) {
         unsigned char* hiAddr = Var64_ResolveAddressByName(self, ctx, hiName);
-        if (hiAddr != NULL) hi = *(long long*)hiAddr;
+        if (hiAddr != NULL) hi = *(long long*)hiAddr / VAR64_SLOT_SCALE;
     }
     if (Var64_MakeFracPartName(name, fracName, sizeof(fracName))) {
         unsigned char* fracAddr = Var64_ResolveAddressByName(self, ctx, fracName);
-        if (fracAddr != NULL) frac = *(long long*)fracAddr - VAR64_FRAC_BIAS;
+        if (fracAddr != NULL) frac = *(long long*)fracAddr / VAR64_SLOT_SCALE - VAR64_FRAC_BIAS;
     }
     if (outLo != NULL) *outLo = (unsigned int)(lo & 0xFFFFFFFFLL);
     if (outHi != NULL) *outHi = (unsigned int)(hi & 0xFFFFFFFFLL);
@@ -1144,7 +1145,7 @@ static int Var64_LangResolveSlotValue(void* ctx, const char* name, long long* ou
     *(unsigned long long*)(nameField + 24) = 15ULL;
 
     ((Var64CtxResolveFn)(*(void**)((char*)vtable + 0x20)))(ctx, &resolved, nameField);
-    *outValue = (long long)(intptr_t)resolved;
+    *outValue = (long long)(intptr_t)resolved / VAR64_SLOT_SCALE;
     return 1;
 }
 
