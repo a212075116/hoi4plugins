@@ -41,7 +41,7 @@ typedef struct EffectDef {
     int          tokenId;
     int          state;
     void*        vt[EFF_VT_SLOTS];
-    void*        entryVt[2];
+    void*        entryVt[4];
     unsigned char entry[16];
 } EffectDef;
 

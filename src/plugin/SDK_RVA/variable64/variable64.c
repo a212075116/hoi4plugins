@@ -162,6 +162,7 @@ static void* __fastcall Var64_PureGameFactory(void)
 
 typedef long long (__fastcall *Var64GameSetExecFn)(void* self, void* ctx);
 
+
 static Var64GameSetExecFn g_var64OrigGameSetExec = NULL;
 static int g_var64GameSyntaxHookReady = 0;
 
@@ -360,6 +361,8 @@ static unsigned char* Var64_ResolveAddressByName(void* self, void* ctx, const ch
 }
 
 #define VAR64_SLOT_SCALE  100000LL
+#define RVA_VARCLAMP_ENTRYVT 0x277C680u
+#define RVA_VARCLAMP_EXEC    0x0034F750u
 #define VAR64_FRAC_SUFFIX "_f"
 #define VAR64_FRAC_SCALE  100000LL
 #define VAR64_FRAC_BIAS   100000LL
@@ -1412,11 +1415,11 @@ EFF_DEF(gamerndvar64, "round_variable64",
         "EFFECT_ROUND_VARIABLE64", &ExecVar64GameSyntax)
 
 EFF_DEF(gameclpvar64, "clamp_variable64",
-        "Raises a 64-bit script variable to the value if it is below it.",
+        "Raises a 64-bit script variable to value if it is below it.",
         "EFFECT_CLAMP_VARIABLE64", &ExecVar64GameSyntax)
 
 EFF_DEF(gameclhvar64, "clamp_variable64_max",
-        "Lowers a 64-bit script variable to the value if it is above it.",
+        "Lowers a 64-bit script variable to value if it is above it.",
         "EFFECT_CLAMP_VARIABLE64_MAX", &ExecVar64GameSyntax)
 
 static EffectDef* g_var64EffectDefs[] = {
