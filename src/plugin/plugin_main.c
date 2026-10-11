@@ -8,6 +8,9 @@
 #include "console_cmd.h"
 #include "camera_height.h"
 #include "effect_reg.h"
+#include "trigger_reg.h"
+
+int TriggerDemo_Register(void);
 #include "file_redirect.h"
 #include "process_block.h"
 #include "gamedate.h"
@@ -197,6 +200,16 @@ static DWORD WINAPI PluginThread(LPVOID p)
             if (!ok) Sleep(10);
         }
         if (!ok) Plugin_Log("[plugin] gave up waiting for lexer (polls=%d)", round);
+    }
+
+    {
+        int round;
+        int registered = 0;
+        for (round = 0; round < 3000 && registered == 0; ++round) {
+            if (Trigger_RegistryReady()) registered = TriggerDemo_Register();
+            if (registered == 0) Sleep(10);
+        }
+        Plugin_Log("[plugin] triggers registered: %d/3 (poll=%d)", registered, round);
     }
 
     for (i = 0; i < 300; ++i) {

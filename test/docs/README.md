@@ -166,3 +166,12 @@ spawn 出来的游戏进程会随宿主 Python 进程结束被一起终止，现
 - `modules/effect/test_var64_language_name.py SOURCE OUTPUT_DIR`：语言桥接名字布局 6 项。
 
 原生夹具依赖本机 VS x64 编译环境。详细边界、性能开销和证据见 `ai_docs/09_脚本数值系统/读档身份与抗压验证.md`。
+
+## Trigger 注册器入口（2026-10-12）
+
+- `modules/trigger/verify_trigger_registry.py PHASE`：独立 fixture，17 项条件与注册幂等/保留关键字自检。会部署、重启游戏，必须先完成构建。
+- 加 `--stress`：测试环境下启动期注册 256 个 alias，验证各 alias 与 2000 个组合判断。结束后恢复基本 fixture 再正常启动。
+- `modules/trigger/test_trigger_registry_native.py OUTPUT`：注册器真实源码与受控引擎替身，22 项 API 检查。
+- `modules/trigger/probe_trigger_tooltip.py`：只在已就绪游戏中使用，捕获真实本地化上下文并同步验证 tooltip 文本；不证明 UI 目视布局。
+
+实现与限制见 `ai_docs/10_Trigger系统/注册器API与验证.md`。

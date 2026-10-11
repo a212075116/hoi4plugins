@@ -48,7 +48,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)SDK_RVA\camera;$(ProjectDir)SDK_RVA\console;$(ProjectDir)SDK_RVA\effect;$(ProjectDir)SDK_RVA\gamedate;$(ProjectDir)SDK_RVA\crash_test;$(ProjectDir)SDK_RVA\hook;$(ProjectDir)SDK_RVA\minihook\include;$(ProjectDir)SDK_RVA\minihook\src;..\carrier;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)SDK_RVA\camera;$(ProjectDir)SDK_RVA\console;$(ProjectDir)SDK_RVA\effect;$(ProjectDir)SDK_RVA\trigger;$(ProjectDir)SDK_RVA\gamedate;$(ProjectDir)SDK_RVA\crash_test;$(ProjectDir)SDK_RVA\hook;$(ProjectDir)SDK_RVA\minihook\include;$(ProjectDir)SDK_RVA\minihook\src;..\carrier;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -64,7 +64,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)SDK_RVA\camera;$(ProjectDir)SDK_RVA\console;$(ProjectDir)SDK_RVA\effect;$(ProjectDir)SDK_RVA\gamedate;$(ProjectDir)SDK_RVA\crash_test;$(ProjectDir)SDK_RVA\hook;$(ProjectDir)SDK_RVA\minihook\include;$(ProjectDir)SDK_RVA\minihook\src;..\carrier;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)SDK_RVA\camera;$(ProjectDir)SDK_RVA\console;$(ProjectDir)SDK_RVA\effect;$(ProjectDir)SDK_RVA\trigger;$(ProjectDir)SDK_RVA\gamedate;$(ProjectDir)SDK_RVA\crash_test;$(ProjectDir)SDK_RVA\hook;$(ProjectDir)SDK_RVA\minihook\include;$(ProjectDir)SDK_RVA\minihook\src;..\carrier;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -79,6 +79,8 @@
     <ClCompile Include="SDK_RVA\console\console_cmd.c" />
     <ClCompile Include="SDK_RVA\camera\camera_height.c" />
     <ClCompile Include="SDK_RVA\effect\effect_reg.c" />
+    <ClCompile Include="SDK_RVA\trigger\trigger_reg.c" />
+    <ClCompile Include="SDK_RVA\trigger\trigger_demo.c" />
     <ClCompile Include="SDK_RVA\effect\effect_camera.c" />
     <ClCompile Include="SDK_RVA\hook\file_redirect.c" />
     <ClCompile Include="SDK_RVA\hook\process_block.c" />
@@ -97,6 +99,7 @@
     <ClInclude Include="SDK_RVA\console\console_cmd.h" />
     <ClInclude Include="SDK_RVA\camera\camera_height.h" />
     <ClInclude Include="SDK_RVA\effect\effect_reg.h" />
+    <ClInclude Include="SDK_RVA\trigger\trigger_reg.h" />
     <ClInclude Include="SDK_RVA\hook\file_redirect.h" />
     <ClInclude Include="SDK_RVA\hook\process_block.h" />
     <ClInclude Include="SDK_RVA\gamedate\gamedate.h" />
