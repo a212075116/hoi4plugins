@@ -822,6 +822,63 @@ static int Var64_ReadNameOnly(void* self, char* nameBuf, unsigned int nameBufSiz
     return 1;
 }
 
+#define VAR64_DEBT_MAX 64
+#define VAR64_INT32_MAX  2147483647LL
+#define VAR64_INT32_MIN  (-2147483648LL)
+
+typedef struct {
+    char      name[40];
+    long long debtInt;
+    long long debtFrac;
+    int       active;
+} Var64DebtRecord;
+
+static Var64DebtRecord g_var64Debts[VAR64_DEBT_MAX];
+
+static Var64DebtRecord* Var64_FindDebt(const char* name)
+{
+    int i;
+
+    if (name == NULL) return NULL;
+    for (i = 0; i < VAR64_DEBT_MAX; ++i) {
+        if (g_var64Debts[i].active && strcmp(g_var64Debts[i].name, name) == 0) {
+            return &g_var64Debts[i];
+        }
+    }
+    return NULL;
+}
+
+static Var64DebtRecord* Var64_NewDebt(const char* name)
+{
+    int i;
+
+    if (name == NULL) return NULL;
+    for (i = 0; i < VAR64_DEBT_MAX; ++i) {
+        if (!g_var64Debts[i].active) {
+            g_var64Debts[i].active = 1;
+            {
+                size_t n = strlen(name);
+                if (n > sizeof(g_var64Debts[i].name) - 1) n = sizeof(g_var64Debts[i].name) - 1;
+                memcpy(g_var64Debts[i].name, name, n);
+                g_var64Debts[i].name[n] = 0;
+            }
+            g_var64Debts[i].debtInt = 0;
+            g_var64Debts[i].debtFrac = 0;
+            return &g_var64Debts[i];
+        }
+    }
+    return NULL;
+}
+
+static void Var64_ClearDebt(Var64DebtRecord* rec)
+{
+    if (rec == NULL) return;
+    rec->active = 0;
+    rec->name[0] = 0;
+    rec->debtInt = 0;
+    rec->debtFrac = 0;
+}
+
 static int Var64_ReadOperandName(void* self, char* out, unsigned int outSize)
 {
     unsigned char* pd = (unsigned char*)self + 296;
@@ -840,6 +897,115 @@ static int Var64_ReadOperandName(void* self, char* out, unsigned int outSize)
     if (src == NULL || !ConsoleCmd_IsReadable(src, size + 1)) return 0;
     memcpy(out, src, (size_t)size);
     out[size] = 0;
+    return 1;
+}
+
+static int Var64_TryDebtArithmetic(void* self, void* ctx, int op, const char* opName)
+{
+    unsigned char* img = Var64_Image();
+    char name[40];
+    char operandName[40];
+    unsigned char* selfAddr;
+    unsigned char* operandAddr;
+    long long currentRaw;
+    long long operandRaw;
+    long long curInt;
+    long long curFrac;
+    long long opInt;
+    long long opFrac;
+    long long resInt;
+    long long resFrac;
+    long long lockedRaw;
+    Var64DebtRecord* debt;
+    char shown[48];
+
+    if (img == NULL || self == NULL || ctx == NULL) return 0;
+    if (op != VAR64_OP_ADD && op != VAR64_OP_SUB) return 0;
+    if (!Var64_ReadNameOnly(self, name, sizeof(name))) return 0;
+    if (Var64_IsSixtyFourBitName(name)) return 0;
+
+    debt = Var64_FindDebt(name);
+
+    if (debt != NULL) {
+        operandRaw = 0;
+        if (Var64_ReadOperandName(self, operandName, sizeof(operandName))
+            && Var64_IsSixtyFourBitName(operandName)) {
+            operandAddr = Var64_ResolveAddressByName(self, ctx, operandName);
+            if (operandAddr == NULL) return 0;
+            operandRaw = Var64_LoadSplit64(self, ctx, operandName, operandAddr, NULL, NULL);
+        } else {
+            if (!Var64_ResolveGameVariableEx(self, ctx, &operandRaw, NULL, operandName,
+                                             sizeof(operandName), 0)) {
+                return 0;
+            }
+        }
+        opInt = operandRaw / VAR64_FRAC_SCALE;
+        opFrac = operandRaw % VAR64_FRAC_SCALE;
+        selfAddr = ((Var64LookupFn)(img + RVA_VAR_LOOKUP))((void*)((unsigned char*)self + 88), ctx, NULL);
+        if (selfAddr == NULL) return 0;
+
+        if (op == VAR64_OP_SUB) {
+            opInt = -opInt;
+            opFrac = -opFrac;
+        }
+        debt->debtInt += opInt;
+        debt->debtFrac += opFrac;
+        Var64_NormalizeFraction(&debt->debtInt, &debt->debtFrac);
+
+        if (debt->debtInt >= 0) {
+            long long back = debt->debtInt;
+            long long backFrac = debt->debtFrac;
+            long long newInt = VAR64_INT32_MIN + back;
+            long long newFrac = backFrac;
+            Var64_NormalizeFraction(&newInt, &newFrac);
+            *(long long*)selfAddr = newInt * VAR64_FRAC_SCALE + newFrac;
+            Var64_FormatPartsToText(newInt, newFrac, shown, sizeof(shown));
+            Plugin_Log("[var64] debt %s settled -> %s", name, shown);
+            Var64_ClearDebt(debt);
+        } else {
+            Plugin_Log("[var64] debt %s += (%lld, %lld) still owed", name, opInt, opFrac);
+        }
+        return 1;
+    }
+
+    if (!Var64_ReadOperandName(self, operandName, sizeof(operandName))) return 0;
+    if (!Var64_IsSixtyFourBitName(operandName)) return 0;
+    operandAddr = Var64_ResolveAddressByName(self, ctx, operandName);
+    if (operandAddr == NULL) return 0;
+    operandRaw = Var64_LoadSplit64(self, ctx, operandName, operandAddr, NULL, NULL);
+    opInt = operandRaw / VAR64_FRAC_SCALE;
+    opFrac = operandRaw % VAR64_FRAC_SCALE;
+
+    selfAddr = ((Var64LookupFn)(img + RVA_VAR_LOOKUP))((void*)((unsigned char*)self + 88), ctx, NULL);
+    if (selfAddr == NULL) return 0;
+    currentRaw = *(long long*)selfAddr;
+    curInt = currentRaw / VAR64_FRAC_SCALE;
+    curFrac = currentRaw % VAR64_FRAC_SCALE;
+
+    if (op == VAR64_OP_SUB) {
+        opInt = -opInt;
+        opFrac = -opFrac;
+    }
+    resInt = curInt + opInt;
+    resFrac = curFrac + opFrac;
+    Var64_NormalizeFraction(&resInt, &resFrac);
+
+    if (resInt < VAR64_INT32_MAX && resInt > VAR64_INT32_MIN) return 0;
+
+    lockedRaw = (resInt > 0) ? (VAR64_INT32_MAX * VAR64_FRAC_SCALE + 99999)
+                             : (VAR64_INT32_MIN * VAR64_FRAC_SCALE);
+    {
+        Var64DebtRecord* fresh = Var64_NewDebt(name);
+        if (fresh == NULL) return 0;
+        fresh->debtInt = resInt - (lockedRaw / VAR64_FRAC_SCALE);
+        fresh->debtFrac = resFrac - (lockedRaw % VAR64_FRAC_SCALE);
+        Var64_NormalizeFraction(&fresh->debtInt, &fresh->debtFrac);
+    }
+    *(long long*)selfAddr = lockedRaw;
+    Var64_FormatPartsToText(resInt, resFrac, shown, sizeof(shown));
+    Plugin_Log("[var64] debt %s overflow: true=%s locked=%lld owedInt=%lld",
+               name, shown, lockedRaw / VAR64_FRAC_SCALE,
+               Var64_FindDebt(name) ? Var64_FindDebt(name)->debtInt : 0);
     return 1;
 }
 
@@ -951,6 +1117,7 @@ static long long __fastcall Var64_AddDetour(void* self, void* ctx)
         mark = *(unsigned int*)((unsigned char*)self + VAR64_MARK_OFF);
     }
     if (mark == VAR64_MARK_ADD) return Var64_DoAddToVariable64(self, ctx);
+    if (Var64_TryDebtArithmetic(self, ctx, VAR64_OP_ADD, "add_to_variable")) return 0;
     if (Var64_TryArithmetic(self, ctx, VAR64_OP_ADD, "add_to_variable")) return 0;
     if (g_var64OrigAddExec != NULL) return g_var64OrigAddExec(self, ctx);
     return 0;
@@ -958,6 +1125,7 @@ static long long __fastcall Var64_AddDetour(void* self, void* ctx)
 
 static long long __fastcall Var64_SubDetour(void* self, void* ctx)
 {
+    if (Var64_TryDebtArithmetic(self, ctx, VAR64_OP_SUB, "subtract_from_variable")) return 0;
     if (Var64_TryArithmetic(self, ctx, VAR64_OP_SUB, "subtract_from_variable")) return 0;
     if (g_var64OrigSubExec != NULL) return g_var64OrigSubExec(self, ctx);
     return 0;
