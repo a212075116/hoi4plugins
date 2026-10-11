@@ -211,9 +211,9 @@ static void* __fastcall Var64_ClampHighVariable64Factory(void)
     return Var64_MarkedFactory(VAR64_MARK_CLH);
 }
 
-static int Var64_ResolveGameVariable(void* self, void* ctx, long long* outValue,
-                                     unsigned char** outAddr, char* nameBuf,
-                                     unsigned int nameBufSize)
+static int Var64_ResolveGameVariableEx(void* self, void* ctx, long long* outValue,
+                                       unsigned char** outAddr, char* nameBuf,
+                                       unsigned int nameBufSize, int keepFraction)
 {
     unsigned char* img = Var64_Image();
     unsigned char* p = (unsigned char*)self;
@@ -236,7 +236,8 @@ static int Var64_ResolveGameVariable(void* self, void* ctx, long long* outValue,
     if (outValue != NULL) {
         *outValue = 0;
         if (ConsoleCmd_IsReadable(img + RVA_EFF_GETPARAM, 16)) {
-            ((Var64GetParamFn)(img + RVA_EFF_GETPARAM))((void*)(p + 296), outValue, ctx, 0, (void*)1);
+            ((Var64GetParamFn)(img + RVA_EFF_GETPARAM))((void*)(p + 296), outValue, ctx, 0,
+                                                           (void*)(long long)keepFraction);
         }
     }
     if (outAddr != NULL) {
@@ -503,6 +504,13 @@ static void Var64_FormatPartsToText(long long vInt, long long vFrac, char* dst, 
     Var64_DecFromParts(vInt, vFrac, &n);
     Var64_DecTrimZeros(&n);
     Var64_DecRender(&n, dst, dstSize);
+}
+
+static int Var64_ResolveGameVariable(void* self, void* ctx, long long* outValue,
+                                     unsigned char** outAddr, char* nameBuf,
+                                     unsigned int nameBufSize)
+{
+    return Var64_ResolveGameVariableEx(self, ctx, outValue, outAddr, nameBuf, nameBufSize, 1);
 }
 
 static void Var64_StoreSplit64(void* self, void* ctx, const char* name,
@@ -814,6 +822,27 @@ static int Var64_ReadNameOnly(void* self, char* nameBuf, unsigned int nameBufSiz
     return 1;
 }
 
+static int Var64_ReadOperandName(void* self, char* out, unsigned int outSize)
+{
+    unsigned char* pd = (unsigned char*)self + 296;
+    unsigned long long size;
+    unsigned long long cap;
+    unsigned char* src;
+
+    if (out == NULL || outSize < 8) return 0;
+    out[0] = 0;
+    if (!ConsoleCmd_IsReadable(pd, 0x90)) return 0;
+    if (*(unsigned char*)(pd + 9) != 0) return 0;
+    size = *(unsigned long long*)(pd + 0x80);
+    cap = *(unsigned long long*)(pd + 0x88);
+    if (size == 0 || size >= outSize) return 0;
+    src = (cap <= 15) ? (pd + 0x70) : *(unsigned char**)(pd + 0x70);
+    if (src == NULL || !ConsoleCmd_IsReadable(src, size + 1)) return 0;
+    memcpy(out, src, (size_t)size);
+    out[size] = 0;
+    return 1;
+}
+
 static int Var64_TryArithmetic(void* self, void* ctx, int op, const char* opName)
 {
     long long operandRaw = 0;
@@ -831,7 +860,7 @@ static int Var64_TryArithmetic(void* self, void* ctx, int op, const char* opName
     if (self == NULL || ctx == NULL) return 0;
     if (!Var64_ReadNameOnly(self, name, sizeof(name))) return 0;
     if (!Var64_IsSixtyFourBitName(name)) return 0;
-    if (!Var64_ResolveGameVariable(self, ctx, &operandRaw, &addr, name, sizeof(name))) return 0;
+    if (!Var64_ResolveGameVariableEx(self, ctx, &operandRaw, &addr, name, sizeof(name), 0)) return 0;
 
     currentRaw = Var64_LoadSplit64(self, ctx, name, addr, NULL, NULL);
     vInt = currentRaw / VAR64_FRAC_SCALE;
@@ -841,6 +870,19 @@ static int Var64_TryArithmetic(void* self, void* ctx, int op, const char* opName
     rInt = 0;
     rFrac = 0;
 
+    {
+        char operandName[40];
+        if (Var64_ReadOperandName(self, operandName, sizeof(operandName))) {
+            if (Var64_IsSixtyFourBitName(operandName)) {
+                unsigned char* operandAddr = Var64_ResolveAddressByName(self, ctx, operandName);
+                if (operandAddr != NULL && ConsoleCmd_IsReadable(operandAddr, 8)) {
+                    operandRaw = Var64_LoadSplit64(self, ctx, operandName, operandAddr, NULL, NULL);
+                    oInt = operandRaw / VAR64_FRAC_SCALE;
+                    oFrac = operandRaw % VAR64_FRAC_SCALE;
+                }
+            }
+        }
+    }
     if (op == VAR64_OP_ADD) {
         rInt = vInt + oInt;
         rFrac = vFrac + oFrac;
