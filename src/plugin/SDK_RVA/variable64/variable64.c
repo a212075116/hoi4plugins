@@ -922,9 +922,9 @@ static int Var64_TryDebtArithmetic(void* self, void* ctx, int op, const char* op
     if (img == NULL || self == NULL || ctx == NULL) return 0;
     if (op != VAR64_OP_ADD && op != VAR64_OP_SUB) return 0;
     if (!Var64_ReadNameOnly(self, name, sizeof(name))) return 0;
-    if (Var64_IsSixtyFourBitName(name)) return 0;
 
     debt = Var64_FindDebt(name);
+    if (debt == NULL && Var64_IsSixtyFourBitName(name)) return 0;
 
     if (debt != NULL) {
         operandRaw = 0;
@@ -953,14 +953,14 @@ static int Var64_TryDebtArithmetic(void* self, void* ctx, int op, const char* op
         Var64_NormalizeFraction(&debt->debtInt, &debt->debtFrac);
 
         if (debt->debtInt >= 0) {
-            long long back = debt->debtInt;
-            long long backFrac = debt->debtFrac;
-            long long newInt = VAR64_INT32_MIN + back;
-            long long newFrac = backFrac;
-            Var64_NormalizeFraction(&newInt, &newFrac);
-            *(long long*)selfAddr = newInt * VAR64_FRAC_SCALE + newFrac;
+            long long baseRaw = *(long long*)selfAddr;
+            long long newRaw = baseRaw + debt->debtInt * VAR64_FRAC_SCALE + debt->debtFrac;
+            long long newInt = newRaw / VAR64_FRAC_SCALE;
+            long long newFrac = newRaw % VAR64_FRAC_SCALE;
+            *(long long*)selfAddr = newRaw;
             Var64_FormatPartsToText(newInt, newFrac, shown, sizeof(shown));
-            Plugin_Log("[var64] debt %s settled -> %s", name, shown);
+            Plugin_Log("[var64] debt settle %s: baseRaw=%lld debt=%lld/%lld newRaw=%lld shown=%s",
+                       name, baseRaw, debt->debtInt, debt->debtFrac, newRaw, shown);
             Var64_ClearDebt(debt);
         } else {
             Plugin_Log("[var64] debt %s += (%lld, %lld) still owed", name, opInt, opFrac);
@@ -993,7 +993,7 @@ static int Var64_TryDebtArithmetic(void* self, void* ctx, int op, const char* op
     if (resInt < VAR64_INT32_MAX && resInt > VAR64_INT32_MIN) return 0;
 
     lockedRaw = (resInt > 0) ? (VAR64_INT32_MAX * VAR64_FRAC_SCALE + 99999)
-                             : (VAR64_INT32_MIN * VAR64_FRAC_SCALE);
+                             : (VAR64_INT32_MIN * VAR64_FRAC_SCALE + 1);
     {
         Var64DebtRecord* fresh = Var64_NewDebt(name);
         if (fresh == NULL) return 0;
@@ -1003,9 +1003,10 @@ static int Var64_TryDebtArithmetic(void* self, void* ctx, int op, const char* op
     }
     *(long long*)selfAddr = lockedRaw;
     Var64_FormatPartsToText(resInt, resFrac, shown, sizeof(shown));
-    Plugin_Log("[var64] debt %s overflow: true=%s locked=%lld owedInt=%lld",
-               name, shown, lockedRaw / VAR64_FRAC_SCALE,
-               Var64_FindDebt(name) ? Var64_FindDebt(name)->debtInt : 0);
+    Plugin_Log("[var64] debt create %s: curInt=%lld curFrac=%lld opInt=%lld opFrac=%lld resInt=%lld resFrac=%lld locked=%lld debtInt=%lld debtFrac=%lld true=%s",
+               name, curInt, curFrac, opInt, opFrac, resInt, resFrac,
+               lockedRaw, Var64_FindDebt(name) ? Var64_FindDebt(name)->debtInt : 0,
+               Var64_FindDebt(name) ? Var64_FindDebt(name)->debtFrac : 0, shown);
     return 1;
 }
 
