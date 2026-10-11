@@ -21,8 +21,10 @@ typedef void* (__fastcall *Var64LookupFn)(void* scopedVar, void* ctx, void* a3);
 #define RVA_VARSET_VT      0x2775698u
 #define RVA_GAME_SET_EXEC  0x364C60u
 #define VAR64_MARK_OFF     505u
-#define VAR64_HIGH_SUFFIX  "_hi"
-#define VAR64_NAME_LIMIT   15u
+#define VAR64_HIGH_SUFFIX  "_var64h"
+#define VAR64_FRAC_SUFFIX  "_var64f"
+#define VAR64_NAME_LIMIT   40u
+#define VAR64_SSO_LIMIT    15u
 #define VAR64_MARK_SET     0x53343656u
 #define VAR64_MARK_ADD     0x53343641u
 #define VAR64_MARK_LOG     0x5334364Cu
@@ -256,7 +258,7 @@ static int Var64_ResolveGameVariableEx(void* self, void* ctx, long long* outValu
 static char g_var64KnownNames[VAR64_KNOWN_NAME_LIMIT][VAR64_KNOWN_NAME_BYTES];
 static int g_var64KnownNameCount = 0;
 
-static void Var64_RememberSixtyFourBitName(const char* name)
+static void Var64_RememberSixtyFourBitNameSrc(const char* name, int src)
 {
     size_t n;
     int i;
@@ -270,7 +272,7 @@ static void Var64_RememberSixtyFourBitName(const char* name)
     if (g_var64KnownNameCount >= VAR64_KNOWN_NAME_LIMIT) return;
     memcpy(g_var64KnownNames[g_var64KnownNameCount], name, n + 1);
     ++g_var64KnownNameCount;
-    Plugin_Log("[v64lang] registered 64-bit name [%s] (total=%d)", name, g_var64KnownNameCount);
+    Plugin_Log("[v64lang] registered [%s] src=%d (total=%d)", name, src, g_var64KnownNameCount);
 }
 
 static int Var64_IsSixtyFourBitName(const char* name)
@@ -308,13 +310,10 @@ static int Var64_MakeHighPartName(const char* name, char* out, unsigned int outS
 
     if (name == NULL || out == NULL) return 0;
     n = strlen(name);
-    if (n == 0 || n + 4 > outSize) return 0;
-    if (n + 3 > VAR64_NAME_LIMIT) return 0;
+    if (n == 0 || n + sizeof(VAR64_HIGH_SUFFIX) > outSize) return 0;
+    if (n + sizeof(VAR64_HIGH_SUFFIX) - 1 > VAR64_NAME_LIMIT) return 0;
     memcpy(out, name, n);
-    out[n] = '_';
-    out[n + 1] = 'h';
-    out[n + 2] = 'i';
-    out[n + 3] = 0;
+    memcpy(out + n, VAR64_HIGH_SUFFIX, sizeof(VAR64_HIGH_SUFFIX));
     return 1;
 }
 
@@ -324,14 +323,14 @@ static int Var64_MakeFracPartName(const char* name, char* out, unsigned int outS
 
     if (name == NULL || out == NULL) return 0;
     n = strlen(name);
-    if (n == 0 || n + 3 > outSize) return 0;
-    if (n + 2 > VAR64_NAME_LIMIT) return 0;
+    if (n == 0 || n + sizeof(VAR64_FRAC_SUFFIX) > outSize) return 0;
+    if (n + sizeof(VAR64_FRAC_SUFFIX) - 1 > VAR64_NAME_LIMIT) return 0;
     memcpy(out, name, n);
-    out[n] = '_';
-    out[n + 1] = 'f';
-    out[n + 2] = 0;
+    memcpy(out + n, VAR64_FRAC_SUFFIX, sizeof(VAR64_FRAC_SUFFIX));
     return 1;
 }
+
+static char* g_var64HeapName = NULL;
 
 static unsigned char* Var64_ResolveAddressByName(void* self, void* ctx, const char* name)
 {
@@ -348,9 +347,19 @@ static unsigned char* Var64_ResolveAddressByName(void* self, void* ctx, const ch
     nm = p + VAR64_NAME_OFF;
     if (!ConsoleCmd_IsReadable(nm, 32)) return NULL;
     memcpy(saved, nm, sizeof(saved));
-    memcpy(nm, name, n + 1);
+    if (n <= VAR64_SSO_LIMIT) {
+        memcpy(nm, name, n + 1);
+        *(unsigned long long*)(nm + 24) = (unsigned long long)VAR64_SSO_LIMIT;
+    } else {
+        if (g_var64HeapName == NULL) {
+            g_var64HeapName = (char*)HeapAlloc(GetProcessHeap(), 0, 128);
+            if (g_var64HeapName == NULL) return NULL;
+        }
+        memcpy(g_var64HeapName, name, n + 1);
+        *(char**)(nm) = g_var64HeapName;
+        *(unsigned long long*)(nm + 24) = (unsigned long long)127;
+    }
     *(unsigned long long*)(nm + 16) = (unsigned long long)n;
-    *(unsigned long long*)(nm + 24) = (unsigned long long)VAR64_NAME_LIMIT;
     addr = NULL;
     if (ConsoleCmd_IsReadable(img + RVA_VAR_LOOKUP, 16)) {
         addr = (unsigned char*)((Var64LookupFn)(img + RVA_VAR_LOOKUP))
@@ -375,7 +384,7 @@ static unsigned char* Var64_ResolveAddressByName(void* self, void* ctx, const ch
 #define VAR64_OP_SUB 1
 #define VAR64_OP_MUL 2
 #define VAR64_OP_DIV 3
-#define VAR64_FRAC_SUFFIX "_f"
+
 #define VAR64_FRAC_SCALE  100000LL
 #define VAR64_FRAC_BIAS   100000LL
 #define VAR64_DEC_DIGITS 24
@@ -594,7 +603,7 @@ static long long __fastcall Var64_DoSetVariable64(void* self, void* ctx)
         return 0;
     }
     Var64_StoreSplit64(self, ctx, name, addr, delta);
-    Var64_RememberSixtyFourBitName(name);
+    Var64_RememberSixtyFourBitNameSrc(name, 1);
     Var64_FormatPartsToText(delta / VAR64_FRAC_SCALE, delta % VAR64_FRAC_SCALE, shown, sizeof(shown));
     Plugin_Log("[var64] set_variable64 %s = %s", name, shown);
     return delta;
@@ -615,7 +624,7 @@ static long long __fastcall Var64_DoAddToVariable64(void* self, void* ctx)
     before = Var64_LoadSplit64(self, ctx, name, addr, NULL, NULL);
     after = before + delta;
     Var64_StoreSplit64(self, ctx, name, addr, after);
-    Var64_RememberSixtyFourBitName(name);
+    Var64_RememberSixtyFourBitNameSrc(name, 2);
     {
         char b[48];
         char d[48];
@@ -711,7 +720,7 @@ static long long __fastcall Var64_DoModuloVariable64(void* self, void* ctx)
     }
     vInt = vInt % mInt;
     Var64_StoreSplit64(self, ctx, name, addr, vInt * VAR64_FRAC_SCALE);
-    Var64_RememberSixtyFourBitName(name);
+    Var64_RememberSixtyFourBitNameSrc(name, 3);
     Plugin_Log("[var64] modulo_variable64 %s: %s mod %s = %lld", name, shownA, shownB, vInt);
     return vInt * VAR64_FRAC_SCALE;
 }
@@ -734,7 +743,7 @@ static long long __fastcall Var64_DoRoundVariable64(void* self, void* ctx)
     if (vFrac >= 50000) ++vInt;
     else if (vFrac <= -50000) --vInt;
     Var64_StoreSplit64(self, ctx, name, addr, vInt * VAR64_FRAC_SCALE);
-    Var64_RememberSixtyFourBitName(name);
+    Var64_RememberSixtyFourBitNameSrc(name, 4);
     Plugin_Log("[var64] round_variable64 %s = %lld", name, vInt);
     return vInt * VAR64_FRAC_SCALE;
 }
@@ -760,7 +769,6 @@ static long long Var64_ApplyClamp(void* self, void* ctx, int isUpper)
         if (result < boundRaw) result = boundRaw;
     }
     Var64_StoreSplit64(self, ctx, name, addr, result);
-    Var64_RememberSixtyFourBitName(name);
     Var64_FormatPartsToText(result / VAR64_FRAC_SCALE, result % VAR64_FRAC_SCALE, shown, sizeof(shown));
     Plugin_Log("[var64] clamp%s %s = %s", isUpper ? "-max" : "-min", name, shown);
     return result;
@@ -957,6 +965,16 @@ static void Var64_WriteTrueRaw(void* self, void* ctx, const char* name,
     if (addr == NULL) return;
     if (trueRaw > VAR64_TRUE_CLAMP) trueRaw = VAR64_TRUE_CLAMP;
     if (trueRaw < -VAR64_TRUE_CLAMP) trueRaw = -VAR64_TRUE_CLAMP;
+
+    if (Var64_IsSixtyFourBitName(name)) {
+        if (self != NULL && ctx != NULL) {
+            Var64_StoreSplit64(self, ctx, name, addr, trueRaw);
+        } else {
+            *(long long*)addr = trueRaw;
+        }
+        return;
+    }
+
     vInt = trueRaw / VAR64_FRAC_SCALE;
     vFrac = trueRaw % VAR64_FRAC_SCALE;
 
@@ -968,7 +986,7 @@ static void Var64_WriteTrueRaw(void* self, void* ctx, const char* name,
         }
         if (self != NULL && ctx != NULL) {
             Var64_StoreSplit64(self, ctx, name, addr, trueRaw);
-            Var64_RememberSixtyFourBitName(name);
+            Var64_RememberSixtyFourBitNameSrc(name, 6);
         } else {
             *(long long*)addr = trueRaw;
         }
@@ -1012,9 +1030,14 @@ static int Var64_TryDebtArithmetic(void* self, void* ctx, int op, const char* op
 
     if (img == NULL || self == NULL || ctx == NULL) return 0;
     if (!Var64_ReadNameOnly(self, name, sizeof(name))) return 0;
-    if (Var64_IsSixtyFourBitName(name) && Var64_FindDebt(name) == NULL) return 0;
 
     debt = Var64_FindDebt(name);
+    if (debt == NULL
+        && !Var64_IsSixtyFourBitName(name)
+        && !(Var64_ReadOperandName(self, operandName, sizeof(operandName))
+             && Var64_IsSixtyFourBitName(operandName))) {
+        return 0;
+    }
     if (op != VAR64_OP_ADD && op != VAR64_OP_SUB) debt = NULL;
 
     if (debt != NULL) {
@@ -1869,9 +1892,9 @@ static void* __fastcall Var64_VarTextBridgeDetour(void* ctx, const char* text,
         return g_var64OrigVarTextHandler(ctx, text, textEnd, out, depth);
     }
     memcpy(hiName, name, n);
-    memcpy(hiName + n, VAR64_HIGH_SUFFIX, 4);
+    memcpy(hiName + n, VAR64_HIGH_SUFFIX, sizeof(VAR64_HIGH_SUFFIX));
     memcpy(fracName, name, n);
-    memcpy(fracName + n, VAR64_FRAC_SUFFIX, 3);
+    memcpy(fracName + n, VAR64_FRAC_SUFFIX, sizeof(VAR64_FRAC_SUFFIX));
     known = Var64_IsSixtyFourBitName(name);
 
     if (!Var64_LangResolveSlotValue(ctx, fracName, &fracSlot)) {
@@ -1879,9 +1902,6 @@ static void* __fastcall Var64_VarTextBridgeDetour(void* ctx, const char* text,
         fracSlot = VAR64_FRAC_BIAS;
     } else if (!known && fracSlot == 0) {
         return g_var64OrigVarTextHandler(ctx, text, textEnd, out, depth);
-    }
-    if (!known) {
-        Var64_RememberSixtyFourBitName(name);
     }
     if (!Var64_LangResolveSlotValue(ctx, name, &loSlot)
         || !Var64_LangResolveSlotValue(ctx, hiName, &hiSlot)) {
