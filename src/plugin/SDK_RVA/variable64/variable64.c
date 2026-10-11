@@ -364,6 +364,8 @@ static unsigned char* Var64_ResolveAddressByName(void* self, void* ctx, const ch
 #define VAR64_SLOT_SCALE  100000LL
 #define RVA_VARCLAMP_ENTRYVT 0x277C680u
 #define RVA_VARCLAMP_EXEC    0x0034F750u
+#define RVA_VAR_ROUND_EXEC   0x00360250u
+#define RVA_VAR_MODULO_EXEC  0x0047D110u
 #define RVA_VAR_ADD_EXEC     0x0034C760u
 #define RVA_VAR_SUB_EXEC     0x00366BC0u
 #define RVA_VAR_MUL_EXEC     0x0035B9E0u
@@ -783,11 +785,16 @@ static int Var64_HasFracComponent(void* self, void* ctx, const char* name)
 {
     char fracName[48];
     unsigned char* addr;
+    long long slot;
 
     if (!Var64_MakeFracPartName(name, fracName, sizeof(fracName))) return 0;
     addr = Var64_ResolveAddressByName(self, ctx, fracName);
     if (addr == NULL) return 0;
-    return (*(long long*)addr != 0) ? 1 : 0;
+    if (!ConsoleCmd_IsReadable(addr, 8)) return 0;
+    slot = *(long long*)addr;
+    if (slot < 100000LL * VAR64_SLOT_SCALE) return 0;
+    if (slot >= 200000LL * VAR64_SLOT_SCALE) return 0;
+    return 1;
 }
 
 static void Var64_NormalizeFraction(long long* outInt, long long* outFrac)
@@ -1258,6 +1265,89 @@ static long long __fastcall Var64_DivDetour(void* self, void* ctx)
 }
 
 static Var64GameSetExecFn g_var64OrigClampExec = NULL;
+static Var64GameSetExecFn g_var64OrigRoundExec = NULL;
+static Var64GameSetExecFn g_var64OrigModuloExec = NULL;
+
+static long long __fastcall Var64_RoundDetourUnused(void* self, void* ctx)
+{
+    unsigned char* img = Var64_Image();
+    char name[40];
+    char shown[48];
+    unsigned char* addr;
+    long long curRaw;
+    long long vInt;
+    long long vFrac;
+
+    if (img == NULL || self == NULL || ctx == NULL) goto vanilla;
+    if (!Var64_ReadNameOnly(self, name, sizeof(name))) goto vanilla;
+    if (!Var64_IsSixtyFourBitName(name) && Var64_FindDebt(name) == NULL) goto vanilla;
+
+    addr = ((Var64LookupFn)(img + RVA_VAR_LOOKUP))((void*)((unsigned char*)self + 88), ctx, NULL);
+    if (addr == NULL) goto vanilla;
+
+    curRaw = Var64_ReadTrueRaw(self, ctx, name, addr);
+    vInt = curRaw / VAR64_FRAC_SCALE;
+    vFrac = curRaw % VAR64_FRAC_SCALE;
+    if (vFrac >= VAR64_FRAC_SCALE / 2) ++vInt;
+    else if (vFrac <= -(VAR64_FRAC_SCALE / 2)) --vInt;
+    Var64_WriteTrueRaw(self, ctx, name, addr, vInt * VAR64_FRAC_SCALE);
+    Var64_FormatPartsToText(vInt, 0, shown, sizeof(shown));
+    Plugin_Log("[var64] round_variable %s = %s", name, shown);
+    return 0;
+
+vanilla:
+    if (g_var64OrigRoundExec != NULL) return g_var64OrigRoundExec(self, ctx);
+    return 0;
+}
+
+static long long __fastcall Var64_ModuloDetourUnused(void* self, void* ctx)
+{
+    unsigned char* img = Var64_Image();
+    char name[40];
+    char shown[48];
+    unsigned char* addr;
+    long long curRaw;
+    long long modRaw = 0;
+    long long curInt;
+    long long modInt;
+    long long result;
+
+    if (img == NULL || self == NULL || ctx == NULL) goto vanilla;
+    if (!Var64_ReadNameOnly(self, name, sizeof(name))) goto vanilla;
+    if (!Var64_IsSixtyFourBitName(name) && Var64_FindDebt(name) == NULL) goto vanilla;
+
+    addr = ((Var64LookupFn)(img + RVA_VAR_LOOKUP))((void*)((unsigned char*)self + 32), ctx, NULL);
+    if (addr == NULL) goto vanilla;
+
+    if (!Var64_ReadParamValue(self, ctx, 240u, 248u, &modRaw)) goto vanilla;
+    if (Var64_ReadOperandNameAt(self, 240u, name, sizeof(name))
+        && Var64_IsSixtyFourBitName(name)) {
+        unsigned char* oa = Var64_ResolveAddressByName(self, ctx, name);
+        if (oa != NULL) modRaw = Var64_LoadSplit64(self, ctx, name, oa, NULL, NULL);
+    }
+    Var64_ReadNameOnly(self, name, sizeof(name));
+
+    curRaw = Var64_ReadTrueRaw(self, ctx, name, addr);
+    curInt = curRaw / VAR64_FRAC_SCALE;
+    modInt = modRaw / VAR64_FRAC_SCALE;
+    if (modInt <= 0) {
+        Plugin_Log("[var64] modulo_variable %s: modulo not positive, left unchanged", name);
+        return 0;
+    }
+    if (curInt < 0) {
+        Plugin_Log("[var64] modulo_variable %s: value is negative, left unchanged", name);
+        return 0;
+    }
+    result = curInt % modInt;
+    Var64_WriteTrueRaw(self, ctx, name, addr, result * VAR64_FRAC_SCALE);
+    Var64_FormatPartsToText(result, 0, shown, sizeof(shown));
+    Plugin_Log("[var64] modulo_variable %s = %s", name, shown);
+    return 0;
+
+vanilla:
+    if (g_var64OrigModuloExec != NULL) return g_var64OrigModuloExec(self, ctx);
+    return 0;
+}
 
 static int Var64_ReadParamValue(void* self, void* ctx, unsigned int valueOff,
                                unsigned int flagOff, long long* out)
@@ -2025,7 +2115,7 @@ static void Var64_InstallArithmeticHooks(void)
         g_var64OrigClampExec = (Var64GameSetExecFn)InlineHook_Install(img + RVA_VARCLAMP_EXEC,
                                                                      (void*)Var64_ClampDetour);
     }
-    Plugin_Log("[var64] arith hook: add=%p sub=%p mul=%p div=%p clamp=%p",
+    Plugin_Log("[var64] arith hook: add=%p sub=%p mul=%p div=%p clamp=%p (round/modulo disabled: wrong name field)",
                (void*)g_var64OrigAddExec, (void*)g_var64OrigSubExec,
                (void*)g_var64OrigMulExec, (void*)g_var64OrigDivExec,
                (void*)g_var64OrigClampExec);
