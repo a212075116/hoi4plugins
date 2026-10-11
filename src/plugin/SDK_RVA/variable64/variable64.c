@@ -26,6 +26,10 @@ typedef void* (__fastcall *Var64LookupFn)(void* scopedVar, void* ctx, void* a3);
 #define VAR64_MARK_SET     0x53343656u
 #define VAR64_MARK_ADD     0x53343641u
 #define VAR64_MARK_LOG     0x5334364Cu
+#define VAR64_MARK_MOD     0x5334364Du
+#define VAR64_MARK_RND     0x53343652u
+#define VAR64_MARK_CLP     0x53343643u
+#define VAR64_MARK_CLH     0x53343648u
 #define VAR64_NAME_OFF     200u
 #define VAR64_SUBOBJ_OFF   88u
 #define VAR64_PARAM_OFF    408u
@@ -184,6 +188,26 @@ static void* __fastcall Var64_AddToVariable64Factory(void)
 static void* __fastcall Var64_LogVariable64Factory(void)
 {
     return Var64_MarkedFactory(VAR64_MARK_LOG);
+}
+
+static void* __fastcall Var64_ModuloVariable64Factory(void)
+{
+    return Var64_MarkedFactory(VAR64_MARK_MOD);
+}
+
+static void* __fastcall Var64_RoundVariable64Factory(void)
+{
+    return Var64_MarkedFactory(VAR64_MARK_RND);
+}
+
+static void* __fastcall Var64_ClampVariable64Factory(void)
+{
+    return Var64_MarkedFactory(VAR64_MARK_CLP);
+}
+
+static void* __fastcall Var64_ClampHighVariable64Factory(void)
+{
+    return Var64_MarkedFactory(VAR64_MARK_CLH);
 }
 
 static int Var64_ResolveGameVariable(void* self, void* ctx, long long* outValue,
@@ -639,6 +663,97 @@ static void Var64_ClearHighPartAfterVanillaSet(void* self, void* ctx)
     Plugin_Log("[var64] vanilla set reclaimed name [%s]", name);
 }
 
+static long long __fastcall Var64_DoModuloVariable64(void* self, void* ctx)
+{
+    long long modulusRaw = 0;
+    unsigned char* addr = NULL;
+    char name[40];
+    char shownA[48];
+    char shownB[48];
+    long long currentRaw;
+    long long vInt;
+    long long mInt;
+
+    if (!Var64_ResolveGameVariable(self, ctx, &modulusRaw, &addr, name, sizeof(name))) {
+        Plugin_Log("[var64] modulo_variable64 failed to resolve");
+        return 0;
+    }
+    currentRaw = Var64_LoadSplit64(self, ctx, name, addr, NULL, NULL);
+    vInt = currentRaw / VAR64_FRAC_SCALE;
+    mInt = modulusRaw / VAR64_FRAC_SCALE;
+    Var64_FormatPartsToText(vInt, 0, shownA, sizeof(shownA));
+    Var64_FormatPartsToText(mInt, 0, shownB, sizeof(shownB));
+    if (mInt == 0) {
+        Plugin_Log("[var64] modulo_variable64 %s: modulus is zero (%s), left unchanged", name, shownA);
+        return currentRaw;
+    }
+    vInt = vInt % mInt;
+    Var64_StoreSplit64(self, ctx, name, addr, vInt * VAR64_FRAC_SCALE);
+    Var64_RememberSixtyFourBitName(name);
+    Plugin_Log("[var64] modulo_variable64 %s: %s mod %s = %lld", name, shownA, shownB, vInt);
+    return vInt * VAR64_FRAC_SCALE;
+}
+
+static long long __fastcall Var64_DoRoundVariable64(void* self, void* ctx)
+{
+    unsigned char* addr = NULL;
+    char name[40];
+    long long currentRaw;
+    long long vInt;
+    long long vFrac;
+
+    if (!Var64_ResolveGameVariable(self, ctx, NULL, &addr, name, sizeof(name))) {
+        Plugin_Log("[var64] round_variable64 failed to resolve");
+        return 0;
+    }
+    currentRaw = Var64_LoadSplit64(self, ctx, name, addr, NULL, NULL);
+    vInt = currentRaw / VAR64_FRAC_SCALE;
+    vFrac = currentRaw % VAR64_FRAC_SCALE;
+    if (vFrac >= 50000) ++vInt;
+    else if (vFrac <= -50000) --vInt;
+    Var64_StoreSplit64(self, ctx, name, addr, vInt * VAR64_FRAC_SCALE);
+    Var64_RememberSixtyFourBitName(name);
+    Plugin_Log("[var64] round_variable64 %s = %lld", name, vInt);
+    return vInt * VAR64_FRAC_SCALE;
+}
+
+static long long Var64_ApplyClamp(void* self, void* ctx, int isUpper)
+{
+    long long boundRaw = 0;
+    unsigned char* addr = NULL;
+    char name[40];
+    char shown[48];
+    long long currentRaw;
+    long long result;
+
+    if (!Var64_ResolveGameVariable(self, ctx, &boundRaw, &addr, name, sizeof(name))) {
+        Plugin_Log("[var64] clamp failed to resolve");
+        return 0;
+    }
+    currentRaw = Var64_LoadSplit64(self, ctx, name, addr, NULL, NULL);
+    result = currentRaw;
+    if (isUpper) {
+        if (result > boundRaw) result = boundRaw;
+    } else {
+        if (result < boundRaw) result = boundRaw;
+    }
+    Var64_StoreSplit64(self, ctx, name, addr, result);
+    Var64_RememberSixtyFourBitName(name);
+    Var64_FormatPartsToText(result / VAR64_FRAC_SCALE, result % VAR64_FRAC_SCALE, shown, sizeof(shown));
+    Plugin_Log("[var64] clamp%s %s = %s", isUpper ? "-max" : "-min", name, shown);
+    return result;
+}
+
+static long long __fastcall Var64_DoClampVariable64(void* self, void* ctx)
+{
+    return Var64_ApplyClamp(self, ctx, 0);
+}
+
+static long long __fastcall Var64_DoClampHighVariable64(void* self, void* ctx)
+{
+    return Var64_ApplyClamp(self, ctx, 1);
+}
+
 static long long __fastcall Var64_GameSyntaxDetour(void* self, void* ctx)
 {
     unsigned int mark = 0;
@@ -650,6 +765,10 @@ static long long __fastcall Var64_GameSyntaxDetour(void* self, void* ctx)
     if (mark == VAR64_MARK_SET) return Var64_DoSetVariable64(self, ctx);
     if (mark == VAR64_MARK_ADD) return Var64_DoAddToVariable64(self, ctx);
     if (mark == VAR64_MARK_LOG) return Var64_DoLogVariable64(self, ctx);
+    if (mark == VAR64_MARK_MOD) return Var64_DoModuloVariable64(self, ctx);
+    if (mark == VAR64_MARK_RND) return Var64_DoRoundVariable64(self, ctx);
+    if (mark == VAR64_MARK_CLP) return Var64_DoClampVariable64(self, ctx);
+    if (mark == VAR64_MARK_CLH) return Var64_DoClampHighVariable64(self, ctx);
     if (g_var64OrigGameSetExec == NULL) return 0;
     result = g_var64OrigGameSetExec(self, ctx);
     Var64_ClearHighPartAfterVanillaSet(self, ctx);
@@ -1284,10 +1403,30 @@ EFF_DEF(gamelogvar64, "log_variable64",
         "Logs a 64-bit script variable in full precision. Same syntax as set_variable.",
         "EFFECT_LOG_VARIABLE64", &ExecVar64GameSyntax)
 
+EFF_DEF(gamemodvar64, "modulo_variable64",
+        "Sets a 64-bit script variable to the remainder of its division by the value.",
+        "EFFECT_MODULO_VARIABLE64", &ExecVar64GameSyntax)
+
+EFF_DEF(gamerndvar64, "round_variable64",
+        "Rounds a 64-bit script variable to the nearest integer.",
+        "EFFECT_ROUND_VARIABLE64", &ExecVar64GameSyntax)
+
+EFF_DEF(gameclpvar64, "clamp_variable64",
+        "Raises a 64-bit script variable to the value if it is below it.",
+        "EFFECT_CLAMP_VARIABLE64", &ExecVar64GameSyntax)
+
+EFF_DEF(gameclhvar64, "clamp_variable64_max",
+        "Lowers a 64-bit script variable to the value if it is above it.",
+        "EFFECT_CLAMP_VARIABLE64_MAX", &ExecVar64GameSyntax)
+
 static EffectDef* g_var64EffectDefs[] = {
     &gamesetvar64_def,
     &gameaddvar64_def,
-    &gamelogvar64_def
+    &gamelogvar64_def,
+    &gamemodvar64_def,
+    &gamerndvar64_def,
+    &gameclpvar64_def,
+    &gameclhvar64_def
 };
 
 #define VAR64_EFFECT_COUNT (int)(sizeof(g_var64EffectDefs) / sizeof(g_var64EffectDefs[0]))
@@ -1300,10 +1439,18 @@ int Var64_RegisterEffects(void)
     gamesetvar64_fill();
     gameaddvar64_fill();
     gamelogvar64_fill();
+    gamemodvar64_fill();
+    gamerndvar64_fill();
+    gameclpvar64_fill();
+    gameclhvar64_fill();
 
     gamesetvar64_def.factory = Var64_SetVariable64Factory;
     gameaddvar64_def.factory = Var64_AddToVariable64Factory;
     gamelogvar64_def.factory = Var64_LogVariable64Factory;
+    gamemodvar64_def.factory = Var64_ModuloVariable64Factory;
+    gamerndvar64_def.factory = Var64_RoundVariable64Factory;
+    gameclpvar64_def.factory = Var64_ClampVariable64Factory;
+    gameclhvar64_def.factory = Var64_ClampHighVariable64Factory;
 
     n = Effect_RegistryRegisterAll(g_var64EffectDefs, VAR64_EFFECT_COUNT);
 
@@ -1318,9 +1465,22 @@ int Var64_RegisterEffects(void)
         if (gamelogvar64_def.state == EFF_STATE_OK) {
             gamelogvar64_def.entryVt[0] = *(void**)(img + RVA_VARSET_ENTRYVT);
         }
-        Plugin_Log("[var64] game-syntax entryVt: set=%p add=%p log=%p",
+        if (gamemodvar64_def.state == EFF_STATE_OK) {
+            gamemodvar64_def.entryVt[0] = *(void**)(img + RVA_VARSET_ENTRYVT);
+        }
+        if (gamerndvar64_def.state == EFF_STATE_OK) {
+            gamerndvar64_def.entryVt[0] = *(void**)(img + RVA_VARSET_ENTRYVT);
+        }
+        if (gameclpvar64_def.state == EFF_STATE_OK) {
+            gameclpvar64_def.entryVt[0] = *(void**)(img + RVA_VARSET_ENTRYVT);
+        }
+        if (gameclhvar64_def.state == EFF_STATE_OK) {
+            gameclhvar64_def.entryVt[0] = *(void**)(img + RVA_VARSET_ENTRYVT);
+        }
+        Plugin_Log("[var64] entryVt set=%p add=%p log=%p mod=%p rnd=%p clp=%p",
                    gamesetvar64_def.entryVt[0], gameaddvar64_def.entryVt[0],
-                   gamelogvar64_def.entryVt[0]);
+                   gamelogvar64_def.entryVt[0], gamemodvar64_def.entryVt[0],
+                   gamerndvar64_def.entryVt[0], gameclpvar64_def.entryVt[0]);
     }
 
     Var64_InstallGameSyntaxHook();
