@@ -1938,9 +1938,14 @@ static int Var64_LangResolveSlotValue(void* ctx, const char* name, long long* ou
     if (!ConsoleCmd_IsReadable(vtable, 0x40)) return 0;
 
     memset(nameField, 0, sizeof(nameField));
-    memcpy(nameField, name, n);
+    if (n <= VAR64_SSO_LIMIT) {
+        memcpy(nameField, name, n + 1);
+        *(unsigned long long*)(nameField + 24) = (unsigned long long)VAR64_SSO_LIMIT;
+    } else {
+        *(const char**)nameField = name;
+        *(unsigned long long*)(nameField + 24) = (unsigned long long)n;
+    }
     *(unsigned long long*)(nameField + 16) = (unsigned long long)n;
-    *(unsigned long long*)(nameField + 24) = 15ULL;
 
     ((Var64CtxResolveFn)(*(void**)((char*)vtable + 0x20)))(ctx, &resolved, nameField);
     *outValue = (long long)(intptr_t)resolved / VAR64_SLOT_SCALE;

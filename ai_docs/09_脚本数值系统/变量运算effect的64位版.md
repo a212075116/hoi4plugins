@@ -1,5 +1,8 @@
 # 变量运算 effect 的 64 位版本 (modulo / round / clamp)
 
+> 状态校正（2026-10-12）：独立 `_64` effect 与原版同名 effect 是不同入口。原版 clamp 的 min/max 已接入并在本次 8 项回归通过；round/modulo 原版同名 hook 仍停用。自定义 clamp_variable64 仍采用 value 边界参数。
+> 当前结论统一见《当前状态与复现.md》；下文保留历史过程，不能作为当前待办清单。
+
 > 状态: **已实现并实测通过。** 记录时间 2026-10-11 19:22:29
 > 依据: 本文所有结论均来自插件运行日志 (test/reports/ 下的报告) 与 IDA 反编译。
 
