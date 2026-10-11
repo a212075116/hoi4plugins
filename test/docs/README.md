@@ -157,3 +157,12 @@ spawn 出来的游戏进程会随宿主 Python 进程结束被一起终止，现
 
 **要用某个历史脚本时**：先在 `reports/` 或 `ai_docs/` 里搜它对应的结论，
 再决定是否值得翻出来；**不要直接照着它的名字猜用途**。
+
+## variable64 固定种子抗压入口（2026-10-12）
+
+- `modules/effect/stress_variable64.py PHASE --extended`：516 项断言，含重启读档、跨国家同名、2560 次交替运算、192 个变量、70 笔同时挂账、边界与 clear。必须先构建；该脚本部署构建产物并重启游戏。PHASE 使用新名字，旧报告不覆盖。
+- `modules/effect/test_var64_identity.py SOURCE OUTPUT_DIR`：从 SOURCE 提取实际身份/查表函数，原生夹具 8 项。
+- `modules/effect/test_var64_raw_math.py SOURCE OUTPUT_DIR`：实际限幅函数与 Python 整数 oracle 对比 10676 组输入。
+- `modules/effect/test_var64_language_name.py SOURCE OUTPUT_DIR`：语言桥接名字布局 6 项。
+
+原生夹具依赖本机 VS x64 编译环境。详细边界、性能开销和证据见 `ai_docs/09_脚本数值系统/读档身份与抗压验证.md`。

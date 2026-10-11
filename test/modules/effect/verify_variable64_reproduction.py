@@ -36,9 +36,10 @@ write=re.findall(r'REPRO WRITE (.*)',g)
 rg=(OUT/'reload_game.log').read_text(encoding='utf-8',errors='replace') if (OUT/'reload_game.log').exists() else ''
 read=re.findall(r'REPRO READ (.*)',rg)
 want='marker=12026 big=92233720368546.05 small=1.5 neg=-1.5 zero=0'
-if not write or write[-1]!=want:failures.append('write fixture')
-if not read or read[-1]!=want:failures.append('reload fixture')
-result={'rows':rows,'pollution':pollution,'write':write,'reload':read,'failures':failures}
+if '--regression-only' not in sys.argv:
+    if not write or write[-1]!=want:failures.append('write fixture')
+    if not read or read[-1]!=want:failures.append('reload fixture')
+result={'rows':rows,'pollution':pollution,'write':write,'reload':read,'failures':failures,'disabled_checks':['write fixture','reload fixture'] if '--regression-only' in sys.argv else []}
 (OUT/'comparison.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
 print(json.dumps({'checks':len(rows),'passed':sum(r['ok'] for r in rows),'pollution':len(pollution),'write':write,'reload':read,'failures':failures},ensure_ascii=False,indent=2))
-raise SystemExit(bool([f for f in failures if f not in ('write fixture','reload fixture')]) if '--regression-only' in sys.argv else bool(failures))
+raise SystemExit(bool(failures))
