@@ -280,6 +280,7 @@ static unsigned char* Var64_ResolveAddressByName(void* self, void* ctx, const ch
     unsigned char* p = (unsigned char*)self;
     unsigned char* nm;
     unsigned char* addr;
+    unsigned char saved[32];
     size_t n;
 
     if (img == NULL || p == NULL || name == NULL) return NULL;
@@ -287,12 +288,16 @@ static unsigned char* Var64_ResolveAddressByName(void* self, void* ctx, const ch
     if (n == 0 || n > VAR64_NAME_LIMIT) return NULL;
     nm = p + VAR64_NAME_OFF;
     if (!ConsoleCmd_IsReadable(nm, 32)) return NULL;
+    memcpy(saved, nm, sizeof(saved));
     memcpy(nm, name, n + 1);
     *(unsigned long long*)(nm + 16) = (unsigned long long)n;
     *(unsigned long long*)(nm + 24) = (unsigned long long)VAR64_NAME_LIMIT;
-    if (!ConsoleCmd_IsReadable(img + RVA_VAR_LOOKUP, 16)) return NULL;
-    addr = (unsigned char*)((Var64LookupFn)(img + RVA_VAR_LOOKUP))
-               ((void*)(p + VAR64_SUBOBJ_OFF), ctx, NULL);
+    addr = NULL;
+    if (ConsoleCmd_IsReadable(img + RVA_VAR_LOOKUP, 16)) {
+        addr = (unsigned char*)((Var64LookupFn)(img + RVA_VAR_LOOKUP))
+                   ((void*)(p + VAR64_SUBOBJ_OFF), ctx, NULL);
+    }
+    memcpy(nm, saved, sizeof(saved));
     if (addr == NULL || !ConsoleCmd_IsReadable(addr, 8)) return NULL;
     return addr;
 }
