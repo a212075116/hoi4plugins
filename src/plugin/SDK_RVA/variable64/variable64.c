@@ -879,9 +879,9 @@ static void Var64_ClearDebt(Var64DebtRecord* rec)
     rec->debtFrac = 0;
 }
 
-static int Var64_ReadOperandLiteral(void* self, long long* out)
+static int Var64_ReadOperandLiteralAt(void* self, unsigned int paramOff, long long* out)
 {
-    unsigned char* pd = (unsigned char*)self + 296;
+    unsigned char* pd = (unsigned char*)self + paramOff;
 
     if (out == NULL) return 0;
     *out = 0;
@@ -891,9 +891,15 @@ static int Var64_ReadOperandLiteral(void* self, long long* out)
     return 1;
 }
 
-static int Var64_ReadOperandName(void* self, char* out, unsigned int outSize)
+static int Var64_ReadOperandLiteral(void* self, long long* out)
 {
-    unsigned char* pd = (unsigned char*)self + 296;
+    return Var64_ReadOperandLiteralAt(self, 296u, out);
+}
+
+static int Var64_ReadOperandNameAt(void* self, unsigned int paramOff,
+                                   char* out, unsigned int outSize)
+{
+    unsigned char* pd = (unsigned char*)self + paramOff;
     unsigned long long size;
     unsigned long long cap;
     unsigned char* src;
@@ -912,21 +918,30 @@ static int Var64_ReadOperandName(void* self, char* out, unsigned int outSize)
     return 1;
 }
 
+static int Var64_ReadOperandName(void* self, char* out, unsigned int outSize)
+{
+    return Var64_ReadOperandNameAt(self, 296u, out, outSize);
+}
+
 #define VAR64_TRUE_CLAMP 9223372036854775807LL
 
-static long long Var64_ReadTrueRaw(const char* name, unsigned char* addr)
+static long long Var64_ReadTrueRaw(void* self, void* ctx, const char* name, unsigned char* addr)
 {
     Var64DebtRecord* d;
     long long slot;
 
     if (addr == NULL) return 0;
+    if (self != NULL && ctx != NULL && Var64_IsSixtyFourBitName(name)) {
+        return Var64_LoadSplit64(self, ctx, name, addr, NULL, NULL);
+    }
     slot = *(long long*)addr;
     d = Var64_FindDebt(name);
     if (d == NULL) return slot;
     return slot + d->debtInt * VAR64_FRAC_SCALE + d->debtFrac;
 }
 
-static void Var64_WriteTrueRaw(const char* name, unsigned char* addr, long long trueRaw)
+static void Var64_WriteTrueRaw(void* self, void* ctx, const char* name,
+                              unsigned char* addr, long long trueRaw)
 {
     long long vInt;
     long long vFrac;
@@ -939,11 +954,16 @@ static void Var64_WriteTrueRaw(const char* name, unsigned char* addr, long long 
     vFrac = trueRaw % VAR64_FRAC_SCALE;
 
     if (vInt >= VAR64_INT32_MIN && vInt <= VAR64_INT32_MAX) {
-        *(long long*)addr = trueRaw;
         d = Var64_FindDebt(name);
         if (d != NULL) {
             Var64_ClearDebt(d);
             Plugin_Log("[var64] debt %s fully repaid, back in 32-bit range", name);
+        }
+        if (self != NULL && ctx != NULL) {
+            Var64_StoreSplit64(self, ctx, name, addr, trueRaw);
+            Var64_RememberSixtyFourBitName(name);
+        } else {
+            *(long long*)addr = trueRaw;
         }
         return;
     }
@@ -1047,7 +1067,7 @@ static int Var64_TryDebtArithmetic(void* self, void* ctx, int op, const char* op
     selfAddr = ((Var64LookupFn)(img + RVA_VAR_LOOKUP))((void*)((unsigned char*)self + 88), ctx, NULL);
     if (selfAddr == NULL) return 0;
 
-    currentRaw = Var64_ReadTrueRaw(name, selfAddr);
+    currentRaw = Var64_ReadTrueRaw(self, ctx, name, selfAddr);
     resInt = currentRaw;
     resFrac = operandRaw;
     if (op == VAR64_OP_SUB) resFrac = -resFrac;
@@ -1063,7 +1083,7 @@ static int Var64_TryDebtArithmetic(void* self, void* ctx, int op, const char* op
         if (hi >= (unsigned long long)VAR64_FRAC_SCALE) {
             resInt = neg ? -VAR64_TRUE_CLAMP : VAR64_TRUE_CLAMP;
             Plugin_Log("[var64] debt mul %s true overflow, clamped", name);
-            Var64_WriteTrueRaw(name, selfAddr, resInt);
+            Var64_WriteTrueRaw(self, ctx, name, selfAddr, resInt);
             return 1;
         }
         q = _udiv128(hi, lo, (unsigned long long)VAR64_FRAC_SCALE, &rem);
@@ -1086,7 +1106,7 @@ static int Var64_TryDebtArithmetic(void* self, void* ctx, int op, const char* op
         if (hi >= b) {
             resInt = neg ? -VAR64_TRUE_CLAMP : VAR64_TRUE_CLAMP;
             Plugin_Log("[var64] debt div %s true overflow, clamped", name);
-            Var64_WriteTrueRaw(name, selfAddr, resInt);
+            Var64_WriteTrueRaw(self, ctx, name, selfAddr, resInt);
             return 1;
         }
         q = _udiv128(hi, lo, b, &rem);
@@ -1095,7 +1115,7 @@ static int Var64_TryDebtArithmetic(void* self, void* ctx, int op, const char* op
     } else {
         resInt = currentRaw + (op == VAR64_OP_SUB ? -operandRaw : operandRaw);
     }
-    Var64_WriteTrueRaw(name, selfAddr, resInt);
+    Var64_WriteTrueRaw(self, ctx, name, selfAddr, resInt);
     return 1;
 }
 
@@ -1234,6 +1254,72 @@ static long long __fastcall Var64_DivDetour(void* self, void* ctx)
     if (Var64_TryDebtArithmetic(self, ctx, VAR64_OP_DIV, "divide_variable")) return 0;
     if (Var64_TryArithmetic(self, ctx, VAR64_OP_DIV, "divide_variable")) return 0;
     if (g_var64OrigDivExec != NULL) return g_var64OrigDivExec(self, ctx);
+    return 0;
+}
+
+static Var64GameSetExecFn g_var64OrigClampExec = NULL;
+
+static int Var64_ReadParamValue(void* self, void* ctx, unsigned int valueOff,
+                               unsigned int flagOff, long long* out)
+{
+    unsigned char* img = Var64_Image();
+    unsigned char* p = (unsigned char*)self;
+
+    if (out == NULL || img == NULL || p == NULL) return 0;
+    *out = 0;
+    if (!ConsoleCmd_IsReadable(p + flagOff, 1)) return 0;
+    if (*(unsigned char*)(p + flagOff) == 0) return 0;
+    if (!ConsoleCmd_IsReadable(img + RVA_EFF_GETPARAM, 16)) return 0;
+    ((Var64GetParamFn)(img + RVA_EFF_GETPARAM))((void*)(p + valueOff), out, ctx, 0, (void*)0);
+    return 1;
+}
+
+static long long __fastcall Var64_ClampDetour(void* self, void* ctx)
+{
+    unsigned char* img = Var64_Image();
+    char name[40];
+    unsigned char* addr;
+    unsigned char* oa;
+    long long curRaw;
+    long long minRaw = 0;
+    long long maxRaw = 0;
+    int haveMin;
+    int haveMax;
+    char opName[40];
+    char shown[48];
+
+    if (img == NULL || self == NULL || ctx == NULL) goto vanilla;
+    if (!Var64_ReadNameOnly(self, name, sizeof(name))) goto vanilla;
+    if (!Var64_IsSixtyFourBitName(name) && Var64_FindDebt(name) == NULL) goto vanilla;
+
+    addr = ((Var64LookupFn)(img + RVA_VAR_LOOKUP))((void*)((unsigned char*)self + 88), ctx, NULL);
+    if (addr == NULL) goto vanilla;
+
+    haveMin = Var64_ReadParamValue(self, ctx, 296u, 304u, &minRaw);
+    haveMax = Var64_ReadParamValue(self, ctx, 504u, 512u, &maxRaw);
+
+    if (haveMin && Var64_ReadOperandNameAt(self, 296u, opName, sizeof(opName))
+        && Var64_IsSixtyFourBitName(opName)) {
+        oa = Var64_ResolveAddressByName(self, ctx, opName);
+        if (oa != NULL) minRaw = Var64_LoadSplit64(self, ctx, opName, oa, NULL, NULL);
+    }
+    if (haveMax && Var64_ReadOperandNameAt(self, 504u, opName, sizeof(opName))
+        && Var64_IsSixtyFourBitName(opName)) {
+        oa = Var64_ResolveAddressByName(self, ctx, opName);
+        if (oa != NULL) maxRaw = Var64_LoadSplit64(self, ctx, opName, oa, NULL, NULL);
+    }
+
+    curRaw = Var64_ReadTrueRaw(self, ctx, name, addr);
+    if (haveMax && curRaw > maxRaw) curRaw = maxRaw;
+    if (haveMin && curRaw < minRaw) curRaw = minRaw;
+    Var64_WriteTrueRaw(self, ctx, name, addr, curRaw);
+    Var64_FormatPartsToText(curRaw / VAR64_FRAC_SCALE, curRaw % VAR64_FRAC_SCALE,
+                            shown, sizeof(shown));
+    Plugin_Log("[var64] clamp_variable %s = %s (min=%d max=%d)", name, shown, haveMin, haveMax);
+    return 0;
+
+vanilla:
+    if (g_var64OrigClampExec != NULL) return g_var64OrigClampExec(self, ctx);
     return 0;
 }
 
@@ -1935,9 +2021,14 @@ static void Var64_InstallArithmeticHooks(void)
         g_var64OrigDivExec = (Var64GameSetExecFn)InlineHook_Install(img + RVA_VAR_DIV_EXEC,
                                                                    (void*)Var64_DivDetour);
     }
-    Plugin_Log("[var64] arith hook: add=%p sub=%p mul=%p div=%p",
+    if (ConsoleCmd_IsReadable(img + RVA_VARCLAMP_EXEC, 16)) {
+        g_var64OrigClampExec = (Var64GameSetExecFn)InlineHook_Install(img + RVA_VARCLAMP_EXEC,
+                                                                     (void*)Var64_ClampDetour);
+    }
+    Plugin_Log("[var64] arith hook: add=%p sub=%p mul=%p div=%p clamp=%p",
                (void*)g_var64OrigAddExec, (void*)g_var64OrigSubExec,
-               (void*)g_var64OrigMulExec, (void*)g_var64OrigDivExec);
+               (void*)g_var64OrigMulExec, (void*)g_var64OrigDivExec,
+               (void*)g_var64OrigClampExec);
 }
 
 int Var64_RegisterEffects(void)
