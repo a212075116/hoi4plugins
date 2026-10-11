@@ -363,6 +363,15 @@ static unsigned char* Var64_ResolveAddressByName(void* self, void* ctx, const ch
 #define VAR64_SLOT_SCALE  100000LL
 #define RVA_VARCLAMP_ENTRYVT 0x277C680u
 #define RVA_VARCLAMP_EXEC    0x0034F750u
+#define RVA_VAR_ADD_EXEC     0x0034C760u
+#define RVA_VAR_SUB_EXEC     0x00366BC0u
+#define RVA_VAR_MUL_EXEC     0x0035B9E0u
+#define RVA_VAR_DIV_EXEC     0x00355C70u
+
+#define VAR64_OP_ADD 0
+#define VAR64_OP_SUB 1
+#define VAR64_OP_MUL 2
+#define VAR64_OP_DIV 3
 #define VAR64_FRAC_SUFFIX "_f"
 #define VAR64_FRAC_SCALE  100000LL
 #define VAR64_FRAC_BIAS   100000LL
@@ -755,6 +764,175 @@ static long long __fastcall Var64_DoClampVariable64(void* self, void* ctx)
 static long long __fastcall Var64_DoClampHighVariable64(void* self, void* ctx)
 {
     return Var64_ApplyClamp(self, ctx, 1);
+}
+
+static Var64GameSetExecFn g_var64OrigAddExec = NULL;
+static Var64GameSetExecFn g_var64OrigSubExec = NULL;
+static Var64GameSetExecFn g_var64OrigMulExec = NULL;
+static Var64GameSetExecFn g_var64OrigDivExec = NULL;
+
+static int Var64_HasFracComponent(void* self, void* ctx, const char* name)
+{
+    char fracName[48];
+    unsigned char* addr;
+
+    if (!Var64_MakeFracPartName(name, fracName, sizeof(fracName))) return 0;
+    addr = Var64_ResolveAddressByName(self, ctx, fracName);
+    if (addr == NULL) return 0;
+    return (*(long long*)addr != 0) ? 1 : 0;
+}
+
+static void Var64_NormalizeFraction(long long* outInt, long long* outFrac)
+{
+    while (*outFrac >= VAR64_FRAC_SCALE) {
+        *outFrac -= VAR64_FRAC_SCALE;
+        ++(*outInt);
+    }
+    while (*outFrac < 0) {
+        *outFrac += VAR64_FRAC_SCALE;
+        --(*outInt);
+    }
+}
+
+static int Var64_ReadNameOnly(void* self, char* nameBuf, unsigned int nameBufSize)
+{
+    unsigned char* p = (unsigned char*)self;
+    unsigned char* src;
+    unsigned long long size;
+    unsigned long long cap;
+    unsigned long long k;
+
+    if (p == NULL || nameBuf == NULL || nameBufSize < 40) return 0;
+    if (!ConsoleCmd_IsReadable(p + VAR64_NAME_OFF, 32)) return 0;
+    size = *(unsigned long long*)(p + VAR64_NAME_OFF + 16);
+    cap = *(unsigned long long*)(p + VAR64_NAME_OFF + 24);
+    if (size == 0 || size >= 32) return 0;
+    src = (cap <= 15) ? (p + VAR64_NAME_OFF) : *(unsigned char**)(p + VAR64_NAME_OFF);
+    if (src == NULL || !ConsoleCmd_IsReadable(src, size + 1)) return 0;
+    for (k = 0; k < size; ++k) nameBuf[k] = (char)src[k];
+    nameBuf[size] = 0;
+    return 1;
+}
+
+static int Var64_TryArithmetic(void* self, void* ctx, int op, const char* opName)
+{
+    long long operandRaw = 0;
+    unsigned char* addr = NULL;
+    char name[40];
+    char shown[48];
+    long long currentRaw;
+    long long vInt;
+    long long vFrac;
+    long long oInt;
+    long long oFrac;
+    long long rInt;
+    long long rFrac;
+
+    if (self == NULL || ctx == NULL) return 0;
+    if (!Var64_ReadNameOnly(self, name, sizeof(name))) return 0;
+    if (!Var64_IsSixtyFourBitName(name)) return 0;
+    if (!Var64_ResolveGameVariable(self, ctx, &operandRaw, &addr, name, sizeof(name))) return 0;
+
+    currentRaw = Var64_LoadSplit64(self, ctx, name, addr, NULL, NULL);
+    vInt = currentRaw / VAR64_FRAC_SCALE;
+    vFrac = currentRaw % VAR64_FRAC_SCALE;
+    oInt = operandRaw / VAR64_FRAC_SCALE;
+    oFrac = operandRaw % VAR64_FRAC_SCALE;
+    rInt = 0;
+    rFrac = 0;
+
+    if (op == VAR64_OP_ADD) {
+        rInt = vInt + oInt;
+        rFrac = vFrac + oFrac;
+    } else if (op == VAR64_OP_SUB) {
+        rInt = vInt - oInt;
+        rFrac = vFrac - oFrac;
+    } else if (op == VAR64_OP_MUL) {
+        unsigned long long a = (unsigned long long)(currentRaw < 0 ? -currentRaw : currentRaw);
+        unsigned long long b = (unsigned long long)(operandRaw < 0 ? -operandRaw : operandRaw);
+        int neg = ((currentRaw < 0) != (operandRaw < 0)) ? 1 : 0;
+        unsigned long long hi = 0;
+        unsigned long long lo = _umul128(a, b, &hi);
+        unsigned long long q;
+        unsigned long long rem;
+        if (hi != 0) {
+            Plugin_Log("[var64] %s %s: multiply overflow, clamped", opName, name);
+            return 0;
+        }
+        q = lo / (unsigned long long)VAR64_FRAC_SCALE;
+        rem = q % (unsigned long long)VAR64_FRAC_SCALE;
+        rInt = (long long)(q / (unsigned long long)VAR64_FRAC_SCALE);
+        rFrac = (long long)rem;
+        if (neg) {
+            rInt = -rInt;
+            rFrac = -rFrac;
+        }
+    } else {
+        unsigned long long a = (unsigned long long)(currentRaw < 0 ? -currentRaw : currentRaw);
+        unsigned long long b = (unsigned long long)(operandRaw < 0 ? -operandRaw : operandRaw);
+        int neg = ((currentRaw < 0) != (operandRaw < 0)) ? 1 : 0;
+        unsigned long long hi = 0;
+        unsigned long long lo;
+        unsigned long long q;
+        unsigned long long rem;
+        if (b == 0) {
+            Plugin_Log("[var64] %s %s: divide by zero, left unchanged", opName, name);
+            return 1;
+        }
+        lo = _umul128(a, (unsigned long long)VAR64_FRAC_SCALE, &hi);
+        if (hi != 0) {
+            Plugin_Log("[var64] %s %s: divide overflow, clamped", opName, name);
+            return 0;
+        }
+        q = lo / b;
+        rem = q % (unsigned long long)VAR64_FRAC_SCALE;
+        rInt = (long long)(q / (unsigned long long)VAR64_FRAC_SCALE);
+        rFrac = (long long)rem;
+        if (neg) {
+            rInt = -rInt;
+            rFrac = -rFrac;
+        }
+    }
+
+    Var64_NormalizeFraction(&rInt, &rFrac);
+    Var64_StoreSplit64(self, ctx, name, addr, rInt * VAR64_FRAC_SCALE + rFrac);
+    Var64_FormatPartsToText(rInt, rFrac, shown, sizeof(shown));
+    Plugin_Log("[var64] %s %s -> %s", opName, name, shown);
+    return 1;
+}
+
+static long long __fastcall Var64_AddDetour(void* self, void* ctx)
+{
+    unsigned int mark = 0;
+
+    if (self != NULL && ConsoleCmd_IsReadable((unsigned char*)self + VAR64_MARK_OFF, 7)) {
+        mark = *(unsigned int*)((unsigned char*)self + VAR64_MARK_OFF);
+    }
+    if (mark == VAR64_MARK_ADD) return Var64_DoAddToVariable64(self, ctx);
+    if (Var64_TryArithmetic(self, ctx, VAR64_OP_ADD, "add_to_variable")) return 0;
+    if (g_var64OrigAddExec != NULL) return g_var64OrigAddExec(self, ctx);
+    return 0;
+}
+
+static long long __fastcall Var64_SubDetour(void* self, void* ctx)
+{
+    if (Var64_TryArithmetic(self, ctx, VAR64_OP_SUB, "subtract_from_variable")) return 0;
+    if (g_var64OrigSubExec != NULL) return g_var64OrigSubExec(self, ctx);
+    return 0;
+}
+
+static long long __fastcall Var64_MulDetour(void* self, void* ctx)
+{
+    if (Var64_TryArithmetic(self, ctx, VAR64_OP_MUL, "multiply_variable")) return 0;
+    if (g_var64OrigMulExec != NULL) return g_var64OrigMulExec(self, ctx);
+    return 0;
+}
+
+static long long __fastcall Var64_DivDetour(void* self, void* ctx)
+{
+    if (Var64_TryArithmetic(self, ctx, VAR64_OP_DIV, "divide_variable")) return 0;
+    if (g_var64OrigDivExec != NULL) return g_var64OrigDivExec(self, ctx);
+    return 0;
 }
 
 static long long __fastcall Var64_GameSyntaxDetour(void* self, void* ctx)
@@ -1434,6 +1612,32 @@ static EffectDef* g_var64EffectDefs[] = {
 
 #define VAR64_EFFECT_COUNT (int)(sizeof(g_var64EffectDefs) / sizeof(g_var64EffectDefs[0]))
 
+static void Var64_InstallArithmeticHooks(void)
+{
+    unsigned char* img = Var64_Image();
+
+    if (img == NULL) return;
+    if (ConsoleCmd_IsReadable(img + RVA_VAR_ADD_EXEC, 16)) {
+        g_var64OrigAddExec = (Var64GameSetExecFn)InlineHook_Install(img + RVA_VAR_ADD_EXEC,
+                                                                   (void*)Var64_AddDetour);
+    }
+    if (ConsoleCmd_IsReadable(img + RVA_VAR_SUB_EXEC, 16)) {
+        g_var64OrigSubExec = (Var64GameSetExecFn)InlineHook_Install(img + RVA_VAR_SUB_EXEC,
+                                                                   (void*)Var64_SubDetour);
+    }
+    if (ConsoleCmd_IsReadable(img + RVA_VAR_MUL_EXEC, 16)) {
+        g_var64OrigMulExec = (Var64GameSetExecFn)InlineHook_Install(img + RVA_VAR_MUL_EXEC,
+                                                                   (void*)Var64_MulDetour);
+    }
+    if (ConsoleCmd_IsReadable(img + RVA_VAR_DIV_EXEC, 16)) {
+        g_var64OrigDivExec = (Var64GameSetExecFn)InlineHook_Install(img + RVA_VAR_DIV_EXEC,
+                                                                   (void*)Var64_DivDetour);
+    }
+    Plugin_Log("[var64] arith hook: add=%p sub=%p mul=%p div=%p",
+               (void*)g_var64OrigAddExec, (void*)g_var64OrigSubExec,
+               (void*)g_var64OrigMulExec, (void*)g_var64OrigDivExec);
+}
+
 int Var64_RegisterEffects(void)
 {
     unsigned char* img;
@@ -1487,6 +1691,7 @@ int Var64_RegisterEffects(void)
     }
 
     Var64_InstallGameSyntaxHook();
+    Var64_InstallArithmeticHooks();
 
     Plugin_Log("[eff] var64 effects registered: %d/%d", n, VAR64_EFFECT_COUNT);
     return n;
