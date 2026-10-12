@@ -11,6 +11,7 @@ extra=r'''
 static unsigned char* __fastcall valueFactory(void){return calloc(1,304);}
 static unsigned char* __fastcall variableFactory(void){return calloc(1,544);}
 static unsigned __fastcall scopeMask(void* ctx){return *(unsigned*)ctx;}
+static void* __fastcall temporary(void){return NULL;}
 static long long* __fastcall param(void* d,long long* out,void* ctx,void* x,unsigned char random){*out=*(long long*)((char*)d+64);return out;}
 static void* __fastcall container(void* d,void* c,int* a,int* b,void** e,void** f,void** g,void** h,void** i,void** j){return *(void**)((char*)d+152);}
 static long long __fastcall half(void* self,const TriggerScopeView* s){return 50000;}
@@ -25,6 +26,7 @@ int main(void){
  thunk(RVA_GAME_ALLOC,alloc);thunk(RVA_GAME_FREE,release);thunk(RVA_ADD_TOKEN,addToken);thunk(RVA_REGISTER_TRIGGER,reg);
  thunk(RVA_VALUE_FACTORY,valueFactory);thunk(RVA_VARIABLE_FACTORY,variableFactory);
  thunk(0x537d90,scopeMask);thunk(0x544c90,param);thunk(0x542500,container);
+ thunk(0x54f730,temporary);
  *(void**)(image+RVA_VALUE_VT+4*8)=image+0x13a2690;*(void**)(image+RVA_VALUE_VT+22*8)=image+0x13a2180;
  *(void**)(image+RVA_VALUE_ENTRY_VT+8)=image+RVA_VALUE_FACTORY;
  *(void**)(image+RVA_VARIABLE_VT+4*8)=image+0x54ae70;*(void**)(image+RVA_VARIABLE_VT+22*8)=image+0x3d0bb0;

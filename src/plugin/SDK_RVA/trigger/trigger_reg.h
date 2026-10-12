@@ -1,4 +1,5 @@
 #pragma once
+#include <stddef.h>
 
 #define TRG_VT_SLOTS 23
 #define TRG_MAX_VT_SLOTS 26
@@ -46,6 +47,7 @@ unsigned char Trigger_EvaluateValue(void* self, void* scope, TriggerValueFn valu
 unsigned char __fastcall Trigger_EvaluateVariable(void* self, void* scope);
 void* Trigger_NewTypedInstance(TriggerDef* def);
 void* Trigger_TypedTooltip(TriggerDef* def, void* self, void* out, void* ctx, unsigned char invert, int indent);
+int Trigger_FormatRaw(long long raw, char* out, size_t capacity);
 
 int Trigger_RegistryReady(void);
 int Trigger_RegistryRegister(TriggerDef* def);

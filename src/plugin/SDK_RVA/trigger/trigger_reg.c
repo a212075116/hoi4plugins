@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <string.h>
+#include <stdio.h>
 #include "console_cmd.h"
 #include "trigger_reg.h"
 
@@ -43,6 +44,7 @@ typedef void* (__fastcall *AppendFn)(void*, const char*, size_t);
 typedef char trigger_pointer_size_check[(sizeof(void*) == 8) ? 1 : -1];
 
 static int g_triggerCount = 0;
+static void Trigger_FreeString(unsigned char* value, unsigned char* img);
 
 typedef struct TriggerTemplate {
     unsigned int vt, entryVt, factory, parse, eval;
@@ -160,6 +162,28 @@ int Trigger_ScopeView(void* context, TriggerScopeView* out)
     return 1;
 }
 
+static int Trigger_HasTemporaryOperand(unsigned char* descriptor, void* context)
+{
+    unsigned char* img = Trigger_Image();
+    unsigned char name[32] = {0};
+    void* temporary;
+    int found;
+    struct NameView { const char* data; unsigned long long size; } view;
+    typedef void* (__fastcall *TemporaryFn)(void);
+    typedef void* (__fastcall *NameFn)(void*, void*, void*, void*);
+    typedef unsigned char (__fastcall *ContainsFn)(void*, void*);
+    if (descriptor[14]) return 1;
+    if (*(int*)(descriptor + 100) != 0) return 0;
+    temporary = ((TemporaryFn)(img + 0x0054F730u))();
+    if (temporary == NULL) return 0;
+    ((NameFn)(img + 0x005454A0u))(descriptor, name, context, *(void**)(descriptor + 160));
+    view.data = *(unsigned long long*)(name + 24) <= 15 ? (const char*)name : *(const char**)name;
+    view.size = *(unsigned long long*)(name + 16);
+    found = ((ContainsFn)(img + 0x00BC8D20u))(temporary, &view) != 0;
+    Trigger_FreeString(name, img);
+    return found;
+}
+
 int Trigger_ReadRawParameter(void* self, const TriggerScopeView* scope, unsigned int offset, long long* out)
 {
     unsigned char* img = Trigger_Image();
@@ -170,7 +194,8 @@ int Trigger_ReadRawParameter(void* self, const TriggerScopeView* scope, unsigned
     if (offset != 88u && offset != 96u && offset != 296u) return 0;
     descriptor = (unsigned char*)self + offset;
     if (!ConsoleCmd_IsReadable(descriptor, 208) || !descriptor[8]) return 0;
-    if (!descriptor[9] && !descriptor[10] && !descriptor[11] && *(void**)(descriptor + 168) == NULL) {
+    if (!descriptor[9] && !descriptor[10] && !descriptor[11] && *(void**)(descriptor + 168) == NULL
+        && !Trigger_HasTemporaryOperand(descriptor, scope->nativeContext)) {
         unsigned char* text = descriptor + 112;
         unsigned long long size = *(unsigned long long*)(text + 16);
         unsigned long long cap = *(unsigned long long*)(text + 24);
@@ -226,12 +251,89 @@ unsigned char __fastcall Trigger_EvaluateVariable(void* self, void* scope)
 
 void* Trigger_TypedTooltip(TriggerDef* def, void* self, void* out, void* ctx, unsigned char invert, int indent)
 {
-    TriggerTemplate t;
     unsigned char* img = Trigger_Image();
-    TriggerTooltipFn fn;
-    if (img == NULL || def == NULL || !Trigger_Template(def->parameterTemplate, &t)) return out;
-    fn = *(TriggerTooltipFn*)(img + t.vt + TRG_VT_TOOLTIP * 8);
-    return fn(self, out, ctx, invert, indent);
+    TriggerScopeView view;
+    long long left = 0, right = 0;
+    int token = 0, valid = 0, actual = 0, i;
+    unsigned int lhsOffset = 88u, rhsOffset = 296u;
+    char lhs[48] = "?", rhs[48] = "?";
+    unsigned char params[4][104], packed[32] = {0}, resultPacked[32] = {0}, resultText[32] = {0};
+    const char* op = "?";
+    const char* names[] = {"LEFT", "COMPARISON", "RIGHT", "RESULT"};
+    const char* texts[4];
+    typedef void (__fastcall *ParamLifeFn)(void*);
+    typedef void* (__fastcall *StringCtorFn)(void*, const void*, size_t);
+    typedef long long* (__fastcall *ValueGetterFn)(void*, long long*, void*);
+    (void)indent;
+    if (img == NULL || def == NULL || out == NULL || ctx == NULL || def->locKey == NULL) return out;
+    if (def->parameterTemplate != TRG_TEMPLATE_VALUE && def->parameterTemplate != TRG_TEMPLATE_VARIABLE) return out;
+    if (def->parameterTemplate == TRG_TEMPLATE_VALUE) { lhsOffset = 96u; rhsOffset = 96u; }
+    if (ConsoleCmd_IsReadable(self, def->parameterTemplate == TRG_TEMPLATE_VALUE ? 304 : 544))
+        token = *(int*)((unsigned char*)self + (def->parameterTemplate == TRG_TEMPLATE_VALUE ? 88 : 504));
+    if (ConsoleCmd_IsReadable(self, def->parameterTemplate == TRG_TEMPLATE_VALUE ? 304 : 544)
+        && Trigger_ScopeView(ctx, &view)
+        && !*((unsigned char*)self + lhsOffset + 11) && !*((unsigned char*)self + rhsOffset + 11)) {
+        if (def->parameterTemplate == TRG_TEMPLATE_VALUE) {
+            token = *(int*)((unsigned char*)self + 88);
+            if (def->valueGetter != NULL && (token == 467 || token == 468)
+                && Trigger_ReadRawParameter(self, &view, 96u, &right)) {
+                ((ValueGetterFn)def->valueGetter)(self, &left, ctx);
+                valid = 1;
+            }
+        } else {
+            token = *(int*)((unsigned char*)self + 504);
+            valid = Trigger_ReadRawParameter(self, &view, 88u, &left)
+                && Trigger_ReadRawParameter(self, &view, 296u, &right);
+        }
+    }
+    switch (token) {
+        case 467: op = invert ? "<=" : ">"; break;
+        case 468: op = invert ? ">=" : "<"; break;
+        case 14578: op = invert ? "==" : "!="; break;
+        case 14579: op = invert ? ">" : "<="; break;
+        case 14580: op = invert ? "!=" : "=="; break;
+        case 14581: op = invert ? "<" : ">="; break;
+        default: valid = 0; break;
+    }
+    if (valid) {
+        Trigger_FormatRaw(left, lhs, sizeof(lhs));
+        Trigger_FormatRaw(right, rhs, sizeof(rhs));
+        actual = Trigger_CompareRaw(left, right, token) != (invert != 0);
+    }
+    ((PackFn)(img + RVA_PACK_KEY))(resultPacked,
+        valid ? (actual ? "PLUGIN_TRIGGER_RESULT_TRUE" : "PLUGIN_TRIGGER_RESULT_FALSE") : "PLUGIN_TRIGGER_RESULT_UNAVAILABLE", NULL, 0);
+    ((FormatFn)(img + RVA_FORMAT_TEXT))(resultText, ctx, resultPacked);
+    texts[0] = lhs; texts[1] = op; texts[2] = rhs;
+    texts[3] = *(unsigned long long*)(resultText + 24) <= 15 ? (const char*)resultText : *(const char**)resultText;
+    for (i = 0; i < 4; ++i) {
+        ((ParamLifeFn)(img + 0x0029DAD0u))(params[i]);
+        *(int*)params[i] = 1;
+        *(const char**)(params[i] + 8) = names[i];
+        ((StringCtorFn)(img + 0x0011D970u))(params[i] + 48, texts[i], strlen(texts[i]));
+    }
+    ((PackFn)(img + RVA_PACK_KEY))(packed, def->locKey, params, 4);
+    for (i = 0; i < 4; ++i) ((ParamLifeFn)(img + 0x0029DFE0u))(params[i]);
+    ((FormatFn)(img + RVA_FORMAT_TEXT))(out, ctx, packed);
+    ((AppendFn)(img + RVA_APPEND_TEXT))(out, "\n", 1);
+    Trigger_FreeString(packed, img);
+    Trigger_FreeString(resultText, img);
+    Trigger_FreeString(resultPacked, img);
+    return out;
+}
+
+int Trigger_FormatRaw(long long raw, char* out, size_t capacity)
+{
+    unsigned long long magnitude = raw < 0 ? 0ULL - (unsigned long long)raw : (unsigned long long)raw;
+    unsigned long long fraction = magnitude % 100000ULL;
+    size_t n;
+    if (out == NULL || capacity < 24) return 0;
+    if (fraction == 0) _snprintf_s(out, capacity, _TRUNCATE, "%s%llu", raw < 0 ? "-" : "", magnitude / 100000ULL);
+    else {
+        _snprintf_s(out, capacity, _TRUNCATE, "%s%llu.%05llu", raw < 0 ? "-" : "", magnitude / 100000ULL, fraction);
+        n = strlen(out);
+        while (n > 0 && out[n - 1] == '0') out[--n] = 0;
+    }
+    return 1;
 }
 
 int Trigger_ParamBool(void* self)
