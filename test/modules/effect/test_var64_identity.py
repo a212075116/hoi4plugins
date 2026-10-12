@@ -20,6 +20,8 @@ prefix=r'''
 #define VAR64_FRAC_SUFFIX "_var64f"
 #define VAR64_NAME_LIMIT 40u
 #define VAR64_SLOT_SCALE 100000LL
+#define VAR64_FRAC_SCALE 100000LL
+#define VAR64_FRAC_BIAS 100000LL
 #define VAR64_KNOWN_NAME_LIMIT 128
 #define VAR64_KNOWN_NAME_BYTES 32
 static char g_var64KnownNames[128][32];static int g_var64KnownNameCount=0;
@@ -31,6 +33,8 @@ static void init(Scope* s){memset(s,0,sizeof(*s));*(void**)(s->b+24)=calloc(512,
 '''
 code=''.join(fn(n) for n in ['Var64_Fnv1a','Var64_LookupInScope','Var64_MakeHighPartName','Var64_MakeFracPartName','Var64_IsSixtyFourBitName','Var64_RememberSixtyFourBitNameSrc'])
 if 'static int Var64_IsStored64(' in s:
+    if 'static int Var64_ReadStoredIn(' in s:
+        code+=fn('Var64_ReadStoredIn')
     # Select the definition, not its forward declaration.
     start=s.index('static int Var64_IsStored64(',s.index('static void* Var64_Container('));pos=s.index('\n#define VAR64_DEBT_MAX',start)
     code+=s[start:pos]

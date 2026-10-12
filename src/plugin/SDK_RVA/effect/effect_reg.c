@@ -24,6 +24,12 @@ static char g_pendingTooltipText[192];
 static const char* g_pendingTooltipLocKey = NULL;
 static int g_hasPendingTooltip = 0;
 
+unsigned int __fastcall Effect_ScopeAny(void* self)
+{
+    (void)self;
+    return 0;
+}
+
 void Effect_FlushPendingTooltip(void)
 {
     if (g_hasPendingTooltip) {
@@ -208,6 +214,7 @@ int Effect_RegistryRegister(EffectDef* def)
     }
     def->vt[EFF_VT_EXEC / 8]    = (void*)def->exec;
     def->vt[EFF_VT_TOOLTIP / 8] = (void*)def->tooltip;
+    if (def->supportedScopes != NULL) def->vt[19] = (void*)def->supportedScopes;
 
     def->entryVt[0] = *(void**)(img + RVA_STAB_ENTRY_VT);
     def->entryVt[1] = (void*)def->factory;

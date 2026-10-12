@@ -30,12 +30,14 @@
 #define EFF_STATE_FAILED     2
 
 typedef void (__fastcall *EffectExecFn)(void* self, void* scope);
+typedef unsigned int (__fastcall *EffectScopeFn)(void* self);
 
 typedef struct EffectDef {
     const char*  name;
     const char*  desc;
     const char*  locKey;
     EffectExecFn exec;
+    EffectScopeFn supportedScopes;
     void*      (*factory)(void);
     void*      (*tooltip)(void* self, void* out, void* ctx);
     int          tokenId;
@@ -49,6 +51,7 @@ int  Effect_RegistryReady(void);
 int  Effect_RegistryRegister(EffectDef* def);
 int  Effect_RegistryRegisterAll(EffectDef** defs, int count);
 int  Effect_RegistryRegisteredCount(void);
+unsigned int __fastcall Effect_ScopeAny(void* self);
 
 void* Effect_NewInstance(void* vt);
 void* Effect_BuildTooltip(void* self, void* out, void* ctx, const char* locKey);

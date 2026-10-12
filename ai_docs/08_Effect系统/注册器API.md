@@ -89,6 +89,19 @@
 `EffectDef` 里由注册器自动填写的字段：`tokenId`、`state`、`vt[]`、`entryVt[]`、`entry[]`。
 使用者只需在 `fill` 里填 `name`/`desc`/`locKey`/`exec`（宏已代劳）。
 
+## Scope 合约（2026-10-12 已实测）
+
+`EffectDef.supportedScopes` 为可选的 `EffectScopeFn`。NULL 保留模板限制；
+需要全局操作时，在 fill 后、注册前设置 `mything_def.supportedScopes = Effect_ScopeAny`。
+注册器仅替换实例虚表第 19 槽（+0x98）的 scope mask getter，不绕过原版解析/执行检查。
+`Effect_ScopeAny` 返回 0，含义是没有特定 scope 限制，并非“取 global 变量容器”。
+
+普通定义仍继承 `CAddStabilityEffect` 的国家 mask=4。
+摄像机、日期定义显式使用 Any；其目标是全局摄像机/日期，不随当前国家改变。
+国家、另一国家、州、角色中 add_time_for_hours/add_camera_height 的零增量均已执行；
+未把零增量测试等同于所有摄像机/日期操作的极值测试。
+详见 [Scope与scoped操作数验证](Scope与scoped操作数验证.md)。
+
 ## 坑：不要在工具提示路径里做文件 I/O
 
 在 `Effect_BuildTooltip` 里直接 `Plugin_Log`（每次 CreateFile/WriteFile/CloseHandle），
@@ -111,7 +124,7 @@
 
 | 事项 | 做法 | 原因 |
 |---|---|---|
-| 实例虚表 | 从 `CAddStabilityEffect` 的虚表整体复制 25 槽 | 其余 24 槽用游戏的正确实现，不猜签名 |
+| 实例虚表 | 从 `CAddStabilityEffect` 整体复制 25 槽，替换 exec、tooltip，按需替换 scope getter | 未指定 scope getter 的定义保留国家限制 |
 | 实例本体 | 调游戏工厂 `sub_14033C420` 造好再换虚表指针 | 布局 100% 正确，不用猜字段 |
 | entry 析构 | 借用游戏 `CEffectEntry` 虚表的 `[0]` | 同上 |
 | 参数 | `sub_140544C90(self+0x58, ...)` | 原版做法；`+0x108` 在工具提示阶段是空的 |

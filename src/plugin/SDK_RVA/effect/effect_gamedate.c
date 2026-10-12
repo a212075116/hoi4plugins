@@ -120,11 +120,13 @@ static EffectDef* g_dateEffectDefs[] = {
 int EffectGameDate_Register(void)
 {
     int n;
+    int i;
     setgamedate_fill();
     addyears_fill();
     addmonths_fill();
     adddays_fill();
     addhours_fill();
+    for (i = 0; i < EFF_DATE_COUNT; ++i) g_dateEffectDefs[i]->supportedScopes = Effect_ScopeAny;
     n = Effect_RegistryRegisterAll(g_dateEffectDefs, EFF_DATE_COUNT);
     Plugin_Log("[eff] date effects registered: %d/%d", n, EFF_DATE_COUNT);
     return n;

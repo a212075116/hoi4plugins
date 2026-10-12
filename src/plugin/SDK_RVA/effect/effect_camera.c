@@ -163,10 +163,12 @@ static EffectDef* g_cameraEffectDefs[] = {
 int EffectCameras_Register(void)
 {
     int n;
+    int i;
     setcamheight_fill();
     addcamheight_fill();
     setcamlower_fill();
     setcamupper_fill();
+    for (i = 0; i < EFF_CAMERA_COUNT; ++i) g_cameraEffectDefs[i]->supportedScopes = Effect_ScopeAny;
     n = Effect_RegistryRegisterAll(g_cameraEffectDefs, EFF_CAMERA_COUNT);
     Plugin_Log("[eff] camera effects registered: %d/%d", n, EFF_CAMERA_COUNT);
     return n;
