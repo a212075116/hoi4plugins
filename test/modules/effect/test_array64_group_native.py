@@ -1,7 +1,7 @@
 import hashlib,json,pathlib,subprocess,sys
 root=pathlib.Path(__file__).resolve().parents[3];out=pathlib.Path(sys.argv[1]).resolve();out.mkdir(parents=True,exist_ok=True)
-base=(root/'src/plugin/SDK_RVA/variable64/native_array_readonly.c').read_text(encoding='utf-8')
-group=(root/'src/plugin/SDK_RVA/variable64/array64_group_readonly.c').read_text(encoding='utf-8').replace('#include "native_array_readonly.c"',base)
+base=(pathlib.Path(sys.argv[2]) if len(sys.argv)>2 else root/'src/plugin/SDK_RVA/variable64/native_array_readonly.c').read_text(encoding='utf-8')
+group=(pathlib.Path(sys.argv[3]) if len(sys.argv)>3 else root/'src/plugin/SDK_RVA/variable64/array64_group_readonly.c').read_text(encoding='utf-8').replace('#include "native_array_readonly.c"',base)
 prefix=r'''
 #include <stdio.h>
 #include <stdint.h>
@@ -31,6 +31,12 @@ static int checks,failed;
 static void check(const char* label,int good){checks++;if(!good){failed++;printf("FAIL %s\n",label);}}
 static void test(const char* label,const char* name,int index,int wanted,long long raw,int count,int gen,int expectedgen){long long v=123;int n=-99,g=-99,s=Array64Group_Read(header,name,index,expectedgen,&v,&n,&g);check(label,s==wanted&&v==raw&&n==count&&g==gen);}
 int main(void){long long v;int n,g,i;uint64_t random=1202612;unsigned char* before=malloc(sizeof(nodes));
+ reset(0);header[40]=0;test("native_unallocated_empty","demo",0,0,123,-99,-99,-1);check("empty_native_array",NativeArray_Read(header,"demo",0,&v,&n)==0);
+ memcpy(before,header,sizeof(header));Array64Group_Read(header,"demo",0,-1,&v,&n,&g);check("empty_no_mutation",!memcmp(before,header,sizeof(header)));
+ header[40]=1;test("empty_invalid_spill","demo",0,-1,123,-99,-99,-1);header[40]=0;
+ *(unsigned*)(header+32)=1;test("empty_invalid_count","demo",0,-1,123,-99,-99,-1);*(unsigned*)(header+32)=0;
+ nodes[4]=1;test("empty_occupied_sentinel","demo",0,-1,123,-99,-99,-1);nodes[4]=0;
+ *(void**)(header+24)=0;test("empty_null_table","demo",0,-1,123,-99,-99,-1);
  reset(255);test("absent","demo",0,0,123,-99,-99,-1);keyput("demo","lo^4095",900000);test("orphan","demo",0,-3,123,-99,-99,-1);
  reset(255);make("demo",0);test("empty","demo",0,2,123,0,2,-1);test("empty_stale","demo",0,-9,123,-99,-99,0);
  reset(255);make("demo",2);element("demo",0,LLONG_MIN,1);element("demo",1,LLONG_MAX,1);test("min","demo",0,1,LLONG_MIN,2,2,-1);test("max","demo",1,1,LLONG_MAX,2,2,2);

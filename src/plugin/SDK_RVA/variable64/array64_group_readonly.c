@@ -29,7 +29,8 @@ static int ag_inventory(const void* container, char keys[6][40], int* owned)
     char text[128];
     *owned = 0;
     if (!container || !na_read_memory(c + 24, &table, 8) || !na_read_memory(c + 36, &mask, 4) ||
-        !na_read_memory(c + 40, &spill, 1) || !table || mask < 1 || mask > 1048575u || (mask & (mask + 1))) return 0;
+        !na_read_memory(c + 40, &spill, 1) || !table || mask > 1048575u || (mask & (mask + 1))) return 0;
+    if (!mask) return na_empty_table(c, table);
     span = mask + 1 + spill;
     for (offset = 0; offset < span; offset += take) {
         take = span - offset; if (take > 32) take = 32;

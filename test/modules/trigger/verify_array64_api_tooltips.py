@@ -1,7 +1,7 @@
 import json,pathlib,re,sys
 ROOT=pathlib.Path(__file__).resolve().parents[3];sys.path[:0]=[str(ROOT/'test/lib'),str(ROOT/'test/tools')]
 import frida,frida_host as FH,hoi4_launch as HL
-sys.stdout.reconfigure(encoding='utf-8',errors='replace');out=ROOT/'test/reports/20261012_variable64_transaction/api/tooltips';out.mkdir(parents=True,exist_ok=True)
+sys.stdout.reconfigure(encoding='utf-8',errors='replace');out=ROOT/'test/reports/20261012_variable64_transaction/api'/(sys.argv[1] if len(sys.argv)>1 else 'tooltips');out.mkdir(parents=True,exist_ok=True)
 DOC=pathlib.Path(r'C:/Users/a2120/Documents/Paradox Interactive/Hearts of Iron IV')
 localization=DOC/'mod/bakaifa/localisation';localization.mkdir(exist_ok=True)
 for lang in ['english','simp_chinese']:

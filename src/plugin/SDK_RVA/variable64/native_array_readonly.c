@@ -1,6 +1,15 @@
 typedef unsigned long long NaSize;
 extern int na_read_memory(const void* source, void* output, NaSize bytes);
 
+static int na_empty_table(const unsigned char* c, const unsigned char* table)
+{
+    unsigned int count;
+    unsigned char spill, node[48];
+    return table && na_read_memory(c + 32, &count, 4) && count == 0 &&
+        na_read_memory(c + 40, &spill, 1) && spill == 0 &&
+        na_read_memory(table, node, 48) && node[4] == 0;
+}
+
 static int na_lookup(const void* container, const char* name, long long* raw)
 {
     const unsigned char* c = (const unsigned char*)container;
@@ -17,7 +26,8 @@ static int na_lookup(const void* container, const char* name, long long* raw)
     }
     if (!length || !na_read_memory(c + 24, &buckets, 8) ||
         !na_read_memory(c + 36, &mask, 4)) return -1;
-    if (!buckets || mask < 1 || mask > 1048575u || (mask & (mask + 1))) return -1;
+    if (!buckets || mask > 1048575u || (mask & (mask + 1))) return -1;
+    if (!mask) return na_empty_table(c, buckets) ? 0 : -1;
     for (i = 0; i < 255; ++i) {
         const unsigned char* p = buckets + 48ull * ((hash & mask) + (NaSize)i);
         if (!na_read_memory(p, node, 48)) return -1;
