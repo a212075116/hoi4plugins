@@ -13,7 +13,7 @@ static unsigned char* __fastcall variableFactory(void){return calloc(1,544);}
 static unsigned __fastcall scopeMask(void* ctx){return *(unsigned*)ctx;}
 static void* __fastcall temporary(void){return NULL;}
 static long long* __fastcall param(void* d,long long* out,void* ctx,void* x,unsigned char random){*out=*(long long*)((char*)d+64);return out;}
-static void* __fastcall container(void* d,void* c,int* a,int* b,void** e,void** f,void** g,void** h,void** i,void** j){return *(void**)((char*)d+152);}
+static void* __fastcall container(void* d,void* c,int* a,int* b,void** e,void** f,void** g,void** h,void** i,void** j){static unsigned char boxes[2][64];void* raw=*(void**)((char*)d+152);int index=strcmp((char*)d+112,"left")==0?0:1;if(!raw)return NULL;memset(boxes[index],0,64);memcpy(boxes[index],raw,8);return boxes[index];}
 static long long __fastcall half(void* self,const TriggerScopeView* s){return 50000;}
 TRG_VALUE_DEF(val,"native_value","value","VALUE",half)
 TRG_VARIABLE_DEF(var,"native_variable","block","BLOCK")

@@ -184,6 +184,42 @@ static int Trigger_HasTemporaryOperand(unsigned char* descriptor, void* context)
     return found;
 }
 
+static int Trigger_HasDynamicBinding(void* container, const char* name, size_t length)
+{
+    unsigned char* map;
+    unsigned char* buckets;
+    unsigned char* node;
+    void* sentinel;
+    void* last;
+    unsigned long long mask;
+    unsigned int hash = 2166136261u;
+    size_t i;
+    if (!ConsoleCmd_IsReadable(container, 56)) return 1;
+    map = *(unsigned char**)((unsigned char*)container + 48);
+    if (map == NULL) return 0;
+    if (!ConsoleCmd_IsReadable(map, 56)) return 1;
+    sentinel = *(void**)(map + 8);
+    buckets = *(unsigned char**)(map + 24);
+    mask = *(unsigned long long*)(map + 48);
+    if (buckets == NULL || mask > 0x100000) return 1;
+    for (i = 0; i < length; ++i) hash = (hash ^ (unsigned char)name[i]) * 16777619u;
+    buckets += 16 * (hash & mask);
+    if (!ConsoleCmd_IsReadable(buckets, 16)) return 1;
+    last = *(void**)buckets; node = *(unsigned char**)(buckets + 8);
+    for (i = 0; i < 65536; ++i) {
+        unsigned char* text;
+        unsigned long long size, cap;
+        if (node == sentinel) return 0;
+        if (!ConsoleCmd_IsReadable(node, 112)) return 1;
+        size = *(unsigned long long*)(node + 32); cap = *(unsigned long long*)(node + 40);
+        text = cap <= 15 ? node + 16 : *(unsigned char**)(node + 16);
+        if (size == length && ConsoleCmd_IsReadable(text, length) && memcmp(text, name, length) == 0) return 1;
+        if (node == last) return 0;
+        node = *(unsigned char**)(node + 8);
+    }
+    return 1;
+}
+
 int Trigger_ReadRawParameter(void* self, const TriggerScopeView* scope, unsigned int offset, long long* out)
 {
     unsigned char* img = Trigger_Image();
@@ -194,7 +230,8 @@ int Trigger_ReadRawParameter(void* self, const TriggerScopeView* scope, unsigned
     if (offset != 88u && offset != 96u && offset != 296u) return 0;
     descriptor = (unsigned char*)self + offset;
     if (!ConsoleCmd_IsReadable(descriptor, 208) || !descriptor[8]) return 0;
-    if (!descriptor[9] && !descriptor[10] && !descriptor[11] && *(void**)(descriptor + 168) == NULL
+    if (!descriptor[9] && !descriptor[10] && !descriptor[11] && *(void**)(descriptor + 144) == NULL
+        && *(void**)(descriptor + 160) == NULL && *(void**)(descriptor + 168) == NULL
         && !Trigger_HasTemporaryOperand(descriptor, scope->nativeContext)) {
         unsigned char* text = descriptor + 112;
         unsigned long long size = *(unsigned long long*)(text + 16);
@@ -206,7 +243,8 @@ int Trigger_ReadRawParameter(void* self, const TriggerScopeView* scope, unsigned
             void* extra[6] = {0};
             void* container = ((ContainerFn)(img + 0x00542500u))(descriptor, scope->nativeContext,
                 &a, &b, &extra[0], &extra[1], &extra[2], &extra[3], &extra[4], &extra[5]);
-            if (Var64_ReadStoredContainerRaw(container, name, out)) return 1;
+            if (!Trigger_HasDynamicBinding(container, name, (size_t)size)
+                && Var64_ReadStoredContainerRaw(container, name, out)) return 1;
         }
     }
     *out = 0;

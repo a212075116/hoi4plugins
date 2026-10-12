@@ -15,7 +15,7 @@ static void* __fastcall temporary(void){return tempPresent?(void*)1:NULL;}
 static void* __fastcall variableName(void* d,void* out,void* ctx,void* index){makeString(out,stringText((unsigned char*)d+112));return out;}
 static unsigned char __fastcall contains(void* c,void* view){return strcmp(*(const char**)view,"left")==0;}
 static long long* __fastcall param(void* d,long long* out,void* ctx,void* x,unsigned char r){paramReads++;*out=tempPresent&&!((unsigned char*)d)[9]?250000:*(long long*)((char*)d+64);return out;}
-static void* __fastcall container(void* d,void* c,int* a,int* b,void** e,void** f,void** g,void** h,void** i,void** j){return *(void**)((char*)d+152);}
+static void* __fastcall container(void* d,void* c,int* a,int* b,void** e,void** f,void** g,void** h,void** i,void** j){static unsigned char box[64];void* raw=*(void**)((char*)d+152);if(!raw)return NULL;memset(box,0,64);memcpy(box,raw,8);return box;}
 static long long* __fastcall half(void* s,long long* out,void* ctx){*out=50000;return out;}
 static void __fastcall ctor(void* raw){unsigned char* p=raw;memset(p,0,104);*(size_t*)(p+40)=15;*(size_t*)(p+72)=15;ctors++;}
 static void __fastcall dtor(void* raw){unsigned char* p=raw;for(int o=16;o<=48;o+=32)if(*(size_t*)(p+o+24)>15)free(*(void**)(p+o));dtors++;}

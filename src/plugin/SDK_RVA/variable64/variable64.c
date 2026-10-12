@@ -226,6 +226,11 @@ static int Var64_ResolveGameVariableEx(void* self, void* ctx, long long* outValu
     unsigned long long k;
 
     if (img == NULL || p == NULL || nameBuf == NULL || nameBufSize < 40) return 0;
+    if (!ConsoleCmd_IsReadable(p + VAR64_SUBOBJ_OFF + 144, 24)) return 0;
+    if (*(void**)(p + VAR64_SUBOBJ_OFF + 144) != NULL || *(void**)(p + VAR64_SUBOBJ_OFF + 160) != NULL) {
+        Plugin_Log("[var64] indexed/compound target unsupported; no split write");
+        return 0;
+    }
     if (!ConsoleCmd_IsReadable(p + VAR64_NAME_OFF, 32)) return 0;
 
     size = *(unsigned long long*)(p + VAR64_NAME_OFF + 16);
@@ -832,6 +837,8 @@ static int Var64_ReadNameOnly(void* self, char* nameBuf, unsigned int nameBufSiz
     unsigned long long k;
 
     if (p == NULL || nameBuf == NULL || nameBufSize < 40) return 0;
+    if (!ConsoleCmd_IsReadable(p + VAR64_SUBOBJ_OFF + 144, 24)
+        || *(void**)(p + VAR64_SUBOBJ_OFF + 144) != NULL || *(void**)(p + VAR64_SUBOBJ_OFF + 160) != NULL) return 0;
     if (!ConsoleCmd_IsReadable(p + VAR64_NAME_OFF, 32)) return 0;
     size = *(unsigned long long*)(p + VAR64_NAME_OFF + 16);
     cap = *(unsigned long long*)(p + VAR64_NAME_OFF + 24);
@@ -1011,7 +1018,7 @@ static int Var64_ReadOperandNameAt(void* self, unsigned int paramOff,
 
     if (out == NULL || outSize < 8) return 0;
     out[0] = 0;
-    if (!ConsoleCmd_IsReadable(pd, 0x90)) return 0;
+    if (!ConsoleCmd_IsReadable(pd, 176) || *(void**)(pd + 144) != NULL || *(void**)(pd + 160) != NULL) return 0;
     if (*(unsigned char*)(pd + 9) != 0) return 0;
     size = *(unsigned long long*)(pd + 0x80);
     cap = *(unsigned long long*)(pd + 0x88);
