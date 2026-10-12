@@ -21,6 +21,8 @@ int EffectGameDate_Register(void);
 int Var64_RegisterEffects(void);
 int Var64_RegisterLoadGameCommand(void);
 void Var64_InstallLanguageBridge(void);
+int Array64_RegisterEffects(void);
+int Array64_RegisterTriggers(void);
 
 #define RVA_GS_GLOBAL   0x332F260u
 #define RVA_VT_MAIN     0x2721158u
@@ -188,6 +190,7 @@ static DWORD WINAPI PluginThread(LPVOID p)
                 if (ok) {
                     int nv = Var64_RegisterEffects();
                     Plugin_Log("[plugin] var64 effects registered: %d", nv);
+                    Plugin_Log("[plugin] array64 effects registered: %d", Array64_RegisterEffects());
                 }
                 if (ok) {
                     int nl = Var64_RegisterLoadGameCommand();
@@ -210,6 +213,7 @@ static DWORD WINAPI PluginThread(LPVOID p)
             if (registered == 0) Sleep(10);
         }
         Plugin_Log("[plugin] triggers registered: %d/3 (poll=%d)", registered, round);
+        Plugin_Log("[plugin] array64 triggers registered: %d", Array64_RegisterTriggers());
     }
 
     for (i = 0; i < 300; ++i) {

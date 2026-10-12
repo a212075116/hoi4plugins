@@ -216,7 +216,7 @@ int Effect_RegistryRegister(EffectDef* def)
     def->vt[EFF_VT_TOOLTIP / 8] = (void*)def->tooltip;
     if (def->supportedScopes != NULL) def->vt[19] = (void*)def->supportedScopes;
 
-    def->entryVt[0] = *(void**)(img + RVA_STAB_ENTRY_VT);
+    def->entryVt[0] = def->entryParser!=NULL?def->entryParser:*(void**)(img + RVA_STAB_ENTRY_VT);
     def->entryVt[1] = (void*)def->factory;
 
     *(void**)def->entry = def->entryVt;

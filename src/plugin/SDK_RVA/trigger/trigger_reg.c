@@ -320,7 +320,8 @@ void* Trigger_TypedTooltip(TriggerDef* def, void* self, void* out, void* ctx, un
             }
         } else {
             token = *(int*)((unsigned char*)self + 504);
-            valid = Trigger_ReadRawParameter(self, &view, 88u, &left)
+            if(def->operandReader!=NULL)valid=def->operandReader(self,&view,88u,&left)&&def->operandReader(self,&view,296u,&right);
+            else valid = Trigger_ReadRawParameter(self, &view, 88u, &left)
                 && Trigger_ReadRawParameter(self, &view, 296u, &right);
         }
     }

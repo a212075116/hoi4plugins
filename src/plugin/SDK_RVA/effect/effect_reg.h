@@ -45,6 +45,7 @@ typedef struct EffectDef {
     void*        vt[EFF_VT_SLOTS];
     void*        entryVt[4];
     unsigned char entry[16];
+    void* entryParser;
 } EffectDef;
 
 int  Effect_RegistryReady(void);

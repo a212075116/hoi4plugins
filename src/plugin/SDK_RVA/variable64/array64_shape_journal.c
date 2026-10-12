@@ -25,6 +25,7 @@ static int aj_target(int op,int index,int old,int size)
     if(op==3)return index>=0&&index<old?old-1:-2;
     if(op==4)return -1;
     if(op==5)return size;
+    if(op==6)return index>=0&&index<old?old:-2;
     return -2;
 }
 
@@ -47,7 +48,7 @@ int Array64_JournalPrepare(void* c,const char* name,const char* scope,unsigned l
 {
     Array64Snapshot* snapshot;unsigned int stamps[8],nested=0,pos,total,n=0;char roots[6][40];
     int sl=ad_scope(scope),old=-1,gen=0,target,count;long long value,encoded[3];
-    if(!scratch||!output||!written||!nonce||!lineage||!sl||!ag_name(name,roots)||op<0||op>5||size<0||size>4096||
+    if(!scratch||!output||!written||!nonce||!lineage||!sl||!ag_name(name,roots)||op<0||op>6||size<0||size>4096||
         !as_encode(raw,wide,encoded)||!aj_absent(c,name))return -1;
     snapshot=&scratch->baseline;
     for(int i=0;i<4;++i)if(!nonce[i]||nonce[i]>2147483647u)return -1;
@@ -91,7 +92,7 @@ static int aj_parse(void* c,const char* name,const char* scope,unsigned long lon
     j->op=aj_i32(record+12);j->index=aj_i32(record+16);j->old_length=aj_i32(record+20);j->old_generation=aj_i32(record+24);
     j->target_length=aj_i32(record+28);j->wide=aj_i32(record+40);j->size=aj_i32(record+44);
     {unsigned long long bits=ad_get(record+32,8);j->raw=bits<=9223372036854775807ull?(long long)bits:-1-(long long)(~bits);}
-    if(j->op<0||j->op>5||j->old_length<-1||j->old_length>4096||j->old_generation<0||j->old_generation>2147483644||
+    if(j->op<0||j->op>6||j->old_length<-1||j->old_length>4096||j->old_generation<0||j->old_generation>2147483644||
         j->old_generation%2||j->size<0||j->size>4096||!as_encode(j->raw,j->wide,encoded)||
         aj_target(j->op,j->index,j->old_length,j->size)!=j->target_length||j->target_length<-1||j->target_length>4096)return -2;
     for(int i=0;i<8;++i){j->stamps[i]=(unsigned int)ad_get(record+56+4*i,4);if(!j->stamps[i]||j->stamps[i]>2147483647u)return -2;}
@@ -212,7 +213,7 @@ int Array64_JournalFinish(void* c,const char* name,const char* scope,unsigned lo
         for(int i=0;i<length;++i)for(int k=0;k<3;++k){
             long long expected;
             if(mode!=1)expected=j->baseline.parts[i][k];
-            else if(j->op==0||(j->op==1&&i==j->old_length)||(j->op==2&&i==j->index)||(j->op==5&&i>=j->old_length))expected=encoded[k];
+            else if(j->op==0||(j->op==1&&i==j->old_length)||(j->op==2&&i==j->index)||(j->op==5&&i>=j->old_length)||(j->op==6&&i==j->index))expected=encoded[k];
             else {int oldindex=i;if(j->op==2&&i>j->index)--oldindex;if(j->op==3&&i>=j->index)++oldindex;expected=j->baseline.parts[oldindex][k];}
             tx_element_key(key,roots[3+k],i);if(na_lookup(c,key,&raw)!=1||raw!=expected)return -6;
         }

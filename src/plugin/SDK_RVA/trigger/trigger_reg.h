@@ -17,6 +17,7 @@ typedef int (__fastcall *TriggerPredicateFn)(void* self, void* scope);
 typedef unsigned char (__fastcall *TriggerEvalFn)(void* self, void* scope);
 typedef void* (__fastcall *TriggerTooltipFn)(void* self, void* out, void* ctx,
                                            unsigned char inverted, int indent);
+struct TriggerScopeView;
 
 typedef struct TriggerDef {
     const char* name;
@@ -32,6 +33,7 @@ typedef struct TriggerDef {
     void* vtStorage[TRG_MAX_VT_SLOTS + 1];
     void* entryVtStorage[3];
     void* entry;
+    int (__fastcall *operandReader)(void* self, const struct TriggerScopeView* scope, unsigned int offset, long long* out);
 } TriggerDef;
 
 typedef struct TriggerScopeView {

@@ -27,6 +27,10 @@ static int ad_scope(const char* s)
     int n = 0, i;
     if (!s) return 0;
     while (s[n]) { if (n >= 80) return 0; ++n; }
+    if(n==38&&s[0]=='s'&&s[1]=='c'&&s[2]=='o'&&s[3]=='p'&&s[4]=='e'&&s[5]==':'){
+        for(i=6;i<n;++i)if(!((s[i]>='0'&&s[i]<='9')||(s[i]>='A'&&s[i]<='F')))return 0;
+        return n;
+    }
     if (n == 6 && s[0]=='g' && s[1]=='l' && s[2]=='o' && s[3]=='b' && s[4]=='a' && s[5]=='l') return n;
     if (n == 11 && s[0]=='c' && s[1]=='o' && s[2]=='u' && s[3]=='n' && s[4]=='t' && s[5]=='r' && s[6]=='y' && s[7]==':') {
         for (i=8;i<11;++i) if (s[i]<'A' || s[i]>'Z') return 0;

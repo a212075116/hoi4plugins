@@ -94,7 +94,7 @@ int Array64_ShapeApply(void* c,const char* name,int op,int index,int expected_ge
     int size,const unsigned int* new_stamps,Array64ShapeWork* work,int fail_stage,int fail_compensation)
 {
     char roots[6][40];long long encoded[3],value;int count,gen,owned,i,j,step=0,rollback=0,ok;
-    if(!work||!ag_name(name,roots)||op<0||op>5||size<0||size>4096||fail_stage<0||fail_compensation<0||!as_encode(raw,wide,encoded))return -1;
+    if(!work||!ag_name(name,roots)||op<0||op>6||size<0||size>4096||fail_stage<0||fail_compensation<0||!as_encode(raw,wide,encoded))return -1;
     work->absent=op==0;
     if(op==0){
         if(expected_generation!=0||!new_stamps||!ag_inventory(c,roots,&owned)||owned||!as_owner_absent(c,name))return -2;
@@ -111,6 +111,7 @@ int Array64_ShapeApply(void* c,const char* name,int op,int index,int expected_ge
         else if(op==3){if(index<0||index>=count)return -1;work->new_length=count-1;for(i=index;i<count-1;++i)for(j=0;j<3;++j)work->next[i][j]=work->next[i+1][j];}
         else if(op==4)work->new_length=-1;
         else if(op==5){work->new_length=size;for(i=count;i<size;++i)for(j=0;j<3;++j)work->next[i][j]=encoded[j];}
+        else if(op==6){if(index<0||index>=count)return -1;for(j=0;j<3;++j)work->next[index][j]=encoded[j];}
     }
     gen=work->old_generation;
     if(!as_put(c,roots[1],(gen+1LL)*100000,&step,fail_stage))goto compensate;
