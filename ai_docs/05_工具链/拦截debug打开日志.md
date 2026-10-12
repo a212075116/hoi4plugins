@@ -4,7 +4,7 @@
 
 ## 结论
 
-**已实现**：插件对游戏的 IAT 打补丁，拦掉「用 notepad 打开 .log」的进程创建调用。
+**当前实现**：process_block.c使用MinHook/InlineHook_Install拦截CreateProcessA/W，拒绝包含notepad与.log的启动请求。下面的IAT分析/当轮计数是历史查证，不是现在的安装方式。
 本功能可单独开关（`ProcBlock_SetEnabled`），与崩溃文件重定向互不影响。
 
 实测日志（`reports/mod_loader_tbb.log`）：
@@ -45,14 +45,13 @@ console 命令 5 个、类结构校验 2/2）全部照常。
 
 ## 实现要点
 
-### 1. 只改 IAT 槽，不做 inline hook
+### 1. 历史IAT方案与当前MinHook实现
 
-与崩溃重定向同一套做法（见《崩溃文件重定向.md》）：运行时解析 PE 导入表拿到槽地址，
-`VirtualProtect` 改成可写后替换，不硬编码地址。
+早期IAT方案通过PE导入槽替换；当前源码改用ApiTarget解析kernel32导出并InlineHook_Install，配合TLS重入保护。不能把游戏自身通过IAT调用系统API，误写为本插件当前只改IAT。
 
 ### 2. 拦截判定
 
-命令行（或 `lpApplicationName`）同时满足两条才拦：
+源码优先检查非空命令行，否则回退application name；该选中的字符串同时满足两条才拦：
 
 - 含 `notepad`（不分大小写）
 - 含 `.log`（不分大小写）
@@ -90,3 +89,8 @@ return FALSE;
 ## 备份
 
 部署前原版 `tbb.dll` 备份为 `tbb.dll.bak_before_pblock`（游戏根目录）。
+
+## 外部控制台方向
+
+当前只拒绝记事本启动，不接管/停止日志写入，也没有交互输入窗口；规则并非逐次检查-debug标志。
+外部日志+命令终端可另行实现，见[可行性与接口方案](外部调试控制台可行性与接口方案.md)。本轮只提出方案，不宣称已开启或已部署。
