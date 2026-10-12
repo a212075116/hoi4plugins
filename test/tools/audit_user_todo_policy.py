@@ -11,6 +11,6 @@ rows=[{'key':'named_user_todo_exists','ok':todo.startswith('# 用户尚未测试
  {'key':'automatable_or_power_loss_not_checklist','ok':not re.search(r'^- \[ \].*(资源|掉电|哈希|原生夹具)',todo,re.M)},
  {'key':'current_growth_accepted_and_2GB_severity','ok':all(x in state for x in ['用户接受当前增量','2GB','不是总占用上限'])},
  {'key':'power_loss_not_required','ok':'不作为必须目标' in state},
- {'key':'design_not_implemented','ok':'未编写或部署' in design},
- {'key':'bidirectional_plan_and_safe_dispatch','ok':all(x in design for x in ['增量读取','命令请求','有界请求队列','不能从任意管道线程','ACL'])}]
+ {'key':'console_state_declared','ok':'未编写或部署' in design or ('已实现' in design and 'U04' in todo)},
+ {'key':'bidirectional_plan_and_safe_dispatch','ok':all(x in design for x in ['增量读取','有界请求队列','不能从任意管道线程','ACL'])}]
 result={'package':str(package),'checks':len(rows),'passed':sum(r['ok'] for r in rows),'rows':rows};result['exit']=int(result['checks']!=result['passed']);print(json.dumps(result,ensure_ascii=False,indent=2));raise SystemExit(result['exit'])

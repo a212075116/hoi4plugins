@@ -6,6 +6,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "carrier", "src\carrier\carr
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "plugin", "src\plugin\plugin.vcxproj", "{A1B2C3D4-0002-4E5F-9A8B-000000000002}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "debug_console", "src\debug_console\debug_console.vcxproj", "{A1B2C3D4-0003-4E5F-9A8B-000000000003}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -20,6 +22,10 @@ Global
 		{A1B2C3D4-0002-4E5F-9A8B-000000000002}.Debug|x64.Build.0 = Debug|x64
 		{A1B2C3D4-0002-4E5F-9A8B-000000000002}.Release|x64.ActiveCfg = Release|x64
 		{A1B2C3D4-0002-4E5F-9A8B-000000000002}.Release|x64.Build.0 = Release|x64
+		{A1B2C3D4-0003-4E5F-9A8B-000000000003}.Debug|x64.ActiveCfg = Debug|x64
+		{A1B2C3D4-0003-4E5F-9A8B-000000000003}.Debug|x64.Build.0 = Debug|x64
+		{A1B2C3D4-0003-4E5F-9A8B-000000000003}.Release|x64.ActiveCfg = Release|x64
+		{A1B2C3D4-0003-4E5F-9A8B-000000000003}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

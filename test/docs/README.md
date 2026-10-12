@@ -54,7 +54,7 @@ ROOT = r'D:/SteamLibrary/steamapps/common/Hearts of Iron IV'
 sys.path.insert(0, ROOT + '/hoi4plugins/test/tools')
 import hoi4_launch as HL
 
-HL.deploy()                                   # 杀游戏 + 复制 tbb.dll 与 hoi4_mod_plugin.dll
+HL.deploy()                                   # 杀游戏 + 复制载体、插件及外部控制台三个产物
 dt, _ = HL.launch(args=['-gdpr-compliant', '-start_tag=ABY', '-nolauncher', '-force_text_save'],
                   wait_marker='[plugin] Camera_RegisterCommands',   # 到达命令注册阶段；还需检查各模块成功数
                   timeout=200)
@@ -187,3 +187,7 @@ scalar64、typed Trigger、Array64正式接口/历史检查点及原生夹具统
 
 [用户尚未测试的待办事项](用户尚未测试的待办事项.md)仅列真实画面/手动体验和真人环境协调。
 用户接受当前资源增量，超过2GB增长才算严重问题（不是总进程内存2GB）；不要求解决掉电。自动资源监测不转移为用户专属待办。
+
+## 外部调试控制台
+
+2026-10-13第一版已实现，使用、自动测试与边界见[外部控制台测试入口](external_console.md)。`-debug`自动打开，可用`-no-plugin-console`禁止自动弹出；用户显示体验单独列在[用户待办](用户尚未测试的待办事项.md)的U04。

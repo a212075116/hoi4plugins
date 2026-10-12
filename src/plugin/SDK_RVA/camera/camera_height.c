@@ -46,6 +46,9 @@ int Camera_CaptureTrueUpperLimit(void)
     return 1;
 }
 
+static SRWLOCK g_smoothLock = SRWLOCK_INIT;
+static int g_smoothCancelled = 0;
+static unsigned char* g_smoothCamera;
 static volatile LONG g_smoothBusy = 0;
 static volatile LONG g_smoothKind = 0;
 static volatile LONG g_smoothFromBits = 0;
@@ -74,63 +77,81 @@ static float CameraSmoothRead(unsigned char* cam, int kind)
 
 static DWORD WINAPI CameraSmoothThreadProc(LPVOID param)
 {
-    float from;
-    float target;
-    float step;
+    float from, target, step, hFrom, hTo;
     unsigned char* cam;
-    int kind;
-    int i;
-
+    unsigned char* original;
+    int kind, withHeight, i;
     (void)param;
+    AcquireSRWLockExclusive(&g_smoothLock);
     kind = (int)g_smoothKind;
     from = *(float*)&g_smoothFromBits;
     target = *(float*)&g_smoothToBits;
+    withHeight = (int)g_smoothWithHeight;
+    hFrom = *(float*)&g_smoothHeightFromBits;
+    hTo = *(float*)&g_smoothHeightToBits;
+    original = g_smoothCamera;
+    ReleaseSRWLockExclusive(&g_smoothLock);
     step = (target - from) / (float)CAM_SMOOTH_STEPS;
-    Plugin_Log("[smooth] kind=%d from=%.2f to=%.2f step=%.2f withHeight=%d",
-               kind, from, target, step, (int)g_smoothWithHeight);
-
+    Plugin_Log("[smooth] kind=%d from=%.2f to=%.2f step=%.2f withHeight=%d", kind, from, target, step, withHeight);
     for (i = 1; i <= CAM_SMOOTH_STEPS; ++i) {
+        AcquireSRWLockExclusive(&g_smoothLock);
         cam = Camera_GetObject();
-        if (cam == NULL) { Plugin_Log("[smooth] camera lost at step %d", i); break; }
-        if (g_smoothWithHeight) {
-            float hFrom = *(float*)&g_smoothHeightFromBits;
-            float hTo = *(float*)&g_smoothHeightToBits;
-            float hv = hFrom + (hTo - hFrom) * (float)i / (float)CAM_SMOOTH_STEPS;
-            CameraSmoothApply(cam, 1, hv);
+        if (g_smoothCancelled || cam == NULL || cam != original) {
+            ReleaseSRWLockExclusive(&g_smoothLock);
+            break;
         }
+        if (withHeight) CameraSmoothApply(cam, 1, hFrom + (hTo - hFrom) * (float)i / (float)CAM_SMOOTH_STEPS);
         CameraSmoothApply(cam, kind, from + step * (float)i);
+        ReleaseSRWLockExclusive(&g_smoothLock);
         Sleep(CAM_SMOOTH_STEP_MS);
     }
-
+    AcquireSRWLockExclusive(&g_smoothLock);
     cam = Camera_GetObject();
-    if (cam != NULL) {
-        if (g_smoothWithHeight) {
-            CameraSmoothApply(cam, 1, *(float*)&g_smoothHeightToBits);
-        }
+    if (!g_smoothCancelled && cam != NULL && cam == original) {
+        if (withHeight) CameraSmoothApply(cam, 1, hTo);
         CameraSmoothApply(cam, kind, target);
-        Plugin_Log("[smooth] done kind=%d final=%.2f (readback %.2f) height=%.2f",
-                   kind, target, CameraSmoothRead(cam, kind),
-                   *(float*)(cam + OFF_CAM_HEIGHT));
+        Plugin_Log("[smooth] done kind=%d final=%.2f (readback %.2f) height=%.2f", kind, target,
+                   CameraSmoothRead(cam, kind), *(float*)(cam + OFF_CAM_HEIGHT));
     }
-
     InterlockedExchange(&g_smoothBusy, 0);
+    ReleaseSRWLockExclusive(&g_smoothLock);
     return 0;
 }
 
-static int CameraSmoothStart(void* cam, int kind, float target)
+static int CameraSmoothStart(void* cam, int kind, float target, int withHeight, float hFrom, float hTo)
 {
     HANDLE th;
-
-    if (InterlockedCompareExchange(&g_smoothBusy, 1, 0) != 0) return 0;
+    float from;
+    AcquireSRWLockExclusive(&g_smoothLock);
+    if (g_smoothBusy) {
+        g_smoothCancelled = 1;
+        CameraSmoothApply((unsigned char*)cam, kind, target);
+        if (withHeight) CameraSmoothApply((unsigned char*)cam, 1, hTo);
+        ReleaseSRWLockExclusive(&g_smoothLock);
+        return 1;
+    }
+    from = CameraSmoothRead((unsigned char*)cam, kind);
+    if (from == target && (!withHeight || hFrom == hTo)) {
+        ReleaseSRWLockExclusive(&g_smoothLock);
+        return 1;
+    }
+    g_smoothBusy = 1;
+    g_smoothCancelled = 0;
+    g_smoothCamera = (unsigned char*)cam;
     g_smoothKind = kind;
-    g_smoothFromBits = *(LONG*)&(float){ CameraSmoothRead((unsigned char*)cam, kind) };
+    g_smoothFromBits = *(LONG*)&from;
     g_smoothToBits = *(LONG*)&target;
+    g_smoothWithHeight = withHeight;
+    g_smoothHeightFromBits = *(LONG*)&hFrom;
+    g_smoothHeightToBits = *(LONG*)&hTo;
     th = CreateThread(NULL, 0, CameraSmoothThreadProc, NULL, 0, NULL);
     if (th == NULL) {
-        InterlockedExchange(&g_smoothBusy, 0);
+        g_smoothBusy = 0;
+        ReleaseSRWLockExclusive(&g_smoothLock);
         return 0;
     }
     CloseHandle(th);
+    ReleaseSRWLockExclusive(&g_smoothLock);
     return 1;
 }
 
@@ -146,7 +167,7 @@ int Camera_SetHeight(void* cam, float want)
 {
     if (cam == NULL) return 0;
     if (!ConsoleCmd_IsReadable((unsigned char*)cam + OFF_CAM_HEIGHT, 4)) return 0;
-    if (CameraSmoothStart(cam, 1, want)) return 1;
+    if (CameraSmoothStart(cam, 1, want, 0, 0, 0)) return 1;
     Plugin_Log("[smooth] busy, immediate height %.2f", want);
     *(float*)((unsigned char*)cam + OFF_CAM_HEIGHT) = want;
     return 1;
@@ -161,12 +182,8 @@ int Camera_SetLowerLimitSmooth(void* cam, int lo)
     if (!ConsoleCmd_IsReadable((unsigned char*)cam + OFF_CAM_MINH, 4)) return 0;
     hFrom = *(float*)((unsigned char*)cam + OFF_CAM_HEIGHT);
     hTo = (hFrom < (float)lo) ? (float)lo : hFrom;
-    g_smoothWithHeight = 1;
-    g_smoothHeightFromBits = *(LONG*)&hFrom;
-    g_smoothHeightToBits = *(LONG*)&hTo;
-    if (CameraSmoothStart(cam, 2, (float)lo)) return 1;
+    if (CameraSmoothStart(cam, 2, (float)lo, 1, hFrom, hTo)) return 1;
     Plugin_Log("[smooth] busy, immediate lower %d", lo);
-    g_smoothWithHeight = 0;
     Camera_SetLowerLimit(cam, lo);
     return 1;
 }
@@ -175,7 +192,7 @@ int Camera_SetUpperLimitSmooth(void* cam, int hi)
 {
     if (cam == NULL) return 0;
     if (!ConsoleCmd_IsReadable((unsigned char*)cam + OFF_CAM_MAXH, 4)) return 0;
-    if (CameraSmoothStart(cam, 3, (float)hi)) return 1;
+    if (CameraSmoothStart(cam, 3, (float)hi, 0, 0, 0)) return 1;
     Plugin_Log("[smooth] busy, immediate upper %d", hi);
     Camera_SetUpperLimit(cam, hi);
     return 1;

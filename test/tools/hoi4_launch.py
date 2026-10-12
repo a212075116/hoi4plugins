@@ -62,7 +62,7 @@ if __name__ == '__main__':
     print('ready in %.2fs (marker %s)' % (dt, marker))
     print(status())
 BUILD = os.path.join(ROOT, 'hoi4plugins', 'build', 'Release')
-DEPLOY = ['tbb.dll', 'hoi4_mod_plugin.dll']
+DEPLOY = ['tbb.dll', 'hoi4_mod_plugin.dll', 'hoi4_debug_console.exe']
 
 def deploy():
     """Kill hoi4 first, then copy build outputs to game root. Returns list of (name, bytes)."""

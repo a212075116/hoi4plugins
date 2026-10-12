@@ -6,6 +6,7 @@
 
 #include "carrier.h"
 #include "console_cmd.h"
+#include "debug_console.h"
 #include "camera_height.h"
 #include "effect_reg.h"
 #include "trigger_reg.h"
@@ -168,6 +169,8 @@ static DWORD WINAPI PluginThread(LPVOID p)
         Plugin_Log("[plugin] ProcBlock_Install -> %d", ok);
     }
 
+    DebugConsole_Start();
+
     {
         int round;
         int ok = 0;
@@ -254,6 +257,8 @@ static DWORD WINAPI PluginThread(LPVOID p)
         int n = CrashTest_RegisterCommands();
         Plugin_Log("[plugin] CrashTest_RegisterCommands -> %d", n);
     }
+
+    DebugConsole_RegisterCommands();
 
     {
         int round;

@@ -25,7 +25,7 @@ variable64 最新状态优先看 [当前状态与复现](09_脚本数值系统/�
 
 Bool、TRG_VALUE_DEF、TRG_VARIABLE_DEF和typed scope/tooltip适配已实现；Array64有专用operandReader。见[注册器 API](10_Trigger系统/注册器API与验证.md)、[数值块](10_Trigger系统/数值块模板与Scope适配.md)。
 
-Array64已正式接入10个effect与1个trigger，使用[Array64单人交付说明](09_脚本数值系统/Array64单人交付说明.md)。功能主线基本完成；资源增长归因、GUI视觉、多人与掉电等发布检查仍未完成。
+Array64已正式接入10个effect与1个trigger，使用[Array64单人交付说明](09_脚本数值系统/Array64单人交付说明.md)。功能主线基本完成；当前资源增量已被用户接受，掉电不作为必须目标，GUI视觉和多人仍未全面验收。外部控制台第一版见[使用与接口](05_工具链/外部调试控制台可行性与接口方案.md)。
 测试入口见[test/docs数值索引](../test/docs/numeric_system.md)，不要把旧CModule阶段“未开放API”当作当前状态。
 
 ## 约定
