@@ -2,6 +2,7 @@
 #include <tlhelp32.h>
 #include <shlobj.h>
 #include <stdio.h>
+#include <iostream>
 #include <string>
 #include <vector>
 #include <deque>
@@ -9,6 +10,9 @@
 #include <thread>
 #include <atomic>
 #include <algorithm>
+#include <condition_variable>
+#include <functional>
+#include <chrono>
 
 static DWORD g_pid;
 static HANDLE g_game, g_pipe = INVALID_HANDLE_VALUE, g_mutex;
@@ -21,6 +25,9 @@ static std::atomic<int> g_filter(0);
 static HANDLE g_in, g_out;
 static DWORD g_oldMode;
 static bool g_console;
+static bool g_interactiveLane;
+static HANDLE g_cancel;
+static std::wstring g_logDirectory;
 
 static std::wstring Wide(const std::string& text) {
     int n = MultiByteToWideChar(CP_UTF8, 0, text.data(), (int)text.size(), NULL, 0);
@@ -71,6 +78,12 @@ struct Tail {
     std::string partial;
     std::string sentinel;
     bool dropping = false;
+    uint64_t Backlog() const {
+        WIN32_FILE_ATTRIBUTE_DATA a;
+        if (!GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &a)) return 0;
+        uint64_t n = ((uint64_t)a.nFileSizeHigh << 32) | a.nFileSizeLow;
+        return n > offset ? n - offset : 0;
+    }
     std::vector<std::string> Poll() {
         std::vector<std::string> rows;
         HANDLE h = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
@@ -89,32 +102,34 @@ struct Tail {
             if (identity) rows.push_back("[log reset/recreated]");
             identity = id; volume = info.dwVolumeSerialNumber; offset = 0; partial.clear(); sentinel.clear(); dropping = false;
         }
-        if ((uint64_t)size.QuadPart - offset > 1024 * 1024) {
-            offset = (uint64_t)size.QuadPart - 65536; partial.clear(); sentinel.clear(); dropping = true;
-            rows.push_back("[log backlog exceeded 1MiB; older output skipped]");
-        }
         LARGE_INTEGER pos; pos.QuadPart = offset;
         if (!SetFilePointerEx(h, pos, NULL, FILE_BEGIN)) { CloseHandle(h); return rows; }
         char buffer[65536]; DWORD n = 0;
         if (ReadFile(h, buffer, sizeof(buffer), &n, NULL)) {
-            offset += n;
-            sentinel.append(buffer, n);
-            if (sentinel.size() > 32) sentinel.erase(0, sentinel.size() - 32);
-            size_t emitted = 0;
+            DWORD consumed = 0;
             for (DWORD i = 0; i < n; ++i) {
-                char c = buffer[i];
+                char c = buffer[i]; consumed = i + 1;
                 if (c == '\n') {
-                    if (!dropping) {
-                        if (!partial.empty() && partial.back() == '\r') partial.pop_back();
-                        if (emitted++ < 256) rows.push_back(partial);
-                    }
-                    partial.clear(); dropping = false;
-                } else if (!dropping) {
+                    if (!partial.empty() && partial.back() == '\r') partial.pop_back();
+                    rows.push_back(partial); partial.clear();
+                } else {
                     partial.push_back(c);
-                    if (partial.size() >= 65536) { partial.clear(); dropping = true; rows.push_back("[oversized log line skipped]"); }
+                    if (partial.size() >= 65536) {
+                        size_t boundary = partial.size();
+                        size_t start = boundary - 1;
+                        while (start && (((unsigned char)partial[start] & 0xc0) == 0x80)) --start;
+                        unsigned char lead = (unsigned char)partial[start];
+                        size_t width = lead >= 0xf0 ? 4 : lead >= 0xe0 ? 3 : lead >= 0xc0 ? 2 : 1;
+                        if (start + width > boundary) boundary = start;
+                        rows.push_back(partial.substr(0, boundary) + " [line continues]");
+                        partial.erase(0, boundary);
+                    }
                 }
+                if (rows.size() >= 256) break;
             }
-            if (emitted > 256) rows.push_back("[output rate limit: extra lines skipped]");
+            offset += consumed;
+            sentinel.append(buffer, consumed);
+            if (sentinel.size() > 32) sentinel.erase(0, sentinel.size() - 32);
         }
         CloseHandle(h); return rows;
     }
@@ -126,7 +141,8 @@ static bool Connect() {
         if (PeekNamedPipe(g_pipe, NULL, 0, NULL, &available, NULL)) return true;
         CloseHandle(g_pipe); g_pipe = INVALID_HANDLE_VALUE;
     }
-    wchar_t name[128]; DcPipeName(name, _countof(name), g_pid);
+    wchar_t name[128]; if (g_interactiveLane) DcInteractivePipeName(name, _countof(name), g_pid);
+    else DcPipeName(name, _countof(name), g_pid);
     ULONGLONG end = GetTickCount64() + 3000;
     do {
         g_pipe = CreateFileW(name, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING,
@@ -139,7 +155,7 @@ static bool Connect() {
         }
         WaitNamedPipeW(name, 100);
         Sleep(50);
-    } while (GetTickCount64() < end && WaitForSingleObject(g_game, 0) == WAIT_TIMEOUT);
+    } while (!g_stop && GetTickCount64() < end && WaitForSingleObject(g_game, 0) == WAIT_TIMEOUT);
     return false;
 }
 static bool Send(const std::string& line, DcResponse& result, std::string& output) {
@@ -147,12 +163,12 @@ static bool Send(const std::string& line, DcResponse& result, std::string& outpu
     if (!Connect()) { output = "Cannot connect to this game's local console service."; return false; }
     DcRequest req = {DC_MAGIC, DC_PROTOCOL_VERSION, ++g_id, (uint32_t)line.size()};
     if (!req.id) req.id = ++g_id;
-    if (DcTransfer(g_pipe, &req, sizeof(req), 1, 5000) &&
-        DcTransfer(g_pipe, (void*)line.data(), req.length, 1, 5000) &&
-        DcTransfer(g_pipe, &result, sizeof(result), 0, 15000) &&
+    if (DcTransferWithCancel(g_pipe, &req, sizeof(req), 1, 5000, g_cancel) &&
+        DcTransferWithCancel(g_pipe, (void*)line.data(), req.length, 1, 5000, g_cancel) &&
+        DcTransferWithCancel(g_pipe, &result, sizeof(result), 0, 15000, g_cancel) &&
         result.magic == DC_MAGIC && result.version == DC_PROTOCOL_VERSION && result.id == req.id && result.length <= DC_OUTPUT_MAX) {
         output.resize(result.length);
-        if (!result.length || DcTransfer(g_pipe, &output[0], result.length, 0, 5000)) return true;
+        if (!result.length || DcTransferWithCancel(g_pipe, &output[0], result.length, 0, 5000, g_cancel)) return true;
     }
     CloseHandle(g_pipe); g_pipe = INVALID_HANDLE_VALUE;
     output = "Connection lost: execution outcome is unknown. NOT automatically retried; reconnect before deciding to repeat.";
@@ -167,6 +183,11 @@ static void Logs(std::wstring root) {
         tails.push_back({std::wstring(docs) + L"\\Paradox Interactive\\Hearts of Iron IV\\logs\\error.log"});
     } else { tails.push_back({L""}); tails.push_back({L""}); }
     tails.push_back({root + L"\\reports\\mod_loader_tbb.log"});
+    if (!g_logDirectory.empty()) {
+        tails.clear();
+        for (auto name : {L"game.log", L"error.log", L"plugin.log"}) tails.push_back({g_logDirectory + L"\\" + name});
+    }
+    ULONGLONG warned = 0;
     const wchar_t* labels[] = {L"GAME", L"ERROR", L"PLUGIN"};
     while (!g_stop && WaitForSingleObject(g_game, 0) == WAIT_TIMEOUT) {
         for (size_t i = 0; i < tails.size(); ++i) {
@@ -178,46 +199,107 @@ static void Logs(std::wstring root) {
                 }
             }
         }
-        Sleep(200);
+        uint64_t pending = 0; for (auto& t : tails) pending += t.Backlog();
+        if (pending > 1024 * 1024 && GetTickCount64() - warned > 5000) {
+            warned = GetTickCount64();
+            Print(L"[CONSOLE] Log backlog=" + std::to_wstring(pending) + L" bytes; no complete lines skipped.");
+        }
+        Sleep(pending ? 5 : 200);
     }
     if (!g_stop) { Print(L"[CONSOLE] Game exited; closing console."); g_stop = true; }
 }
 
+class CommandQueue {
+    std::mutex lock;
+    std::condition_variable wake;
+    std::deque<std::string> queue;
+    bool stopping = false;
+    std::function<void(const std::string&)> execute;
+    std::thread worker;
+    void Run() {
+        for (;;) {
+            std::string line;
+            { std::unique_lock<std::mutex> guard(lock);
+              wake.wait(guard, [&]{ return stopping || !queue.empty(); });
+              if (stopping) return;
+              line = std::move(queue.front()); queue.pop_front(); }
+            execute(line);
+        }
+    }
+public:
+    explicit CommandQueue(std::function<void(const std::string&)> fn) : execute(std::move(fn)), worker(&CommandQueue::Run, this) {}
+    bool Submit(const std::string& line) {
+        std::lock_guard<std::mutex> guard(lock);
+        if (stopping || queue.size() >= 8) return false;
+        queue.push_back(line); wake.notify_one(); return true;
+    }
+    void RequestStop() {
+        { std::lock_guard<std::mutex> guard(lock); stopping = true; queue.clear(); }
+        if (g_cancel) SetEvent(g_cancel);
+        wake.notify_all();
+    }
+    void Stop() {
+        RequestStop(); if (worker.joinable()) worker.join();
+    }
+    ~CommandQueue() { Stop(); }
+};
+static void ExecuteLine(const std::string& line) {
+    if (line == "/reconnect") {
+        if (g_pipe != INVALID_HANDLE_VALUE) CloseHandle(g_pipe);
+        g_pipe = INVALID_HANDLE_VALUE;
+        Print(Connect() ? L"[CONSOLE] Reconnected." : L"[CONSOLE] Service unavailable.");
+        return;
+    }
+    DcResponse res = {0}; std::string text; bool ok = Send(line, res, text);
+    wchar_t meta[160]; _snwprintf_s(meta, _countof(meta), _TRUNCATE, L"[RESULT id=%u status=%u ok=%u thread=%u] ", res.id, res.status, res.ok, res.thread);
+    Print((ok ? std::wstring(meta) : L"[CONSOLE] ") + Wide(text));
+}
 static int SelfTest() {
     wchar_t temp[MAX_PATH], file[MAX_PATH]; GetTempPathW(MAX_PATH, temp); GetTempFileNameW(temp, L"hdc", 0, file);
-    DeleteFileW(file); Tail t{file}; int count = 0;
-    auto check = [&](bool ok, const char* name) { printf("%s %s\n", ok ? "PASS" : "FAIL", name); if (ok) ++count; };
+    DeleteFileW(file); Tail t{file}; int count = 0, total = 0;
+    auto check = [&](bool ok, const char* name) { ++total; printf("%s %s\n", ok ? "PASS" : "FAIL", name); if (ok) ++count; };
     auto write = [&](const std::string& s, DWORD disposition) {
         HANDLE h = CreateFileW(file, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, disposition, 0, NULL);
         SetFilePointer(h, 0, NULL, FILE_END); DWORD n; WriteFile(h, s.data(), (DWORD)s.size(), &n, NULL); CloseHandle(h);
     };
+    auto drain = [&] { std::vector<std::string> all; for (int i=0;i<10000;++i) { auto r=t.Poll(); all.insert(all.end(),r.begin(),r.end()); if (!t.Backlog()) break; } return all; };
     check(t.Poll().empty(), "missing-file");
     write("partial", CREATE_ALWAYS); check(t.Poll().empty(), "partial-line");
     write(" done\n", OPEN_EXISTING); check(t.Poll() == std::vector<std::string>{"partial done"}, "partial-complete");
     check(t.Poll().empty(), "no-duplicate");
     write("\xe4\xb8", OPEN_EXISTING); check(t.Poll().empty(), "split-utf8-prefix");
     write("\xad\n", OPEN_EXISTING); check(t.Poll() == std::vector<std::string>{"\xe4\xb8\xad"}, "split-utf8-complete");
-    write("r\n", CREATE_ALWAYS); auto r = t.Poll(); check(r.size() == 2 && r.back() == "r", "truncate");
-    DeleteFileW(file); write("new-file\n", CREATE_ALWAYS); r = t.Poll(); check(r.size() == 2 && r.back() == "new-file", "recreate");
-    write(std::string(70000, 'x') + "\nlast\n", OPEN_EXISTING); r = t.Poll(); auto r2 = t.Poll();
-    check(r.size() == 1 && r[0] == "[oversized log line skipped]" && r2.back() == "last", "long-line-bounded");
-    write(std::string(2 * 1024 * 1024, 'y') + "\ntail\n", OPEN_EXISTING); r = t.Poll();
-    check(r.front().find("backlog") != std::string::npos && r.back() == "tail", "backlog-bounded");
-    write(std::string(600, '\n'), OPEN_EXISTING); r = t.Poll(); check(r.size() == 257, "rate-limit");
-    write("old\n", CREATE_ALWAYS); t.Poll();
-    write(std::string(500, 'z') + "\n", CREATE_ALWAYS); r = t.Poll();
-    check(r.size() == 2 && r.back() == std::string(500, 'z'), "truncate-regrow-between-polls");
-    check(Wide("\x1b[31m") == L" [31m", "escape-sanitized");
-    check(Utf8(Wide("\xe4\xb8\xad")) == "\xe4\xb8\xad", "utf8-roundtrip");
-    DeleteFileW(file); printf("%d/14\n", count); return count == 14 ? 0 : 1;
+    write("r\n", CREATE_ALWAYS); auto r=t.Poll(); check(r.size()==2 && r.back()=="r", "truncate");
+    DeleteFileW(file); write("new-file\n", CREATE_ALWAYS); r=t.Poll(); check(r.size()==2 && r.back()=="new-file", "recreate");
+    write(std::string(70000,'x')+"\nlast\n", OPEN_EXISTING); r=drain();
+    check(r.size()==3 && r[0]==std::string(65536,'x')+" [line continues]" && r[1]==std::string(4464,'x') && r.back()=="last", "long-line-lossless-chunks");
+    std::string expected; for (int i=0;i<90000;++i) expected+="SEQ:"+std::to_string(i)+" payload\n";
+    write(expected, OPEN_EXISTING); r=drain(); std::string actual; for(auto& line:r) actual+=line+'\n';
+    check(actual==expected, "large-backlog-lossless");
+    write(std::string(600,'\n'), OPEN_EXISTING); r=drain(); check(r.size()==600, "budget-resumes-without-drop");
+    write("old\n",CREATE_ALWAYS); t.Poll(); write(std::string(500,'z')+"\n",CREATE_ALWAYS); r=t.Poll();
+    check(r.size()==2 && r.back()==std::string(500,'z'), "truncate-regrow-between-polls");
+    check(Wide("\x1b[31m")==L" [31m", "escape-sanitized");
+    check(Utf8(Wide("\xe4\xb8\xad"))=="\xe4\xb8\xad", "utf8-roundtrip");
+    std::atomic<bool> entered(false), release(false); std::atomic<int> executed(0);
+    CommandQueue q([&](const std::string&) { entered=true; while(!release) Sleep(1); ++executed; });
+    q.Submit("slow"); while(!entered) Sleep(1);
+    auto start=GetTickCount64(); bool accepted=true; for(int i=0;i<8;++i) accepted &= q.Submit("queued");
+    check(accepted && GetTickCount64()-start<100, "submit-does-not-block-input");
+    check(!q.Submit("overflow"), "input-queue-bounded"); q.RequestStop(); release=true; q.Stop();
+    check(executed==1, "shutdown-cancels-unsent-queue");
+    DeleteFileW(file); printf("%d/%d\n",count,total); return count==total?0:1;
 }
 
 int wmain(int argc, wchar_t** argv) {
     std::wstring command;
-    DWORD logsMs = 0;
+    DWORD logsMs = 0; bool sessionStdio = false;
     for (int i = 1; i < argc; ++i) {
         if (!wcscmp(argv[i], L"--self-test")) return SelfTest();
         if (!wcscmp(argv[i], L"--pid") && i + 1 < argc) g_pid = wcstoul(argv[++i], NULL, 10);
+        else if (!wcscmp(argv[i], L"--session-stdio")) { sessionStdio = true; g_interactiveLane = true; }
+        else if (!wcscmp(argv[i], L"--log-dir") && i + 1 < argc) g_logDirectory = argv[++i];
+        else if (!wcscmp(argv[i], L"--interactive-command") && i + 1 < argc) { command = argv[++i]; g_interactiveLane = true; }
         else if (!wcscmp(argv[i], L"--command") && i + 1 < argc) command = argv[++i];
         else if (!wcscmp(argv[i], L"--logs-ms") && i + 1 < argc) {
             logsMs = wcstoul(argv[++i], NULL, 10);
@@ -243,6 +325,24 @@ int wmain(int argc, wchar_t** argv) {
     if (!slash || _wcsicmp(slash + 1, L"hoi4.exe")) { fprintf(stderr, "PID is not hoi4.exe.\n"); return 2; }
     *slash = 0;
     if (logsMs && !command.empty()) { fprintf(stderr, "Choose --command or --logs-ms, not both.\n"); return 2; }
+    g_cancel = CreateEventW(NULL, TRUE, FALSE, NULL);
+    if (!g_cancel) return 2;
+    if (sessionStdio) {
+        setvbuf(stdout, NULL, _IONBF, 0);
+        CommandQueue commands(ExecuteLine); std::string line;
+        std::thread logWorker;
+        if (!g_logDirectory.empty()) logWorker = std::thread(Logs, std::wstring(gamePath));
+        while (std::getline(std::cin, line)) {
+            if (line == "/quit") break;
+            if (line == "/help") { Print(L"[LOCAL] responsive"); continue; }
+            if (!commands.Submit(line)) Print(L"[CONSOLE] Queue busy; command not accepted.");
+            else Print(L"[QUEUED] " + Wide(line));
+        }
+        g_stop = true; commands.Stop();
+        if (logWorker.joinable()) logWorker.join();
+        if (g_pipe != INVALID_HANDLE_VALUE) CloseHandle(g_pipe);
+        CloseHandle(g_cancel); CloseHandle(g_game); return 0;
+    }
     if (logsMs) {
         std::thread logs(Logs, std::wstring(gamePath)); Sleep(logsMs); g_stop = true; logs.join();
         CloseHandle(g_game); return 0;
@@ -262,10 +362,12 @@ int wmain(int argc, wchar_t** argv) {
     DWORD outMode;
     g_console = GetConsoleMode(g_in, &g_oldMode) && GetConsoleMode(g_out, &outMode);
     if (!g_console) { fprintf(stderr, "Interactive console required; use --command for scripted requests.\n"); return 2; }
+    g_interactiveLane = true;
     SetConsoleMode(g_in, (g_oldMode | ENABLE_WINDOW_INPUT | ENABLE_EXTENDED_FLAGS) & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_QUICK_EDIT_MODE | ENABLE_PROCESSED_INPUT));
     SetConsoleTitleW(L"HOI4 plugin debug console (local / single-player)");
     Write(L"HOI4 external console v1. /help for local actions; game commands use the native dispatcher.\r\n"); Prompt();
     std::thread logs(Logs, std::wstring(gamePath));
+    CommandQueue commands(ExecuteLine);
     std::deque<std::wstring> history; size_t hist = 0; bool quit = false;
     while (!g_stop && !quit) {
         if (WaitForSingleObject(g_in, 100) != WAIT_OBJECT_0) continue;
@@ -279,7 +381,7 @@ int wmain(int argc, wchar_t** argv) {
             if (history.empty() || history.back() != line) { history.push_back(line); if (history.size() > 128) history.pop_front(); } hist = history.size();
             if (line == L"/quit") quit = true;
             else if (line == L"/help") Print(L"[CONSOLE] /filter all|game|error|plugin, /clear, /reconnect, /quit; Up/Down history; Left/Right/Home/End/Delete edit. No OS shell.");
-            else if (line == L"/reconnect") { if (g_pipe != INVALID_HANDLE_VALUE) CloseHandle(g_pipe); g_pipe = INVALID_HANDLE_VALUE; Print(Connect() ? L"[CONSOLE] Reconnected." : L"[CONSOLE] Service unavailable."); }
+            else if (line == L"/reconnect") { if (!commands.Submit("/reconnect")) Print(L"[CONSOLE] Queue busy; reconnect not accepted."); }
             else if (line == L"/clear") {
                 std::lock_guard<std::mutex> lock(g_display); CONSOLE_SCREEN_BUFFER_INFO info; GetConsoleScreenBufferInfo(g_out, &info); DWORD w; COORD zero = {0,0};
                 FillConsoleOutputCharacterW(g_out, L' ', info.dwSize.X * info.dwSize.Y, zero, &w); SetConsoleCursorPosition(g_out, zero); Prompt();
@@ -288,9 +390,8 @@ int wmain(int argc, wchar_t** argv) {
                 if (filter < 0) Print(L"[CONSOLE] Unknown filter."); else { g_filter = filter; Print(L"[CONSOLE] Filter=" + f); }
             } else if (line[0] == L'/') Print(L"[CONSOLE] Unknown local action; /help.");
             else {
-                DcResponse res = {0}; std::string text; bool ok = Send(Utf8(line), res, text);
-                wchar_t meta[160]; _snwprintf_s(meta, _countof(meta), _TRUNCATE, L"[RESULT id=%u status=%u ok=%u thread=%u] ", res.id, res.status, res.ok, res.thread);
-                Print((ok ? std::wstring(meta) : L"[CONSOLE] ") + Wide(text));
+                if (!commands.Submit(Utf8(line))) Print(L"[CONSOLE] Queue busy; command not accepted.");
+                else Print(L"[CONSOLE] Request queued; input remains active.");
             }
             continue;
         }
@@ -308,7 +409,7 @@ int wmain(int argc, wchar_t** argv) {
         }
         Prompt();
     }
-    g_stop = true; logs.join(); SetConsoleMode(g_in, g_oldMode);
+    g_stop = true; commands.Stop(); logs.join(); SetConsoleMode(g_in, g_oldMode);
     if (g_pipe != INVALID_HANDLE_VALUE) CloseHandle(g_pipe);
     CloseHandle(g_mutex); CloseHandle(g_game); return 0;
 }

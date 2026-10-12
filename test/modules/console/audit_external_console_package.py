@@ -13,7 +13,7 @@ with zipfile.ZipFile(p) as z:
  check('native-permission-dispatch',b'0x24B4D40' in source and b'0xDD3A50' in source and b'GetCurrentThreadId() != g_thread' in source)
  check('local-acl-and-server-identity',all(x in source for x in [b'ConvertSidToStringSidW',b'PIPE_REJECT_REMOTE_CLIENTS',b'FILE_FLAG_FIRST_PIPE_INSTANCE',b'ProcessIdToSessionId']) and b'GetNamedPipeServerProcessId' in client)
  check('bounded-cancel-fifo',all(x in source for x in [b'cancelled before execution',b'p->serial = ++g_serial',b'g_queue[i].serial < p->serial']) and b'DC_INPUT_MAX 2048' in protocol and b'DC_QUEUE_MAX 32' in protocol)
- check('bounded-log-tail',all(x in client for x in [b'65536',b'1024 * 1024',b'partial',b'sentinel',b'rate limit']))
+ check('bounded-log-tail',all(x in client for x in [b'65536',b'256',b'partial',b'sentinel',b'line continues']))
  check('user-visual-todo',b'U04' in data('test/docs/用户尚未测试的待办事项.md'))
  manifest='test/reports/20261012_variable64_transaction/CURRENT_BUILD.json'
  m=json.loads(data(manifest)) if manifest in names else {}

@@ -16,7 +16,10 @@ typedef struct { uint32_t magic, version, id, length, status, ok, thread; } DcRe
 static void DcPipeName(wchar_t* out, size_t count, DWORD pid) {
     _snwprintf_s(out, count, _TRUNCATE, L"\\\\.\\pipe\\hoi4-plugin-debug-v1-%lu", pid);
 }
-static int DcTransfer(HANDLE h, void* data, DWORD count, int writing, DWORD timeout) {
+static void DcInteractivePipeName(wchar_t* out, size_t count, DWORD pid) {
+    _snwprintf_s(out, count, _TRUNCATE, L"\\\\.\\pipe\\hoi4-plugin-debug-ui-v1-%lu", pid);
+}
+static int DcTransferWithCancel(HANDLE h, void* data, DWORD count, int writing, DWORD timeout, HANDLE cancel) {
     unsigned char* p = (unsigned char*)data;
     ULONGLONG end = GetTickCount64() + timeout;
     while (count) {
@@ -28,7 +31,9 @@ static int DcTransfer(HANDLE h, void* data, DWORD count, int writing, DWORD time
         ok = writing ? WriteFile(h, p, count, &n, &ov) : ReadFile(h, p, count, &n, &ov);
         err = ok ? ERROR_SUCCESS : GetLastError();
         if (!ok && err == ERROR_IO_PENDING) {
-            if (WaitForSingleObject(ov.hEvent, (DWORD)(end - now)) != WAIT_OBJECT_0) {
+            HANDLE events[2] = {ov.hEvent, cancel};
+            DWORD waited = cancel ? WaitForMultipleObjects(2, events, FALSE, (DWORD)(end-now)) : WaitForSingleObject(ov.hEvent, (DWORD)(end-now));
+            if (waited != WAIT_OBJECT_0) {
                 CancelIoEx(h, &ov);
                 GetOverlappedResult(h, &ov, &n, TRUE);
                 CloseHandle(ov.hEvent); return 0;
@@ -40,4 +45,8 @@ static int DcTransfer(HANDLE h, void* data, DWORD count, int writing, DWORD time
         p += n; count -= n;
     }
     return 1;
+}
+
+static int DcTransfer(HANDLE h, void* data, DWORD count, int writing, DWORD timeout) {
+    return DcTransferWithCancel(h, data, count, writing, timeout, NULL);
 }

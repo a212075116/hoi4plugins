@@ -22,7 +22,7 @@ typedef struct {
 } Pending;
 static SRWLOCK g_lock = SRWLOCK_INIT;
 static Pending g_queue[DC_QUEUE_MAX];
-static HANDLE g_pipes[DC_PEERS];
+static HANDLE g_pipes[DC_PEERS + 1];
 static DWORD g_thread;
 static ULONGLONG g_serial;
 static volatile LONG g_started, g_failed, g_commandsReady;
@@ -203,6 +203,16 @@ static DWORD WINAPI Peer(LPVOID value) {
             if (!GetNamedPipeClientProcessId(h, &pid) || !ProcessIdToSessionId(pid, &theirs) ||
                 !ProcessIdToSessionId(GetCurrentProcessId(), &mine) || mine != theirs) connected = FALSE;
         }
+        if (connected && h == g_pipes[DC_PEERS]) {
+            ULONG pid; wchar_t expected[MAX_PATH], actual[MAX_PATH]; DWORD size = _countof(actual);
+            HANDLE process = NULL;
+            if (GetNamedPipeClientProcessId(h, &pid)) process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+            GetModuleFileNameW(NULL, expected, _countof(expected));
+            { wchar_t* slash = wcsrchr(expected, L'\\');
+              if (slash) wcscpy_s(slash+1, _countof(expected)-(slash+1-expected), L"hoi4_debug_console.exe"); }
+            if (!process || !QueryFullProcessImageNameW(process, 0, actual, &size) || _wcsicmp(actual, expected)) connected = FALSE;
+            if (process) CloseHandle(process);
+        }
         while (connected) {
             DcRequest req; DcResponse res = {DC_MAGIC, DC_PROTOCOL_VERSION, 0, 0, DC_REJECTED, 0, 0};
             char input[DC_INPUT_MAX + 1], output[DC_OUTPUT_MAX + 1] = {0}; Pending* p = NULL;
@@ -274,10 +284,11 @@ static DWORD WINAPI StartDebugService(LPVOID unused) {
     LocalFree(sid); LocalFree(user); CloseHandle(token);
     if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, SDDL_REVISION_1, &sd, NULL)) return 3;
     sa.lpSecurityDescriptor = sd; DcPipeName(name, _countof(name), GetCurrentProcessId());
-    for (i = 0; i < DC_PEERS; ++i) {
-        g_pipes[i] = CreateNamedPipeW(name, PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED | (i ? 0 : FILE_FLAG_FIRST_PIPE_INSTANCE),
+    for (i = 0; i <= DC_PEERS; ++i) {
+        if (i == DC_PEERS) DcInteractivePipeName(name, _countof(name), GetCurrentProcessId());
+        g_pipes[i] = CreateNamedPipeW(name, PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED | ((i && i != DC_PEERS) ? 0 : FILE_FLAG_FIRST_PIPE_INSTANCE),
             PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
-            DC_PEERS, DC_OUTPUT_MAX + 32, DC_INPUT_MAX + 32, 5000, &sa);
+            i == DC_PEERS ? 1 : DC_PEERS, DC_OUTPUT_MAX + 32, DC_INPUT_MAX + 32, 5000, &sa);
         if (g_pipes[i] == INVALID_HANDLE_VALUE) {
             Plugin_Log("[debugconsole] pipe creation failed error=%lu", GetLastError());
             while (i--) CloseHandle(g_pipes[i]); LocalFree(sd); return 4;
@@ -288,7 +299,7 @@ static DWORD WINAPI StartDebugService(LPVOID unused) {
         g_queue[i].done = CreateEventW(NULL, TRUE, FALSE, NULL);
         if (!g_queue[i].done) {
             while (i--) CloseHandle(g_queue[i].done);
-            for (i = 0; i < DC_PEERS; ++i) CloseHandle(g_pipes[i]);
+            for (i = 0; i <= DC_PEERS; ++i) CloseHandle(g_pipes[i]);
             Plugin_Log("[debugconsole] completion event creation failed"); return 7;
         }
     }
@@ -297,13 +308,13 @@ static DWORD WINAPI StartDebugService(LPVOID unused) {
         MH_CreateHook((char*)GetModuleHandleW(NULL) + 0xDD3A50, Frame, (void**)&g_frame) != MH_OK ||
         MH_EnableHook((char*)GetModuleHandleW(NULL) + 0xDD3A50) != MH_OK) {
         Plugin_Log("[debugconsole] scheduler unavailable; service not enabled");
-        for (i = 0; i < DC_PEERS; ++i) CloseHandle(g_pipes[i]);
+        for (i = 0; i <= DC_PEERS; ++i) CloseHandle(g_pipes[i]);
         for (i = 0; i < DC_QUEUE_MAX; ++i) CloseHandle(g_queue[i].done);
         return 5;
     }
-    for (i = 0; i < DC_PEERS; ++i) { HANDLE t = CreateThread(NULL, 0, Peer, g_pipes[i], 0, NULL); if (t) CloseHandle(t); }
+    for (i = 0; i <= DC_PEERS; ++i) { HANDLE t = CreateThread(NULL, 0, Peer, g_pipes[i], 0, NULL); if (t) CloseHandle(t); }
     InterlockedExchange(&g_started, 2);
-    Plugin_Log("[debugconsole] service ready pid=%lu game_thread=%lu protocol=1 peers=4 queue=32", GetCurrentProcessId(), g_thread);
+    Plugin_Log("[debugconsole] service ready pid=%lu game_thread=%lu protocol=1 peers=4 interactive=1 queue=32", GetCurrentProcessId(), g_thread);
     argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     for (i = 1; argv && i < argc; ++i) if (!_wcsicmp(argv[i], L"-debug") || !_wcsicmp(argv[i], L"-plugin-console")) autoOpen = 1;
     for (i = 1; argv && i < argc; ++i) if (!_wcsicmp(argv[i], L"-no-plugin-console")) autoOpen = 0;

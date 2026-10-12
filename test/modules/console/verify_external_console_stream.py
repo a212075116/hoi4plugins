@@ -1,6 +1,6 @@
-import ctypes,json,struct,time
+import ctypes,json,struct,time,sys
 import verify_external_console as V
-K=V.K;out=V.OUT/'stream.json';assert not out.exists();p=V.pid();rows=[]
+K=V.K;out=V.OUT/((sys.argv[1] if len(sys.argv)>1 else 'stream')+'.json');assert not out.exists();p=V.pid();rows=[]
 def openpipe():
  h=K.CreateFileW(r'\\.\pipe\hoi4-plugin-debug-v1-'+str(p),0xc0000000,0,None,3,0,None);assert h!=V.INVALID;return h
 def write(h,b):
