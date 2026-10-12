@@ -879,7 +879,20 @@ static int Var64_ReadStoredIn(void* container, const char* name, long long* outR
     if (outRaw != NULL) {
         long long integer = (long long)(((unsigned long long)(unsigned int)(hi / VAR64_SLOT_SCALE) << 32)
             | (unsigned int)(lo / VAR64_SLOT_SCALE));
-        *outRaw = integer * VAR64_FRAC_SCALE + frac / VAR64_SLOT_SCALE - VAR64_FRAC_BIAS;
+        long long fraction = frac / VAR64_SLOT_SCALE - VAR64_FRAC_BIAS;
+        long long raw;
+        if (integer > 9223372036854775807LL / VAR64_FRAC_SCALE) {
+            if (integer != 9223372036854775807LL / VAR64_FRAC_SCALE + 1 || fraction >= 0) return 0;
+            --integer; fraction += VAR64_FRAC_SCALE;
+        }
+        if (integer < (-9223372036854775807LL - 1) / VAR64_FRAC_SCALE) {
+            if (integer != (-9223372036854775807LL - 1) / VAR64_FRAC_SCALE - 1 || fraction <= 0) return 0;
+            ++integer; fraction -= VAR64_FRAC_SCALE;
+        }
+        raw = integer * VAR64_FRAC_SCALE;
+        if ((fraction > 0 && raw > 9223372036854775807LL - fraction)
+            || (fraction < 0 && raw < (-9223372036854775807LL - 1) - fraction)) return 0;
+        *outRaw = raw + fraction;
     }
     return 1;
 }
@@ -887,6 +900,12 @@ static int Var64_ReadStoredIn(void* container, const char* name, long long* outR
 static int Var64_IsStored64(void* self, void* ctx, const char* name)
 {
     return Var64_ReadStoredIn(Var64_Container(self, ctx), name, NULL);
+}
+
+int Var64_ReadStoredContainerRaw(void* container, const char* name, long long* out)
+{
+    if (out == NULL) return 0;
+    return Var64_ReadStoredIn(container, name, out);
 }
 
 

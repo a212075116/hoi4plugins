@@ -1,6 +1,10 @@
 #pragma once
 
 #define TRG_VT_SLOTS 23
+#define TRG_MAX_VT_SLOTS 26
+#define TRG_TEMPLATE_BOOL 0
+#define TRG_TEMPLATE_VALUE 1
+#define TRG_TEMPLATE_VARIABLE 2
 #define TRG_VT_TOOLTIP 21
 #define TRG_VT_EVAL 22
 #define TRG_PARAM_BOOL_OFFSET 88
@@ -22,10 +26,26 @@ typedef struct TriggerDef {
     TriggerTooltipFn tooltip;
     int tokenId;
     int state;
-    void* vtStorage[TRG_VT_SLOTS + 1];
+    int parameterTemplate;
+    void* valueGetter;
+    void* vtStorage[TRG_MAX_VT_SLOTS + 1];
     void* entryVtStorage[3];
     void* entry;
 } TriggerDef;
+
+typedef struct TriggerScopeView {
+    void* nativeContext;
+    unsigned int mask;
+} TriggerScopeView;
+
+typedef long long (__fastcall *TriggerValueFn)(void* self, const TriggerScopeView* scope);
+int Trigger_ScopeView(void* context, TriggerScopeView* out);
+int Trigger_ReadRawParameter(void* self, const TriggerScopeView* scope, unsigned int offset, long long* out);
+int Trigger_CompareRaw(long long left, long long right, int token);
+unsigned char Trigger_EvaluateValue(void* self, void* scope, TriggerValueFn value);
+unsigned char __fastcall Trigger_EvaluateVariable(void* self, void* scope);
+void* Trigger_NewTypedInstance(TriggerDef* def);
+void* Trigger_TypedTooltip(TriggerDef* def, void* self, void* out, void* ctx, unsigned char invert, int indent);
 
 int Trigger_RegistryReady(void);
 int Trigger_RegistryRegister(TriggerDef* def);
@@ -53,3 +73,30 @@ void* Trigger_BuildTooltip(void* self, void* out, void* ctx,
         sym##_def.eval = sym##_eval; sym##_def.factory = sym##_factory;      \
         sym##_def.tooltip = sym##_tooltip;                                  \
     }
+
+#define TRG_VALUE_DEF(sym, NM, DS, LK, FN)                                   \
+    static TriggerDef sym##_def;                                           \
+    static void* __fastcall sym##_factory(void)                            \
+    { return Trigger_NewTypedInstance(&sym##_def); }                        \
+    static unsigned char __fastcall sym##_eval(void* s, void* c)            \
+    { return Trigger_EvaluateValue(s, c, FN); }                             \
+    static long long* __fastcall sym##_value(void* s, long long* out, void* c) \
+    { TriggerScopeView view; *out = Trigger_ScopeView(c, &view) ? FN(s, &view) : 0; return out; } \
+    static void* __fastcall sym##_tooltip(void* s, void* o, void* c, unsigned char inv, int indent) \
+    { return Trigger_TypedTooltip(&sym##_def, s, o, c, inv, indent); }       \
+    static void sym##_fill(void)                                           \
+    { sym##_def.name=NM; sym##_def.desc=DS; sym##_def.locKey=LK;             \
+      sym##_def.eval=sym##_eval; sym##_def.factory=sym##_factory;           \
+      sym##_def.tooltip=sym##_tooltip; sym##_def.parameterTemplate=TRG_TEMPLATE_VALUE; \
+      sym##_def.valueGetter=(void*)sym##_value; }
+
+#define TRG_VARIABLE_DEF(sym, NM, DS, LK)                                   \
+    static TriggerDef sym##_def;                                           \
+    static void* __fastcall sym##_factory(void)                            \
+    { return Trigger_NewTypedInstance(&sym##_def); }                        \
+    static void* __fastcall sym##_tooltip(void* s, void* o, void* c, unsigned char inv, int indent) \
+    { return Trigger_TypedTooltip(&sym##_def, s, o, c, inv, indent); }       \
+    static void sym##_fill(void)                                           \
+    { sym##_def.name=NM; sym##_def.desc=DS; sym##_def.locKey=LK;             \
+      sym##_def.eval=Trigger_EvaluateVariable; sym##_def.factory=sym##_factory; \
+      sym##_def.tooltip=sym##_tooltip; sym##_def.parameterTemplate=TRG_TEMPLATE_VARIABLE; }

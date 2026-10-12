@@ -25,6 +25,14 @@ TRG_BOOL_DEF(demo_true, "plugin_trigger_true", "Plugin trigger returning true.",
 TRG_BOOL_DEF(demo_false, "plugin_trigger_false", "Plugin trigger returning false.", "PLUGIN_TRIGGER_FALSE", PredicateFalse)
 TRG_BOOL_DEF(demo_scope, "plugin_trigger_scope", "Plugin trigger checking a scope pointer.", "PLUGIN_TRIGGER_SCOPE", PredicateHasScope)
 
+static long long __fastcall ValueHalf(void* self, const TriggerScopeView* scope)
+{
+    (void)self; (void)scope; return 50000;
+}
+
+TRG_VALUE_DEF(demo_half, "plugin_value_half", "Fixed-point half comparison.", "PLUGIN_VALUE_HALF", ValueHalf)
+TRG_VARIABLE_DEF(demo_variable, "plugin_check_variable64", "Scoped fixed-point variable comparison.", "PLUGIN_CHECK_VARIABLE64")
+
 static TriggerDef g_bulkDefs[256];
 static char g_bulkNames[256][32];
 
@@ -68,6 +76,12 @@ int TriggerDemo_Register(void)
         rejected = Trigger_RegistryRegister(&collision);
         Plugin_Log("[trg] duplicate definition rejected=%d count=%d", !rejected, Trigger_RegistryRegisteredCount());
         TriggerDemo_OptionalBulk();
+        {
+            TriggerDef* typed[] = { &demo_half_def, &demo_variable_def };
+            demo_half_fill(); demo_variable_fill();
+            if (Trigger_RegistryRegisterAll(typed, 2) != 2) return 0;
+            Plugin_Log("[trg] typed templates registered=2 total=%d", Trigger_RegistryRegisteredCount());
+        }
     }
     return result;
 }

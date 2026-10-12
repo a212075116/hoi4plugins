@@ -23,8 +23,15 @@
 #define RVA_PACK_KEY 0x02245E60u
 #define RVA_FORMAT_TEXT 0x010E48A0u
 #define RVA_APPEND_TEXT 0x00129C10u
+#define RVA_VALUE_VT 0x027915A0u
+#define RVA_VALUE_ENTRY_VT 0x027A0BC0u
+#define RVA_VALUE_FACTORY 0x003E6A70u
+#define RVA_VARIABLE_VT 0x02799320u
+#define RVA_VARIABLE_ENTRY_VT 0x0279FF90u
+#define RVA_VARIABLE_FACTORY 0x003E3E10u
 
 extern void Plugin_Log(const char* fmt, ...);
+extern int Var64_ReadStoredContainerRaw(void* container, const char* name, long long* out);
 typedef void* (__fastcall *GameAllocFn)(size_t);
 typedef void (__fastcall *GameFreeFn)(void*);
 typedef void* (__fastcall *GameFactoryFn)(void);
@@ -36,6 +43,23 @@ typedef void* (__fastcall *AppendFn)(void*, const char*, size_t);
 typedef char trigger_pointer_size_check[(sizeof(void*) == 8) ? 1 : -1];
 
 static int g_triggerCount = 0;
+
+typedef struct TriggerTemplate {
+    unsigned int vt, entryVt, factory, parse, eval;
+    int slots;
+} TriggerTemplate;
+
+static int Trigger_Template(int kind, TriggerTemplate* out)
+{
+    static const TriggerTemplate templates[] = {
+        {RVA_ALWAYS_VT, RVA_ALWAYS_ENTRY_VT, RVA_ALWAYS_FACTORY, RVA_ALWAYS_PARSE, RVA_ALWAYS_EVAL, 23},
+        {RVA_VALUE_VT, RVA_VALUE_ENTRY_VT, RVA_VALUE_FACTORY, 0x013A2690u, 0x013A2180u, 26},
+        {RVA_VARIABLE_VT, RVA_VARIABLE_ENTRY_VT, RVA_VARIABLE_FACTORY, 0x0054AE70u, 0x003D0BB0u, 23}
+    };
+    if (out == NULL || kind < 0 || kind > TRG_TEMPLATE_VARIABLE) return 0;
+    *out = templates[kind];
+    return 1;
+}
 
 static unsigned char* Trigger_Image(void)
 {
@@ -111,6 +135,105 @@ void* Trigger_NewInstance(void* vt)
     return instance;
 }
 
+void* Trigger_NewTypedInstance(TriggerDef* def)
+{
+    TriggerTemplate t;
+    unsigned char* img = Trigger_Image();
+    void* instance;
+    if (img == NULL || def == NULL || !Trigger_Template(def->parameterTemplate, &t)
+        || !ConsoleCmd_IsReadable(img + t.factory, 16)) return NULL;
+    instance = ((GameFactoryFn)(img + t.factory))();
+    if (instance != NULL) *(void**)instance = def->vtStorage + 1;
+    return instance;
+}
+
+int Trigger_ScopeView(void* context, TriggerScopeView* out)
+{
+    unsigned char* img = Trigger_Image();
+    typedef unsigned int (__fastcall *ScopeMaskFn)(void*);
+    if (out == NULL) return 0;
+    out->nativeContext = NULL; out->mask = 0;
+    if (img == NULL || !ConsoleCmd_IsReadable(context, 176)
+        || !ConsoleCmd_IsReadable(img + 0x00537D90u, 16)) return 0;
+    out->nativeContext = context;
+    out->mask = ((ScopeMaskFn)(img + 0x00537D90u))(context);
+    return 1;
+}
+
+int Trigger_ReadRawParameter(void* self, const TriggerScopeView* scope, unsigned int offset, long long* out)
+{
+    unsigned char* img = Trigger_Image();
+    unsigned char* descriptor;
+    typedef long long* (__fastcall *ParamFn)(void*, long long*, void*, void*, unsigned char);
+    typedef void* (__fastcall *ContainerFn)(void*, void*, int*, int*, void**, void**, void**, void**, void**, void**);
+    if (img == NULL || self == NULL || scope == NULL || scope->nativeContext == NULL || out == NULL) return 0;
+    if (offset != 88u && offset != 96u && offset != 296u) return 0;
+    descriptor = (unsigned char*)self + offset;
+    if (!ConsoleCmd_IsReadable(descriptor, 208) || !descriptor[8]) return 0;
+    if (!descriptor[9] && !descriptor[10] && !descriptor[11] && *(void**)(descriptor + 168) == NULL) {
+        unsigned char* text = descriptor + 112;
+        unsigned long long size = *(unsigned long long*)(text + 16);
+        unsigned long long cap = *(unsigned long long*)(text + 24);
+        const char* name = cap <= 15 ? (const char*)text : *(const char**)text;
+        if (size > 0 && size <= 33 && size <= cap && ConsoleCmd_IsReadable(name, (size_t)size + 1)
+            && name[size] == 0 && memchr(name, 0, (size_t)size) == NULL) {
+            int a = 0, b = 0;
+            void* extra[6] = {0};
+            void* container = ((ContainerFn)(img + 0x00542500u))(descriptor, scope->nativeContext,
+                &a, &b, &extra[0], &extra[1], &extra[2], &extra[3], &extra[4], &extra[5]);
+            if (Var64_ReadStoredContainerRaw(container, name, out)) return 1;
+        }
+    }
+    *out = 0;
+    ((ParamFn)(img + 0x00544C90u))(descriptor, out, scope->nativeContext, NULL, 0);
+    return 1;
+}
+
+int Trigger_CompareRaw(long long left, long long right, int token)
+{
+    switch (token) {
+        case 467: return left > right;
+        case 468: return left < right;
+        case 14578: return left != right;
+        case 14579: return left <= right;
+        case 14580: return left == right;
+        case 14581: return left >= right;
+        default: return 0;
+    }
+}
+
+unsigned char Trigger_EvaluateValue(void* self, void* scope, TriggerValueFn value)
+{
+    TriggerScopeView view;
+    long long rhs;
+    int token;
+    if (value == NULL || !ConsoleCmd_IsReadable(self, 304) || !Trigger_ScopeView(scope, &view)
+        || !Trigger_ReadRawParameter(self, &view, 96u, &rhs)) return 0;
+    token = *(int*)((unsigned char*)self + 88);
+    if (token != 467 && token != 468) return 0;
+    return (unsigned char)Trigger_CompareRaw(value(self, &view), rhs, token);
+}
+
+unsigned char __fastcall Trigger_EvaluateVariable(void* self, void* scope)
+{
+    TriggerScopeView view;
+    long long lhs, rhs;
+    if (!ConsoleCmd_IsReadable(self, 544) || !Trigger_ScopeView(scope, &view)
+        || !Trigger_ReadRawParameter(self, &view, 88u, &lhs)
+        || !Trigger_ReadRawParameter(self, &view, 296u, &rhs)) return 0;
+    return (unsigned char)Trigger_CompareRaw(lhs, rhs, *(int*)((unsigned char*)self + 504));
+}
+
+void* Trigger_TypedTooltip(TriggerDef* def, void* self, void* out, void* ctx, unsigned char invert, int indent)
+{
+    TriggerTemplate t;
+    unsigned char* img = Trigger_Image();
+    TriggerTooltipFn fn;
+    if (img == NULL || def == NULL || !Trigger_Template(def->parameterTemplate, &t)) return out;
+    fn = *(TriggerTooltipFn*)(img + t.vt + TRG_VT_TOOLTIP * 8);
+    return fn(self, out, ctx, invert, indent);
+}
+
 int Trigger_ParamBool(void* self)
 {
     if (self == NULL || !ConsoleCmd_IsReadable((unsigned char*)self + TRG_PARAM_BOOL_OFFSET, 1)) return 0;
@@ -159,6 +282,7 @@ void* Trigger_BuildTooltip(void* self, void* out, void* ctx,
 
 int Trigger_RegistryRegister(TriggerDef* def)
 {
+    TriggerTemplate t;
     unsigned char* img;
     void* map;
     int id;
@@ -167,7 +291,9 @@ int Trigger_RegistryRegister(TriggerDef* def)
     unsigned char* entry;
     if (def == NULL) return 0;
     if (!Trigger_ValidName(def->name) || def->desc == NULL || def->locKey == NULL
-        || def->eval == NULL || def->factory == NULL || def->tooltip == NULL) {
+        || def->eval == NULL || def->factory == NULL || def->tooltip == NULL
+        || !Trigger_Template(def->parameterTemplate, &t)
+        || (def->parameterTemplate == TRG_TEMPLATE_VALUE && def->valueGetter == NULL)) {
         def->state = TRG_STATE_FAILED;
         return 0;
     }
@@ -176,9 +302,11 @@ int Trigger_RegistryRegister(TriggerDef* def)
     map = *(void**)(img + RVA_TRIGGER_MAP);
     if (def->state == TRG_STATE_OK)
         return Trigger_FindEntry(map, def->tokenId) == def->entry;
-    if (*(void**)(img + RVA_ALWAYS_VT + 4 * 8) != img + RVA_ALWAYS_PARSE
-        || *(void**)(img + RVA_ALWAYS_VT + TRG_VT_EVAL * 8) != img + RVA_ALWAYS_EVAL
-        || *(void**)(img + RVA_ALWAYS_ENTRY_VT + 8) != img + RVA_ALWAYS_FACTORY) {
+    if (!ConsoleCmd_IsReadable(img + t.vt - 8, (size_t)(t.slots + 1) * 8)
+        || !ConsoleCmd_IsReadable(img + t.entryVt - 8, 24)
+        || *(void**)(img + t.vt + 4 * 8) != img + t.parse
+        || *(void**)(img + t.vt + TRG_VT_EVAL * 8) != img + t.eval
+        || *(void**)(img + t.entryVt + 8) != img + t.factory) {
         def->state = TRG_STATE_FAILED;
         return 0;
     }
@@ -192,12 +320,13 @@ int Trigger_RegistryRegister(TriggerDef* def)
         return 0;
     }
     if (id == 0) { def->state = TRG_STATE_FAILED; return 0; }
-    for (i = 0; i < TRG_VT_SLOTS + 1; ++i)
-        def->vtStorage[i] = *(void**)(img + RVA_ALWAYS_VT - 8 + (size_t)i * 8);
+    for (i = 0; i < t.slots + 1; ++i)
+        def->vtStorage[i] = *(void**)(img + t.vt - 8 + (size_t)i * 8);
     def->vtStorage[1 + TRG_VT_EVAL] = (void*)def->eval;
     def->vtStorage[1 + TRG_VT_TOOLTIP] = (void*)def->tooltip;
-    def->entryVtStorage[0] = *(void**)(img + RVA_ALWAYS_ENTRY_VT - 8);
-    def->entryVtStorage[1] = *(void**)(img + RVA_ALWAYS_ENTRY_VT);
+    if (def->parameterTemplate == TRG_TEMPLATE_VALUE) def->vtStorage[1 + 23] = def->valueGetter;
+    def->entryVtStorage[0] = *(void**)(img + t.entryVt - 8);
+    def->entryVtStorage[1] = *(void**)(img + t.entryVt);
     def->entryVtStorage[2] = (void*)def->factory;
     entry = (unsigned char*)((GameAllocFn)(img + RVA_GAME_ALLOC))(24);
     if (entry == NULL) { def->state = TRG_STATE_FAILED; return 0; }

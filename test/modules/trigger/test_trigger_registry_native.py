@@ -20,6 +20,7 @@ static unsigned char mapObject[64],head[48],builtin[24];
 static int nextId=20000,allocFailure=0,checks=0,failures=0;
 static unsigned char tokenData[72*64];
 void Plugin_Log(const char* fmt,...){(void)fmt;}
+int Var64_ReadStoredContainerRaw(void* container,const char* name,long long* out){(void)container;(void)name;(void)out;return 0;}
 int ConsoleCmd_IsReadable(const void* p,size_t n){MEMORY_BASIC_INFORMATION b;if(!p||!VirtualQuery(p,&b,sizeof(b)))return 0;return b.State==MEM_COMMIT&&!(b.Protect&PAGE_NOACCESS)&&n<=(size_t)((char*)b.BaseAddress+b.RegionSize-(char*)p);}
 static void* __fastcall alloc(size_t n){return allocFailure?NULL:calloc(1,n);}
 static void __fastcall release(void* p){free(p);}
