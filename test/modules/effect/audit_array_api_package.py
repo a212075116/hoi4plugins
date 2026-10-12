@@ -6,7 +6,11 @@ with zipfile.ZipFile(package) as z:
  assert present==compiled
  result={'package':str(package),'api_present':present,'api_compiled_into_plugin':compiled,'project_xml_valid':True}
  if present:
+  manifest='test/reports/20261012_variable64_transaction/CURRENT_BUILD.json'
+  current=json.loads(z.read(manifest)) if manifest in z.namelist() else None
+  if current:dll=current['dll_archive']
   code=z.read(source);assert b'array64_shape_journal.c' in code and b'check_array64' in code and b'Array64_JournalApply' in code
   binary=z.read(dll);offset=struct.unpack_from('<I',binary,60)[0];assert binary[:2]==b'MZ' and binary[offset:offset+4]==b'PE\0\0' and struct.unpack_from('<H',binary,offset+4)[0]==0x8664
   result['production_dll_sha256']=hashlib.sha256(binary).hexdigest();result['effects']=10;result['triggers']=1
+  if current:assert result['production_dll_sha256']==current['sha256']
  result['exit']=0;print(json.dumps(result))

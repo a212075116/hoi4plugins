@@ -130,3 +130,7 @@
 | entry 析构 | 借用游戏 `CEffectEntry` 虚表的 `[0]` | 同上 |
 | 参数 | `sub_140544C90(self+0x58, ...)` | 原版做法；`+0x108` 在工具提示阶段是空的 |
 | 本地化 | `sub_142245E60` 打包 + `sub_1410E48A0` 格式化 | 自己拼 `packed` 会 access violation |
+
+## 字符串追加ABI修正
+
+Effect_BuildTooltip当前使用RVA0x129C10的append(out,data,size)。0x11DBC0是5参数扩容/拷贝入口，不能按2参数调用；此前现场AV已复现并修正，见[摄像机统一](摄像机Effect与控制台路径统一.md)。

@@ -92,3 +92,9 @@ python -u test/lib/crash_report.py
 | Effect 注册原理 | `ai_docs/08_Effect系统/注册新Effect.md` |
 | hook 选型（IAT vs inline） | `ai_docs/05_工具链/MinHook集成与hook选型.md` |
 | 崩溃文件重定向 | `ai_docs/05_工具链/崩溃文件重定向.md` |
+
+## 摄像机共享路径专项
+
+`python test/modules/camera/test_camera_effect_shared.py SOURCE OUTPUT_DIR`是源码抽取+受控依赖，不启动游戏。
+`python -u test/modules/camera/verify_camera_effect_shared.py NEW_PHASE`会部署、重启旧存档、建立camera fixture/本地化并执行四种effect，最后恢复原高度/上下限；不保存战役。
+本轮正式事件9/9、受控C13/13、Scope12/12；未因此验证屏幕像素或完整中文视觉。

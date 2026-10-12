@@ -9,8 +9,6 @@
 
 extern void Plugin_Log(const char* fmt, ...);
 
-typedef void (__fastcall *CamSetHeightFn)(void* cam, float h);
-
 static int g_cameraEffectExecCount = 0;
 
 static float CameraEffect_ReadCurrentHeight(void* cam)
@@ -18,11 +16,9 @@ static float CameraEffect_ReadCurrentHeight(void* cam)
     return *(float*)((unsigned char*)cam + OFF_CAM_HEIGHT);
 }
 
-static void CameraEffect_WriteHeight(void* cam, float h)
+static int CameraEffect_WriteHeight(void* cam, float h)
 {
-    unsigned char* img = (unsigned char*)GetModuleHandleA(NULL);
-    if (img == NULL) return;
-    ((CamSetHeightFn)(img + RVA_CAM_SETH))(cam, h);
+    return Camera_SetHeight(cam, h);
 }
 
 static void __fastcall ExecSetCamHeight(void* self, void* scope)
@@ -42,10 +38,13 @@ static void __fastcall ExecSetCamHeight(void* self, void* scope)
     }
     want = Effect_ParamFloat(self, scope);
     before = CameraEffect_ReadCurrentHeight(cam);
-    CameraEffect_WriteHeight(cam, want);
+    if (!CameraEffect_WriteHeight(cam, want)) {
+        Plugin_Log("[eff] set_camera_height #%d: shared setter rejected", g_cameraEffectExecCount);
+        return;
+    }
     after = CameraEffect_ReadCurrentHeight(cam);
-    Plugin_Log("[eff] set_camera_height #%d  %.2f -> %.2f (param %.3f)",
-               g_cameraEffectExecCount, before, after, want);
+    Plugin_Log("[eff] set_camera_height #%d from=%.2f target=%.3f immediate-readback=%.2f",
+               g_cameraEffectExecCount, before, want, after);
 }
 
 static void __fastcall ExecAddCamHeight(void* self, void* scope)
@@ -65,10 +64,13 @@ static void __fastcall ExecAddCamHeight(void* self, void* scope)
     }
     delta = Effect_ParamFloat(self, scope);
     before = CameraEffect_ReadCurrentHeight(cam);
-    CameraEffect_WriteHeight(cam, before + delta);
+    if (!CameraEffect_WriteHeight(cam, before + delta)) {
+        Plugin_Log("[eff] add_camera_height #%d: shared setter rejected", g_cameraEffectExecCount);
+        return;
+    }
     after = CameraEffect_ReadCurrentHeight(cam);
-    Plugin_Log("[eff] add_camera_height #%d  %.2f -> %.2f (delta %.3f)",
-               g_cameraEffectExecCount, before, after, delta);
+    Plugin_Log("[eff] add_camera_height #%d from=%.2f target=%.3f delta=%.3f immediate-readback=%.2f",
+               g_cameraEffectExecCount, before, before + delta, delta, after);
 }
 
 static void __fastcall ExecSetLowerLimit(void* self, void* scope)
@@ -99,8 +101,7 @@ static void __fastcall ExecSetLowerLimit(void* self, void* scope)
     }
     Camera_SetLowerLimitSmooth(cam, want);
     Camera_GetLimits(cam, &lo, &hi);
-    Effect_SetParamFixed(self, (double)lo);
-    Plugin_Log("[eff] set_camera_height_lowerlimit  want=%d  lo %d -> %d  hi=%d  height=%.2f",
+    Plugin_Log("[eff] set_camera_height_lowerlimit target=%d previous=%d immediate-readback=%d hi=%d height=%.2f",
                want, old, lo, hi, CameraEffect_ReadCurrentHeight(cam));
 }
 
@@ -132,8 +133,7 @@ static void __fastcall ExecSetUpperLimit(void* self, void* scope)
     }
     Camera_SetUpperLimitSmooth(cam, want);
     Camera_GetLimits(cam, &lo, &hi);
-    Effect_SetParamFixed(self, (double)hi);
-    Plugin_Log("[eff] set_camera_height_upperlimit  want=%d  hi %d -> %d  lo=%d  height=%.2f",
+    Plugin_Log("[eff] set_camera_height_upperlimit target=%d previous=%d immediate-readback=%d lo=%d height=%.2f",
                want, old, hi, lo, CameraEffect_ReadCurrentHeight(cam));
 }
 

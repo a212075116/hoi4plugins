@@ -201,4 +201,4 @@
       if (cam) Camera_SetHeight(cam, h);          // 复用已实证的 setter
     }
 
-当前Camera_SetHeight在camera_height.c走平滑/字段写入，不是调用sub_1412643F0；effect_camera.c仍通过CameraEffect_WriteHeight调用该RVA。这里的早期映射不能当作两个入口已统一的证明；见[已知问题](../01_工程与构建/已知问题.md)。
+当前Camera_SetHeight走字段/平滑路径，高度Effect已复用同一接口。旧sub_1412643F0调用不再作为推荐路线；见[路径统一](摄像机Effect与控制台路径统一.md)。

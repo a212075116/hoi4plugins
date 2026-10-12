@@ -16,7 +16,7 @@ typedef void* (__fastcall *PackKeyFn)(void* out, const char* key, void* params, 
 typedef void* (__fastcall *FormatFn)(void* out, void* ctx, void* packed);
 typedef void  (__fastcall *ParamCtorFn)(void* p);
 typedef void  (__fastcall *ParamDtorFn)(void* p);
-typedef void  (__fastcall *StrAppendFn)(void* str, unsigned long long n);
+typedef void* (__fastcall *StrAppendFn)(void* str, const char* data, size_t n);
 typedef char  assert_ptr64[(sizeof(void*) == 8) ? 1 : -1];
 
 static int g_registeredEffectCount = 0;
@@ -119,8 +119,6 @@ void* Effect_BuildTooltip(void* self, void* out, void* ctx, const char* locKey)
     unsigned long long sz;
     unsigned long long cap;
     unsigned char* src;
-    unsigned char* dst;
-    unsigned long long i;
 
     if (img == NULL || out == NULL) return out;
     if (locKey == NULL) locKey = "";
@@ -154,12 +152,7 @@ void* Effect_BuildTooltip(void* self, void* out, void* ctx, const char* locKey)
     *(unsigned char*)out = 0;
 
     if (sz > 0 && sz < 400 && ConsoleCmd_IsReadable(src, (size_t)sz)) {
-        ((StrAppendFn)(img + RVA_EFF_STR_APPEND))(out, sz);
-        cap = *(unsigned long long*)((unsigned char*)out + 0x18);
-        dst = (cap <= EFF_SSO_MAX) ? (unsigned char*)out : *(unsigned char**)out;
-        for (i = 0; i < sz; ++i) dst[i] = src[i];
-        dst[sz] = 0;
-        *(unsigned long long*)((unsigned char*)out + 0x10) = sz;
+        ((StrAppendFn)(img + RVA_EFF_STR_APPEND))(out, (const char*)src, (size_t)sz);
     }
 
     {
