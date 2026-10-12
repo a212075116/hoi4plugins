@@ -391,6 +391,7 @@ static unsigned char* Var64_ResolveAddressByName(void* self, void* ctx, const ch
 #define VAR64_FRAC_BIAS   100000LL
 
 static int Var64_IsStored64(void* self, void* ctx, const char* name);
+static void Var64_ResetDebtForSet(void* self, void* ctx, const char* name);
 static int Var64_ReadParamValue(void* self, void* ctx, unsigned int valueOff, unsigned int flagOff, long long* out);
 #define VAR64_DEC_DIGITS 24
 
@@ -608,6 +609,7 @@ static long long __fastcall Var64_DoSetVariable64(void* self, void* ctx)
         return 0;
     }
     Var64_StoreSplit64(self, ctx, name, addr, delta);
+    Var64_ResetDebtForSet(self, ctx, name);
     Var64_RememberSixtyFourBitNameSrc(name, 1);
     Var64_FormatPartsToText(delta / VAR64_FRAC_SCALE, delta % VAR64_FRAC_SCALE, shown, sizeof(shown));
     Plugin_Log("[var64] set_variable64 %s = %s", name, shown);
@@ -975,6 +977,11 @@ static void Var64_ClearDebt(Var64DebtRecord* rec)
     rec->name[0] = 0;
     rec->debtInt = 0;
     rec->debtFrac = 0;
+}
+
+static void Var64_ResetDebtForSet(void* self, void* ctx, const char* name)
+{
+    Var64_ClearDebt(Var64_FindDebt(self, ctx, name));
 }
 
 static int Var64_ReadOperandLiteralAt(void* self, unsigned int paramOff, long long* out)
@@ -1457,6 +1464,7 @@ static long long __fastcall Var64_GameSyntaxDetour(void* self, void* ctx)
     long long result;
     char previousName[40];
     int was64;
+    int haveName;
 
     if (self != NULL && ConsoleCmd_IsReadable((unsigned char*)self + VAR64_MARK_OFF, 7)) {
         mark = *(unsigned int*)((unsigned char*)self + VAR64_MARK_OFF);
@@ -1469,10 +1477,11 @@ static long long __fastcall Var64_GameSyntaxDetour(void* self, void* ctx)
     if (mark == VAR64_MARK_CLP) return Var64_DoClampVariable64(self, ctx);
     if (mark == VAR64_MARK_CLH) return Var64_DoClampHighVariable64(self, ctx);
     if (g_var64OrigGameSetExec == NULL) return 0;
-    was64 = Var64_ReadNameOnly(self, previousName, sizeof(previousName))
-        && Var64_IsStored64(self, ctx, previousName);
+    haveName = Var64_ReadNameOnly(self, previousName, sizeof(previousName));
+    was64 = haveName && Var64_IsStored64(self, ctx, previousName);
     result = g_var64OrigGameSetExec(self, ctx);
     if (was64) Var64_ClearHighPartAfterVanillaSet(self, ctx);
+    if (haveName) Var64_ResetDebtForSet(self, ctx, previousName);
     return result;
 }
 

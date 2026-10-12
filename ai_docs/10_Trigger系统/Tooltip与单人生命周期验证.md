@@ -26,6 +26,8 @@ PLUGIN_TRIGGER_RESULT_UNAVAILABLE: "§YUNAVAILABLE§!"
 中英文 UTF-8 BOM 参考文件位于 test/modules/trigger/typed_tooltip_l_*_reference.yml。
 DLL 不自动安装 mod 本地化文件，作者应复制对应语言文件到 mod/localisation。
 本轮游戏 oracle 使用统一英文 fixture 字符串；中文参考文件已验证 UTF-8 BOM，但未单独做中文 UI 目视验收。
+后续“同名变量最后设置者”阶段已安装真实中英文参考文件，中文原生文本 20/20 通过，
+捕获“半值比较”“64 位变量比较”“满足/未满足”及颜色控制码。此后续结果仍不是 UI 悬停目视验收。
 
 ## 原生参数与上下文依据
 

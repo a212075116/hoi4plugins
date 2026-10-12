@@ -37,12 +37,9 @@ def fixture():
  return '\n'.join(lines)+'\n'
 def localization():
  for lang in ['english','simp_chinese']:
-  labels={'PLUGIN_VALUE_HALF':'Half: $LEFT$ $COMPARISON$ $RIGHT$ ($RESULT$)',
-          'PLUGIN_CHECK_VARIABLE64':'Variable64: $LEFT$ $COMPARISON$ $RIGHT$ ($RESULT$)',
-          'PLUGIN_TRIGGER_RESULT_TRUE':'§GTRUE§!','PLUGIN_TRIGGER_RESULT_FALSE':'§RFALSE§!',
-          'PLUGIN_TRIGGER_RESULT_UNAVAILABLE':'§YUNAVAILABLE§!'}
-  text='l_'+lang+':\n'+''.join(' '+k+':0 "'+v+'"\n' for k,v in labels.items())
-  (DOC/('mod/bakaifa/localisation/zz_typed_tooltips_l_'+lang+'.yml')).write_text(text,encoding='utf-8-sig')
+  reference=ROOT/('test/modules/trigger/typed_tooltip_l_'+lang+'_reference.yml')
+  content=reference.read_bytes();assert content.startswith(b'\xef\xbb\xbf')
+  (DOC/('mod/bakaifa/localisation/zz_typed_tooltips_l_'+lang+'.yml')).write_bytes(content)
 def read(p):return p.read_text(encoding='utf-8',errors='replace') if p.exists() else ''
 js=(ROOT/'test/lib/exec_console_command.js').read_text(encoding='utf-8')+'\nconst tipTags='+json.dumps([t[0] for t in tips])+';\n'+r'''
 const base=Process.getModuleByName('hoi4.exe').base,plugin=Process.getModuleByName('hoi4_mod_plugin.dll');
@@ -104,7 +101,10 @@ def verify(out):
   for inv in [False,True]:
    o=inverse[op] if inv else op;r='§YUNAVAILABLE§!' if result is None else ('§GTRUE§!' if result!=inv else '§RFALSE§!')
    want=f'{label}: {left} {o} {right} ({r})\n';actual=row.get('inverted' if inv else 'normal')
-   rows.append({'key':tag+('_inverse' if inv else ''),'expected':want,'observed':actual,'ok':actual is not None and actual.replace('\x11','§')==want})
+   zh_result='§Y参数不可用§!' if result is None else ('§G满足§!' if result!=inv else '§R未满足§!')
+   zh_label='半值比较' if tag=='scalar' else '64 位变量比较'
+   zh_want=f'{zh_label}：{left} {o} {right}（{zh_result}）\n'
+   rows.append({'key':tag+('_inverse' if inv else ''),'expected':want,'expected_chinese':zh_want,'observed':actual,'ok':actual is not None and actual.replace('\x11','§') in [want,zh_want]})
  errors=[l for l in read(out/'write_error.log').splitlines() if 'zz_tooltip_lifecycle' in l]
  boundary={key:(re.findall(r'DT '+key+r'=(\S+)',g) or [None])[-1] for key in ['dynamic','native_temp','native_shadow','native_missing','native_dynamic']}
  # Separate count capture from the dynamic boolean marker.
@@ -115,7 +115,8 @@ def verify(out):
  if (out/'reload_game.log').exists():
   rg=read(out/'reload_game.log');reload_samples=json.loads(read(out/'reload_samples.json'))
   wanted='DT READ marker=20261012 big=12345678901.125 negative=-0.00001 shadow=12345678901.125'
-  result['reload_ok']=wanted in rg and any(r.get('normal','').replace('\x11','§')=='Variable64: 12345678901.125 == 12345678901.125 (§GTRUE§!)\n' for r in reload_samples)
+  expected_reload=['Variable64: 12345678901.125 == 12345678901.125 (§GTRUE§!)\n','64 位变量比较：12345678901.125 == 12345678901.125（§G满足§!）\n']
+  result['reload_ok']=wanted in rg and any(r.get('normal','').replace('\x11','§') in expected_reload for r in reload_samples)
  result['exit']=int(result['passed']!=len(rows) or bool(errors) or not boundary_ok or not result['alive'] or result.get('reload_ok') is False)
  (out/'comparison.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8');print(json.dumps({k:v for k,v in result.items() if k!='rows'},ensure_ascii=False,indent=2));return result['exit']
 def main():
