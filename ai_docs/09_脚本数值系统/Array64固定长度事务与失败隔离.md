@@ -1,8 +1,10 @@
 # Array64 固定长度事务与失败隔离
 
+> 历史阶段记录：全文的“本轮/当前/下一步”仅指当时实验，不是最新状态或可直接照抄的实施指令。现状见 [当前状态与复现](当前状态与复现.md)。旧方案、失败与旧偏移保留用于追溯，不覆盖现实现。
+
 2026-10-12，HOI4 1.19.3 Windows x64。承接v2保留组只读解码，验证已有合法组的一次单元素更新。
 源码：src/plugin/SDK_RVA/variable64/array64_existing_transaction.c，入口Array64_SetExisting。
-仍未加入plugin.vcxproj、未注册公开effect或trigger；原索引64写入拒绝保护保持。
+该阶段尚未加入plugin.vcxproj、未注册公开effect或trigger；原索引64写入拒绝保护保持。
 
 ## 已实现的最小闭环
 

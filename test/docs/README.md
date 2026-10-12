@@ -2,7 +2,7 @@
 
 > 本目录是**探针与测试脚本**。改插件前先看这里，不要凭记忆写新脚本。
 > 测试报告放 `test/reports/`，技术结论写 `ai_docs/`。
-> 最后更新： 2026-10-11 20:12:32
+> 核对：2026-10-12；命令默认从hoi4plugins项目根执行。
 
 ## 目录结构
 
@@ -35,7 +35,8 @@
 | `modules/gamedate/` | `SDK_RVA/gamedate/`（日期读写、界面刷新） |
 | `modules/camera/` | `SDK_RVA/camera/`（摄像机高度） |
 | `modules/console/` | `SDK_RVA/console/`（控制台指令注册） |
-| `modules/effect/` | `SDK_RVA/effect/`（Effect 注册与执行） |
+| `modules/effect/` | Effect注册、scalar64与Array64阶段测试 |
+| `modules/trigger/` | Bool/typed注册、比较、原生tooltip与动态/数组隔离 |
 | `modules/hook/` | `SDK_RVA/hook/`（文件重定向、进程拦截、inline hook） |
 | `modules/crash_test/` | `SDK_RVA/crash_test/`（崩溃测试命令） |
 
@@ -55,7 +56,7 @@ import hoi4_launch as HL
 
 HL.deploy()                                   # 杀游戏 + 复制 tbb.dll 与 hoi4_mod_plugin.dll
 dt, _ = HL.launch(args=['-gdpr-compliant', '-start_tag=ABY', '-nolauncher', '-force_text_save'],
-                  wait_marker='[plugin] Camera_RegisterCommands',   # 插件完全就绪 ~14 秒
+                  wait_marker='[plugin] Camera_RegisterCommands',   # 到达命令注册阶段；还需检查各模块成功数
                   timeout=200)
 print('plugin ready in %.2fs' % dt)
 ```
@@ -73,7 +74,7 @@ print('plugin ready in %.2fs' % dt)
 | 标记 | 含义 | 实测耗时 |
 |---|---|---|
 | `[eff] camera height effect ready` | effect 可注册 | 约 3.5 秒 |
-| `[plugin] Camera_RegisterCommands` | **插件完全就绪** | 约 14.4 秒 |
+| `[plugin] Camera_RegisterCommands` | 摄像机命令注册阶段；不是全部功能成功/进地图保证 | 历史机器约14.4秒，非超时依据 |
 
 ### 方式 B：手动 `Start-Process`（方式 A 不适用时）
 
@@ -112,11 +113,11 @@ Get-Content '<文档目录>/Paradox Interactive/Hearts of Iron IV/logs/game.log'
 
 spawn 出来的游戏进程会随宿主 Python 进程结束被一起终止，现象是「一跑完脚本游戏就没了」，
 **会被误判成崩溃**（无 dump、无事件日志）。标准做法：外部 `Start-Process` 启动，
-脚本里 `connect(force_spawn=False)`。
+外部启动并确认find_pid非空后再connect(force_spawn=False)。该参数只禁止“强制重开”，没有进程时connect仍会自动spawn；不能把它当绝对禁止spawn。
 
-**2. 不要在同一进程里反复 connect/detach**
+**2. 不要无控制地快速反复 connect/detach**
 
-快速反复开关 Frida 会话会把游戏搞死。**一个脚本只 connect 一次**，做完所有操作最后 detach 一次。
+历史曾在快速反复开关会话时死亡；优先单会话复用并在finally收尾。已有分阶段驱动按其生命周期管理会话，不能据此声称所有重复attach必然崩溃。
 需要同时用多个探针时，在那个 JS 探针里多写几个 rpc 方法，而不是开两个会话。
 
 **3. `auto_unpause` 是开关，不是「取消暂停」**
@@ -131,7 +132,7 @@ spawn 出来的游戏进程会随宿主 Python 进程结束被一起终止，现
   判据是 `game.log` 里的 `Launching SINGLEPLAYER-game`
 - 编译前**先杀游戏**，否则 `LNK1201`（pdb 被占用）
 - 部署要**同时覆盖 `tbb.dll` 和 `hoi4_mod_plugin.dll`**，且杀游戏后等几秒再复制
-- **改了插件后必须同时确认 DLL 时间戳和日志里的新格式**，否则可能拿到旧结果
+- 部署后比较构建/游戏根DLL的SHA-256及注册日志；仅时间戳不足以保证版本。单独构建vcxproj须指定SolutionDir，见ai_docs构建说明
 
 ## 新增脚本放哪里
 
@@ -175,3 +176,9 @@ spawn 出来的游戏进程会随宿主 Python 进程结束被一起终止，现
 - `modules/trigger/probe_trigger_tooltip.py`：只在已就绪游戏中使用，捕获真实本地化上下文并同步验证 tooltip 文本；不证明 UI 目视布局。
 
 实现与限制见 `ai_docs/10_Trigger系统/注册器API与验证.md`。
+
+## 数值系统测试入口
+
+scalar64、typed Trigger、Array64正式接口/历史检查点及原生夹具统一见[numeric_system.md](numeric_system.md)。
+最新a64soak配对已推进状态；旧检查点驱动不能直接套当前游戏。137/137是功能断言，资源增长仍待归因。
+本轮只整理文档，不重跑游戏测试。

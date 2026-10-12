@@ -1,6 +1,6 @@
 # 注册器 API
 
-> 源码：src/plugin/console_cmd.h / console_cmd.c
+> 源码：src/plugin/SDK_RVA/console/console_cmd.h / console_cmd.c
 
 ## 目的
 

@@ -28,7 +28,7 @@ set_array_element_native与set_array_element64明确决定最后写入的精度�
 已验证ABY、ARI、州335、角色ABY_Hoshino和global，按原版变量容器解析目标；没有另加国家scope限定。
 其他scope对象不因这五类通过而自动成为已验证对象；动态/临时/复合数组目标不要作为本接口用法。
 ROOT scalar64右操作数已在接口首轮验证；不要把它扩大解释为全部scope前缀/链组合验收。
-effect结果写入目标容器的__v64sys_status，global目标使用global.__v64sys_status；非0必须按失败处理。
+目标容器可解析时effect结果写__v64sys_status，global用global.__v64sys_status；非0必须按失败处理。若容器无法解析则仅有错误日志，状态槽可能仍是旧值；还需核对脚本解析/注册与本次日志，不能单凭旧0认定成功。
 check_array64缺失/隔离/无效读取返回false，不猜作0，也不修改status。
 
 ## 存档与侧车备份

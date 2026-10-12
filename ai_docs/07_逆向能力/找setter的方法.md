@@ -1,7 +1,7 @@
 # 找 setter 的方法
 
 > 依据：外部实践 + 本项目在 HOI4 上的完整实证
-> 脚本：test/probes_ida/vtable/_find_writer_69c.py、test/probes_js/_exec_cmd.js
+> 脚本：test/probes_ida/vtable/_find_writer_69c.py、test/lib/exec_console_command.js
 
 ## 为什么要找 setter
 

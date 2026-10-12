@@ -1,6 +1,6 @@
 # CString 布局与 SSO 上限
 
-> 源码：src/plugin/console_cmd.h 的 CmdString
+> 源码：src/plugin/SDK_RVA/console/console_cmd.h 的 CmdString
 
 ## 布局
 

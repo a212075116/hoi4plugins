@@ -1,7 +1,7 @@
 # Frida 探针
 
 > 脚本目录：hoi4plugins/test/
-> 宿主 frida_host.py 在 test/probes_frida/，JS 探针在 test/probes_js/
+> 宿主在test/lib/frida_host.py，公共JS在test/lib，模块探针在test/modules/；probes目录仅历史
 > （早期路径为 flirt/loader/，**该目录已不存在**）
 
 ## 用途
@@ -11,18 +11,18 @@
 
 ## 宿主
 
-test/probes_frida/frida_host.py 提供：
+test/lib/frida_host.py提供：
 
 | 函数 | 说明 |
 |---|---|
 | find_pid() | 找 hoi4.exe 进程 |
-| connect(js_path, force_spawn) | **attach** 到已运行进程（不 kill）；返回 (pid, session, sc, fresh) |
+| connect(js_path, force_spawn) | 已有PID且force_spawn=False时attach；无PID或强制时会spawn/重开；返回四元组 |
 | wait_game_ready(session, ...) | 基于 CGameState 的等待（推荐） |
 | wait_stable(...) | 旧的轮询等待（仅在 st 返回 chi 时用） |
 
 ## 硬规则：绝不同时开两个 Frida 会话
 
-同一个 hoi4.exe 上开两个会话会把游戏搞死（实测过一次，pid 53864 死亡）。
+历史双会话实验中进程死亡；这是风险记录，不证明任何双会话必然崩溃。现有驱动优先复用单会话，避免未经管理的并发/快速切换。
 
 ## 保留字陷阱
 
@@ -48,5 +48,5 @@ Frida 的 readUtf8String(size) **不会在 NUL 处停止**。
 
 ## 注意
 
-探针脚本大量硬编码 RVA，**游戏版本一变就全部作废**。
+探针脚本大量硬编码 RVA，**游戏版本变化必须重新核对**。
 没有加版本校验。

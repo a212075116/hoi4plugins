@@ -87,7 +87,8 @@
 | `Effect_ParamFloat(self, ctx)` | 取本 effect 的参数值（float） |
 
 `EffectDef` 里由注册器自动填写的字段：`tokenId`、`state`、`vt[]`、`entryVt[]`、`entry[]`。
-使用者只需在 `fill` 里填 `name`/`desc`/`locKey`/`exec`（宏已代劳）。
+默认EFF_DEF填name/desc/locKey/exec/factory/tooltip。
+可选EffectDef.entryParser在注册前指定原生entry参数模板；NULL保留stability模板。Array64预先设置变量parser并用自己的原生工厂/虚表；不要把所有自定义effect都当作stability布局。scalar64现有路径仍在注册后patch entryVt[0]，不能误称两者完全一样。
 
 ## Scope 合约（2026-10-12 已实测）
 

@@ -201,4 +201,4 @@
       if (cam) Camera_SetHeight(cam, h);          // 复用已实证的 setter
     }
 
-**已有的 `Camera_SetHeight`（调 `sub_1412643F0`）可以直接复用。**
+当前Camera_SetHeight在camera_height.c走平滑/字段写入，不是调用sub_1412643F0；effect_camera.c仍通过CameraEffect_WriteHeight调用该RVA。这里的早期映射不能当作两个入口已统一的证明；见[已知问题](../01_工程与构建/已知问题.md)。

@@ -6,10 +6,10 @@
 
 ## 参与编译的文件（x64 只需这些）
 
-    minihook/src/hook.c
-    minihook/src/buffer.c
-    minihook/src/trampoline.c
-    minihook/src/hde/hde64.c
+    src/plugin/SDK_RVA/minihook/src/hook.c
+    src/plugin/SDK_RVA/minihook/src/buffer.c
+    src/plugin/SDK_RVA/minihook/src/trampoline.c
+    src/plugin/SDK_RVA/minihook/src/hde/hde64.c
 
 封装在 `SDK_RVA/hook/inline_hook.c`：
 

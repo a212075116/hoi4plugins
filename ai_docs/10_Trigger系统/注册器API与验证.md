@@ -1,6 +1,6 @@
 # Trigger 注册器 API 与验证
 
-> 2026-10-12；HOI4 1.19.3 / Windows x64。首版提供 **bool 标量 trigger**，不是数值或块参数注册器。
+> 2026-10-12；HOI4 1.19.3 / Windows x64。本文的首版Bool部分是历史注册验证；当前已提供Bool、VALUE、VARIABLE三个模板，以及Array64操作数回调。
 > callback 的 scope 是 trigger 求值链传入的 opaque 上下文，不能直接当成 Effect scope 或本地化上下文使用。
 > 首版 Bool 证据保留如下；后续数值/比较块与类型化 adapter 见 [数值块模板与Scope适配](数值块模板与Scope适配.md)，多人顾虑见 [协调测试说明](多人环境顾虑与协调测试.md)。
 
@@ -114,3 +114,8 @@ Path：先完成 17/22/3 项基本验证，再启用仅用于测试的批量注�
 首轮未覆盖：数值/块参数模板、variable64 比较、trigger scope 的类型化适配器、热注册/卸载、多线程、长期运行和完整 UI 目视。
 后续已完成数值/比较块与 scope adapter 的所列单人验证，当前正常模式注册 5 个示例（3 Bool +2 typed）。
 实现与剩余边界以 `数值块模板与Scope适配.md` 为准，不能把首轮 3 个示例的历史结果当作当前模块全部状态。
+
+## 当前typed与Array64追加
+
+当前demo为3 Bool+2 typed；Array64再注册check_array64，正常使用同一注册器共6个自定义定义。首轮259是Bool压力注册当时的计数，不是加入typed/Array64后的总数。
+TriggerDef.operandReader是可选的tooltip操作数读取器，成功返回1、失败0；不能把后端负状态直接作为bool成功。Array64左边读保留组，右边继续原版/scalar64 reader。

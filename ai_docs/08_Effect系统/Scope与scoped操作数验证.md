@@ -50,4 +50,4 @@ Release x64 最终构建退出码 0、无警告。以上是本轮测试输入的
 
 未声称支持任意不具备原版变量容器的 scope，也未完成全部 ROOT/PREV/FROM 链、无 scope 回调、
 跨对象存档往返、挂账操作数持久化、多人同步、多线程、长时间运行或 UI 视觉验收。
-下一步为数值/block Trigger 模板与 typed Trigger scope adapter；不能借用 Effect offset。
+后续数值/block Trigger与typed scope adapter已实现并验证，见[typed模板](../10_Trigger系统/数值块模板与Scope适配.md)；仍不能借用Effect offset。

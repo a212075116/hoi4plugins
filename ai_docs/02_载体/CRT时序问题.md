@@ -52,5 +52,5 @@ pdata 段 + 代码扫描的组合：pdata 给出准确的函数边界，然后
 
 ## 参考
 
-https://github.com/MyresMkG/HOI4-Mod-Injector 的 src/crtprobe.cpp、src/dllmain.cpp
+https://github.com/MyresMkG/HOI4-Mod-Injector 的外部crtprobe.cpp/dllmain.cpp（不是本工程src文件，本次未联网核验）
 —— 探测形状与时序策略与该工程一致。

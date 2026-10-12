@@ -14,9 +14,9 @@
 摄像机相关的**运行脚本**（`_cam*_run.py`）尚未迁入；当前活跃的用法是：
 
 ```
-python -u modules/console/exec_command_run.py setcamheight 500
-python -u modules/console/exec_command_run.py setcameraheight_lowerlimit 35
-python -u modules/console/exec_command_run.py setcameraheight_upperlimit 3000
+python -u test/modules/console/numtest_run_command.py setcamheight 500
+python -u test/modules/console/numtest_run_command.py setcameraheight_lowerlimit 35
+python -u test/modules/console/numtest_run_command.py setcameraheight_upperlimit 3000
 ```
 
 ## console（对应 `SDK_RVA/console/`）
@@ -25,7 +25,8 @@ python -u modules/console/exec_command_run.py setcameraheight_upperlimit 3000
 |---|---|
 | `command_check.js` / `command_check_legacy.py` | 检查命令是否注册成功 |
 | `command_list.py` / `command_list_run.py` | 列出控制台命令（`_exec_cmd.js` 里的 `listCmds`） |
-| `exec_command_run.py` | **执行任意控制台命令**（最常用） |
+| `numtest_run_command.py` | 按命令行参数执行单条命令（需先确认游戏存在） |
+| `exec_command_run.py` | 历史固定摄像机命令序列，不读取传入的任意命令参数 |
 | `command_range_run.py` | 按范围批量查命令 |
 | `add_control.py` | 增加控制项（早期实验） |
 | `control_syntax.py` / `control_probe_2.py` | 控制台语法探测 |
@@ -33,7 +34,7 @@ python -u modules/console/exec_command_run.py setcameraheight_upperlimit 3000
 **最常用的一条**：
 
 ```
-python -u modules/console/exec_command_run.py <命令名> [参数...]
+python -u test/modules/console/numtest_run_command.py <命令名> [参数...]
 ```
 
 ## effect（对应 `SDK_RVA/effect/`）
@@ -79,7 +80,7 @@ python -u modules/console/exec_command_run.py <命令名> [参数...]
 崩溃报告汇总工具在 `lib/crash_report.py`：
 
 ```
-python -u lib/crash_report.py
+python -u test/lib/crash_report.py
 ```
 
 ## 相关文档

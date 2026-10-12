@@ -1,6 +1,8 @@
 # Array64 变长意图日志与重启修复
 
-2026-10-12，HOI4 1.19.3 Windows x64。已有形状事务之上增加独立操作意图日志，仍未注册脚本API。
+> 历史阶段记录：全文的“本轮/当前/下一步”仅指当时实验，不是最新状态或可直接照抄的实施指令。现状见 [当前状态与复现](当前状态与复现.md)。旧方案、失败与旧偏移保留用于追溯，不覆盖现实现。
+
+2026-10-12，HOI4 1.19.3 Windows x64。已有形状事务之上增加独立操作意图日志，该阶段尚未注册脚本API。
 源码array64_shape_journal.c，入口JournalPrepare、JournalBegin、JournalApply、JournalRecover、JournalFinish。
 不修改原有ImportOwned的固定形状条件；专用恢复必须有本次事务的额外归属证明。
 

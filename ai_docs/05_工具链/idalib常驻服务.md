@@ -1,6 +1,6 @@
 # idalib 常驻服务
 
-> 脚本：test/tools/idalib_server.py、test/tools/idalib_cli.py
+> 脚本：test/lib/idalib_server.py、test/lib/idalib_cli.py
 > （早期路径为 `flirt/idalib_server.py`，目录 flirt/ 已不存在，见文末）
 > 数据库：hoi4plugins/sources/1.19.3/hoi4.exe.i64
 
@@ -19,7 +19,7 @@ idalib 是进程内库，加载一次后所有查询都是**毫秒级**。
     os.environ['IDADIR'] = r'D:\IDA Professional 9.0'
     idapro.open_database(I64, False)
 
-IDA 9.0 是唯一有可用许可证的版本（9.4 没有）。
+历史实测使用本机IDA9.0。旧记录中的9.4许可证状态不是当前安装清单；本轮不重新核验许可证，实际运行前确认IDADIR与可用工具。
 idalib 与 idat.exe **互斥**（都会锁 .i64），不能同时开。
 
 ## 协议
@@ -51,8 +51,8 @@ TCP 127.0.0.1:19531，一行一个 JSON 请求 -> 一行一个 JSON 响应。
 
 ## 用法
 
-    python hoi4plugins/test/tools/idalib_server.py          # 后台常驻
-    python hoi4plugins/test/tools/idalib_cli.py decompile 0x140DC53B0
+    python hoi4plugins/test/lib/idalib_server.py          # 后台常驻
+    python hoi4plugins/test/lib/idalib_cli.py decompile 0x140DC53B0
 
 改 .i64 路径的位置在 idalib_server.py 第 26 行的 I64 常量。
 
@@ -71,9 +71,9 @@ TCP 127.0.0.1:19531，一行一个 JSON 请求 -> 一行一个 JSON 响应。
 
 | 旧路径 | 现路径 |
 |---|---|
-| `flirt/idalib_server.py` | `test/tools/idalib_server.py` |
-| `flirt/idalib_cli.py` | `test/tools/idalib_cli.py` |
-| `flirt/loader/frida_host.py` | `test/probes_frida/frida_host.py` |
+| `flirt/idalib_server.py` | `test/lib/idalib_server.py` |
+| `flirt/idalib_cli.py` | `test/lib/idalib_cli.py` |
+| `flirt/loader/frida_host.py` | `test/lib/frida_host.py` |
 | `flirt/loader/*.js` | `test/probes_js/*.js` |
 | `flirt/脚本.py`（ida 批处理） | `test/probes_ida/*.py` |
 
@@ -81,5 +81,4 @@ TCP 127.0.0.1:19531，一行一个 JSON 请求 -> 一行一个 JSON 响应。
 
 - `ai_docs/` 里若出现，说明那处还没更新，请按上表改正；
 - `test/probes_py/*.py`、`test/probes_frida/frida_*.py` 等**历史脚本**里仍留有旧路径，
-  它们大多已失效，**不要照抄**，新脚本请参照 `test/probes_js/` + `test/tools/*_run.py` 的现行写法。
-
+  它们大多已失效，**不要照抄**，新脚本参照test/lib公共库与test/modules现有驱动；历史probes目录不是现行入口。

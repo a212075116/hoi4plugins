@@ -1,5 +1,7 @@
 # CResistance 修复实验记录
 
+> 该页是对应抵抗实验的结构/状态记录，不是当前模组配置快照；本次未重测抵抗模块或外部mod文件。实验中的待查项保持待查，不能据别的模块通过而标为解决。
+
 > 本页是《CState与CResistance.md》的续篇，记录第六、七轮的尝试与结论。
 
 ### 第六轮：两条修复尝试都被否定
@@ -127,5 +129,4 @@
 
     mod/bakaifa/common/scripted_triggers/zz_probe_resistance_override.txt
 
-该文件当前内容是一份对默认 `should_initiate_resistance` 的完整覆盖（与原版逐字一致），
-可作为编写 mod 侧逻辑的起点。
+实验当时记录该外部mod文件为默认should_initiate_resistance的完整覆盖；本次未核对当前外部文件内容，不把当时状态当现在配置。

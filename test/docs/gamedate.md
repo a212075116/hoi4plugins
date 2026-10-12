@@ -65,16 +65,16 @@
 **验证「暂停时也能立刻改日期」**：
 
 ```
-python -u modules/gamedate/read_game_date_fields.py          # 记下当前
-python -u modules/gamedate/test_set_date_while_paused.py     # 暂停下写入并检查
-python -u modules/gamedate/read_game_date_fields.py          # 复查
+python -u test/modules/gamedate/read_game_date_fields.py          # 记下当前
+python -u test/modules/gamedate/test_set_date_while_paused.py     # 暂停下写入并检查
+python -u test/modules/gamedate/read_game_date_fields.py          # 复查
 ```
 
 **验证加减法**：
 
 ```
-python -u modules/gamedate/test_add_time_commands.py         # 指令（8 个用例）
-python -u modules/gamedate/test_add_time_effects.py          # effect（8 个用例）
+python -u test/modules/gamedate/test_add_time_commands.py         # 指令（8 个用例）
+python -u test/modules/gamedate/test_add_time_effects.py          # effect（8 个用例）
 ```
 
 ## 注意

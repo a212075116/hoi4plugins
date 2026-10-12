@@ -1,5 +1,7 @@
 # 注册新 Effect — 运行期实测记录
 
+> 历史阶段记录：全文的“本轮/当前/下一步”仅指当时实验，不是最新状态或可直接照抄的实施指令。现状见 [注册器API](注册器API.md)。旧方案、失败与旧偏移保留用于追溯，不覆盖现实现。
+
 > 本页是《注册新Effect.md》的续篇，记录 2026-10-09 的运行期实测过程与结论。
 
 ## 五、运行期实测记录（2026-10-09）
@@ -45,7 +47,7 @@
     view.add(8).writeU64(name.length);
     new NativeFunction(img(0x1424BB460), 'pointer', ['pointer','pointer','pointer'])(outId, view, ptr(0));
 
-探针：`test/probes_js/_addtoken.js`
+探针：当轮_addtoken.js（旧名称）；现有对应探针为`test/modules/effect/effect_add_token.js`
 
 ## 六、还剩什么
 
@@ -105,7 +107,7 @@
 
     events/zz_camtest.txt                      触发用事件
     localisation/zz_camtest_l_english.yml
-    test/probes_js/_exec_cmd.js                进程内执行控制台命令
+    test/lib/exec_console_command.js                进程内执行控制台命令
     test/probes_frida/_trigger_event.py
 
 ### 尚未完成
