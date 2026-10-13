@@ -31,6 +31,39 @@ static HANDLE g_helper;
 static SRWLOCK g_helperLock = SRWLOCK_INIT;
 static __declspec(thread) int g_dispatching;
 
+static unsigned char __fastcall ExternalDeveloperPermission(void* object) {
+    (void)object;
+    return 0;
+}
+
+static int DispatchExternal(unsigned char* base, void* manager, CmdResult* result, CmdArgs* args, char* output, size_t outputSize) {
+    typedef unsigned char (__fastcall *Predicate)(void*);
+    typedef long long (__fastcall *Dispatch)(void*, CmdResult*, CmdArgs*);
+    void* network = *(void**)((char*)manager + 144);
+    void** table = *(void***)network;
+    void* permissionTable[3] = {NULL, NULL, (void*)ExternalDeveloperPermission};
+    void** permissionObject = permissionTable;
+    void* originalPermission;
+    unsigned char originalUiState[2];
+    if (!ConsoleCmd_IsReadable(table, 3 * sizeof(void*)) || !ConsoleCmd_IsReadable(table[2], 1)) {
+        strcpy_s(output, outputSize, "Multiplayer permission check unavailable; request not executed.");
+        return 0;
+    }
+    if (((Predicate)table[2])(network)) {
+        strcpy_s(output, outputSize, "External console commands are disabled in multiplayer.");
+        return 0;
+    }
+    memcpy(originalUiState, (char*)manager + 216, sizeof(originalUiState));
+    originalPermission = InterlockedExchangePointer((PVOID volatile*)((char*)manager + 80), &permissionObject);
+    __try {
+        ((Dispatch)(base + 0x24B4D40))(manager, result, args);
+    } __finally {
+        InterlockedExchangePointer((PVOID volatile*)((char*)manager + 80), originalPermission);
+        memcpy((char*)manager + 216, originalUiState, sizeof(originalUiState));
+    }
+    return 1;
+}
+
 static void ReleaseString(CmdString* s) {
     if (s->cap > 15) {
         void* p = s->u.ptr;
@@ -90,7 +123,11 @@ static void Execute(Pending* p) {
             !ConsoleCmd_IsReadable(*(void**)((char*)manager + 208), 8)) {
             strcpy_s(p->output, sizeof(p->output), "Command manager is not ready; request was not executed.");
         } else {
-            ((Dispatch)(base + 0x24B4D40))(manager, &result, &args);
+            if (!DispatchExternal(base, manager, &result, &args, p->output, sizeof(p->output))) {
+                for (i = 0; i < args.count; ++i) ReleaseString(&strings[i]);
+                ReleaseString(&result.message);
+                return;
+            }
             p->response.status = DC_EXECUTED;
             p->response.ok = result.ok;
             if (result.message.size && result.message.size <= 16 * 1024 * 1024) {

@@ -34,10 +34,10 @@ JS=r'''
 const b=Process.getModuleByName('hoi4.exe').base;
 let calls=[],heaps={},released=0,aligned=0,depth={},forceGate=false;
 let mgr=b.add(0x35e1a80).readPointer(), forced=[], yes=new NativeCallback(()=>1,'uint8',['pointer']);
-for(const off of [80,208]){let obj=mgr.add(off).readPointer(),vt=obj.readPointer(),copy=Memory.alloc(24);copy.writeByteArray(vt.readByteArray(24));copy.add(16).writePointer(yes);forced.push({obj,vt,copy});}
-Interceptor.attach(b.add(0x24b4d60),{onEnter(a){this.tid=Process.getCurrentThreadId();depth[this.tid]=(depth[this.tid]||0)+1;this.result=a[1];if(forceGate)for(const f of forced)f.obj.writePointer(f.copy);calls.push({tid:this.tid,argc:a[2].add(12).readS32()});},onLeave(){if(forceGate)for(const f of forced)f.obj.writePointer(f.vt);let m=this.result.add(8),cap=m.add(24).readU64().toNumber();if(cap>15){let x=m.readPointer();if(cap+1>=4096){x=x.sub(8).readPointer();aligned++;}heaps[x.toString()]=(heaps[x.toString()]||0)+1;}depth[this.tid]--;}});
+for(const off of [144]){let obj=mgr.add(off).readPointer(),vt=obj.readPointer(),copy=Memory.alloc(24);copy.writeByteArray(vt.readByteArray(24));copy.add(16).writePointer(yes);forced.push({obj,vt,copy});}
+Interceptor.attach(b.add(0x24b4d60),{onEnter(a){this.tid=Process.getCurrentThreadId();depth[this.tid]=(depth[this.tid]||0)+1;this.result=a[1];calls.push({tid:this.tid,argc:a[2].add(12).readS32()});},onLeave(){let m=this.result.add(8),cap=m.add(24).readU64().toNumber();if(cap>15){let x=m.readPointer();if(cap+1>=4096){x=x.sub(8).readPointer();aligned++;}heaps[x.toString()]=(heaps[x.toString()]||0)+1;}depth[this.tid]--;}});
 Interceptor.attach(b.add(0x21c9b00),{onEnter(a){let key=a[0].toString();if(heaps[key]){released++;heaps[key]--;if(!heaps[key])delete heaps[key];}}});
-rpc.exports={snapshot(){let obj=b.add(0x332f698).readPointer(),cam=obj.add(0x750).readPointer();return {rawDate:b.add(0x332f260).readPointer().add(0x468).readS32(),height:cam.add(0x69c).readFloat(),lower:cam.add(0x6d0).readS32(),upper:cam.add(0x6d4).readS32(),calls:calls.length,tids:[...new Set(calls.map(x=>x.tid))],heaps:Object.keys(heaps),released,aligned};},gate(on){forceGate=on;},calls(){return calls;}};
+rpc.exports={snapshot(){let obj=b.add(0x332f698).readPointer(),cam=obj.add(0x750).readPointer();return {rawDate:b.add(0x332f260).readPointer().add(0x468).readS32(),height:cam.add(0x69c).readFloat(),lower:cam.add(0x6d0).readS32(),upper:cam.add(0x6d4).readS32(),calls:calls.length,tids:[...new Set(calls.map(x=>x.tid))],heaps:Object.keys(heaps),released,aligned};},gate(on){forceGate=on;for(const f of forced)f.obj.writePointer(on?f.copy:f.vt);},calls(){return calls;}};
 '''
 def main():
  a=argparse.ArgumentParser();a.add_argument('phase');a.add_argument('--stress',action='store_true');a.add_argument('--menu',action='store_true');args=a.parse_args()
@@ -66,7 +66,7 @@ def main():
    for name,data,hdr in [('nul',b'help\0bad',None),('newline',b'help\nbad',None),('utf8',b'help \xff',None),('bad-version',b'x',struct.pack('<4I',0x31434448,2,1,1)),('overflow',b'',struct.pack('<4I',0x31434448,1,1,2049)),('bad-magic',b'x',struct.pack('<4I',0,1,1,1))]:
     r=raw(p,data,hdr);check(name,r.get('closed') or r.get('status')==1,r)
    sc.exports_sync.gate(True)
-   r=run('setcamheight 1234');check('native-permission-gate-injection',r['exit']==1 and 'Console not available in multiplayer or ironman mode.' in r['stdout'],r)
+   r=run('setcamheight 1234');check('native-permission-gate-injection',r['exit']==3 and 'External console commands are disabled in multiplayer.' in r['stdout'],r)
    sc.exports_sync.gate(False);r=run('setcamheight 500');check('gate-restored',r['exit']==0)
    thread=K.OpenThread(2,False,tid);assert thread
    assert K.SuspendThread(thread)!=0xffffffff
