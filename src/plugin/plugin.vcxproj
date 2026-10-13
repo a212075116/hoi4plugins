@@ -88,6 +88,7 @@
     <ClCompile Include="SDK_RVA\gamedate\gamedate.c" />
     <ClCompile Include="SDK_RVA\effect\effect_gamedate.c" />
     <ClCompile Include="SDK_RVA\achievement\achievement_probe.c" />
+    <ClCompile Include="SDK_RVA\achievement\achievement_compat.c" />
     <ClCompile Include="SDK_RVA\hook\inline_hook.c" />
     <ClCompile Include="SDK_RVA\gamedate\gamedate_ui.c" />
     <ClCompile Include="SDK_RVA\crash_test\crash_test.c" />

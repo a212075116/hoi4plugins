@@ -14,6 +14,8 @@
 int TriggerDemo_Register(void);
 int AchievementProbe_RegisterCommands(void);
 int AchievementSource_Install(void);
+int AchievementCompat_Install(void);
+int AchievementCompat_RegisterCommands(void);
 #include "file_redirect.h"
 #include "process_block.h"
 #include "gamedate.h"
@@ -160,6 +162,7 @@ static DWORD WINAPI PluginThread(LPVOID p)
     Plugin_Log("[plugin] thread start, pid=%lu", (unsigned long)GetCurrentProcessId());
     Plugin_Log("[plugin] hoi4 base=%p", (void*)GetModuleHandleA(NULL));
     Plugin_Log("[plugin] AchievementSource_Install -> %d", AchievementSource_Install());
+    Plugin_Log("[plugin] AchievementCompat_Install -> %d", AchievementCompat_Install());
 
     {
         int ok = FileRedirect_Install();
@@ -262,6 +265,7 @@ static DWORD WINAPI PluginThread(LPVOID p)
     }
 
     Plugin_Log("[plugin] AchievementProbe_RegisterCommands -> %d", AchievementProbe_RegisterCommands());
+    Plugin_Log("[plugin] AchievementCompat_RegisterCommands -> %d", AchievementCompat_RegisterCommands());
     DebugConsole_RegisterCommands();
 
     {

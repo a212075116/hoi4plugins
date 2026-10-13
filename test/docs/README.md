@@ -2,7 +2,7 @@
 
 > 本目录是**探针与测试脚本**。改插件前先看这里，不要凭记忆写新脚本。
 > 测试报告放 `test/reports/`，技术结论写 `ai_docs/`。
-> 核对：2026-10-12；命令默认从hoi4plugins项目根执行。
+> 核对：2026-10-13；命令默认从hoi4plugins项目根执行。
 
 ## 目录结构
 
@@ -35,7 +35,7 @@
 | `modules/gamedate/` | `SDK_RVA/gamedate/`（日期读写、界面刷新） |
 | `modules/camera/` | `SDK_RVA/camera/`（摄像机高度） |
 | `modules/console/` | `SDK_RVA/console/`（控制台指令注册） |
-| `modules/achievement/` | `SDK_RVA/achievement/`（[只读探针及策略基础](achievement_compat.md)，真实解锁尚未启用） |
+| `modules/achievement/` | `SDK_RVA/achievement/`（[阶段记录](achievement_compat.md)、[单人资格与真实解锁](achievement_eligibility.md)，更多平台/模式覆盖待扩展） |
 | `modules/effect/` | Effect注册、scalar64与Array64阶段测试 |
 | `modules/trigger/` | Bool/typed注册、比较、原生tooltip与动态/数组隔离 |
 | `modules/hook/` | `SDK_RVA/hook/`（文件重定向、进程拦截、inline hook） |

@@ -20,7 +20,7 @@ def main():
     result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
     match = re.search(r"ironman=(\d+) definitions=(\d+) pending=(\d+) completed=(\d+) excluded=(\d+)", result.stdout)
     fields = dict(zip(["ironman", "definitions", "pending", "completed", "excluded"], map(int, match.groups()))) if match else None
-    compat_off = "compatibility hooks NOT enabled" in result.stdout
+    compat_off = "compatibility hooks NOT enabled" in result.stdout or "compatibility_installed=0" in result.stdout
     record = {
         "captured_at": datetime.now(timezone.utc).isoformat(),
         "phase": args.phase,

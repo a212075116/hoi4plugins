@@ -5,11 +5,12 @@
 ## 当前执行结果
 
 用户报告已完成上述流程，没有解锁成就。
-当前部署仍是只读探针；真实资格放行与 Steam 解锁未启用。
-现场读取：ironman=0、definitions=293、pending=0、completed=0、excluded=0；
+资格未实现时的旧版本仍是只读探针，用户初测未解锁。旧现场读取：ironman=0、definitions=293、pending=0、completed=0、excluded=0；
 A0..A4=0,1,0,0,0；debug 与 debug_or_crash_log 均为 1。
-这说明本次定义已经加载，但候选列表为空；不能用等待一个月替代资格初始化。
+这说明旧现场定义已经加载，但候选列表为空；不能用等待一个月替代资格初始化。
 不能把模型矩阵或只读命令成功当作此流程验收成功。
+当前资格版本已完成CHI吞并→正常推进744小时：ID254从pending变completed，用户确认Steam解锁提示。
+ID255/256仍pending；详情与恢复证据见[资格兼容测试](achievement_eligibility.md)。
 
 ## 必须保留的边界
 
@@ -61,7 +62,7 @@ python test/modules/achievement/capture_chi_flow.py --pid PID --phase after-mont
 
 ## 完成标准
 
-此流程暂未通过功能验收。必须观察到原生条件真实满足、候选链路正常、
-原版 Steam 提交及平台确认；还需证明未满足条件的负对照不解锁。
+本流程的ID254单例已通过原生条件、候选链路、完成调用与用户平台确认。
+未满足条件的ID255/256保持不解锁；不等于293项全量通过。
 既有三态：探针 Unknown/只读成功/Unknown（exit1/0/1），模型509/512→512/512→509/512。
 以上历史结果不替代本流程。

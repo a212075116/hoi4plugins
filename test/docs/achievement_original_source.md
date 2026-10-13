@@ -1,6 +1,7 @@
 # 原版成就定义来源：阶段测试
 
-2026-10-13，限定HOI4 1.19.3指纹。资格放行尚未开启，不宣称成就功能已完成。
+2026-10-13，限定HOI4 1.19.3指纹。本文记录原版来源阶段，当时资格放行尚未开启。
+后续资格已接通并实际解锁ID254，见[资格兼容测试](achievement_eligibility.md)。
 
 ## 实现边界
 
@@ -28,7 +29,7 @@
 第一轮曾附加Frida做临时VFS夹具验证；无证据证明它与退出有因果关系。
 随后观察轮不附加Frida，Explorer父进程、in_job=false、没有超时kill；180秒结束时STILL_ACTIVE=259。
 用户这轮正常入图并完成CHI操作；这是单轮存活证据，不是稳定性验收通过。
-继续工作前优先建立可捕获真实退出码/退出调用链的反馈循环，不能凭概率现象宣称修复。
+后续用户明确要求该问题延后，不作为成就主线前置；不能凭概率现象宣称修复。
 
 ## 命令
 
@@ -43,4 +44,4 @@ python test/modules/achievement/verify_original_source.py
 
 原生VFS脚本仅用于独立测试局，临时更换公开路径可见内容，不能用于正式战役或多人。
 证据目录：test/reports/20261013_achievement_source。
-CHI操作按[端到端流程](achievement_chi_annex_flow.md)，等资格链路接通后再做解锁验收。
+CHI操作按[端到端流程](achievement_chi_annex_flow.md)，后续阶段已经接通并记录单例解锁。

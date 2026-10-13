@@ -7,6 +7,8 @@
 #include "achievement_source.h"
 
 extern void Plugin_Log(const char* fmt, ...);
+int AchievementCompat_Installed(void);
+void AchievementCompat_DefinitionsLoaded(void);
 static __declspec(thread) int g_sourceContext;
 static volatile LONG g_sourceInstalled, g_sourceMounted, g_sourceLoads, g_sourceRedirects, g_sourceFailed;
 static __int64 (__fastcall *g_loadDefinitions)(__int64, __int64);
@@ -96,6 +98,7 @@ static __int64 __fastcall SourceLoad(__int64 manager, __int64 arg) {
     __try { result = g_loadDefinitions(manager, arg); }
     __finally { --g_sourceContext; }
     InterlockedIncrement(&g_sourceLoads);
+    AchievementCompat_DefinitionsLoaded();
     return result;
 }
 
@@ -140,8 +143,8 @@ static long long __fastcall AchievementSourceStatus(CmdResult* out, CmdArgs* arg
     }
     _snprintf_s(text, sizeof(text), _TRUNCATE,
         "[info] Original achievement source: installed=%ld mounted=%ld loads=%ld redirects=%ld failures=%ld definitions=%d. "
-        "Public mod overrides ignored only inside vanilla definition loader. Eligibility compatibility NOT enabled; no Steam calls.",
-        g_sourceInstalled, g_sourceMounted, g_sourceLoads, g_sourceRedirects, g_sourceFailed, definitions);
+        "Public mod overrides ignored only inside vanilla definition loader. eligibility_compatibility_installed=%d; this status command makes no Steam calls.",
+        g_sourceInstalled, g_sourceMounted, g_sourceLoads, g_sourceRedirects, g_sourceFailed, definitions, AchievementCompat_Installed());
     ConsoleCmd_SetMessage(out, text);
     out->ok = g_sourceInstalled && g_sourceMounted && g_sourceLoads > 0 && g_sourceRedirects > 0 && !g_sourceFailed;
     return (long long)out;
@@ -169,13 +172,13 @@ static long long __fastcall AchievementStatus(CmdResult* out, CmdArgs* args) {
         ConsoleCmd_SetMessage(out, "[warning] Achievement probe: game context not ready; no state changed."); return (long long)out;
     }
     _snprintf_s(text, sizeof(text), _TRUNCATE,
-        "[info] Achievement probe ONLY; compatibility hooks NOT enabled. "
+        "[info] Achievement readonly status; compatibility_installed=%d. "
         "ironman=%u definitions=%d pending=%d completed=%d excluded=%d "
         "manager_flags_A0_A4=%u,%u,%u,%u,%u "
         "debug_flag=%u debug_or_crash_log_flag=%u. "
         "No SetAchievement/StoreStats/ClearAchievement/ResetAllStats calls. "
         "original_source_hook=%ld mounted=%ld loads=%ld redirects=%ld failures=%ld.",
-        state[192] & 1, *(const int*)(manager + 28), *(const int*)(manager + 52),
+        AchievementCompat_Installed(), state[192] & 1, *(const int*)(manager + 28), *(const int*)(manager + 52),
         *(const int*)(manager + 76), *(const int*)(manager + 100),
         manager[160], manager[161], manager[162], manager[163], manager[164],
         base[0x34530D4], base[0x332EC69],
