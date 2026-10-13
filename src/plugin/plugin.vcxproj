@@ -124,6 +124,7 @@
 
   <ItemGroup>
     <None Include="SDK_RVA\variable64\variable64_language.inc" />
+    <None Include="SDK_RVA\variable64\variable64_debt.inc" />
   </ItemGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

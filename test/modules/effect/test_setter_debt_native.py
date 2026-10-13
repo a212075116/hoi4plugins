@@ -2,6 +2,9 @@
 import pathlib,re,subprocess,sys,json
 sys.stdout.reconfigure(encoding='utf-8',errors='replace')
 src=pathlib.Path(sys.argv[1]).resolve();out=pathlib.Path(sys.argv[2]).resolve();out.mkdir(parents=True,exist_ok=True);s=src.read_text(encoding='utf-8-sig')
+debt=src.parent/'variable64_debt.inc'
+if debt.exists():
+    s=s.replace('#include "variable64_debt.inc"',debt.read_text(encoding='utf-8-sig'))
 def fn(name):
  for m in re.finditer(r'(?m)^static[^\n]*\b'+name+r'\(',s):
   p=m.start();a=s.index('{',p);semi=s.find(';',p)

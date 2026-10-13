@@ -1,4 +1,5 @@
 import pathlib,subprocess,sys,json
+from test_var64_text_refactor import function
 sys.stdout.reconfigure(encoding='utf-8',errors='replace')
 source=pathlib.Path(sys.argv[1]).resolve();out=pathlib.Path(sys.argv[2]).resolve();out.mkdir(parents=True,exist_ok=True)
 s=source.read_text(encoding='utf-8-sig')
@@ -41,8 +42,7 @@ if 'static int Var64_IsStored64(' in s:
     if 'static int Var64_ReadStoredIn(' in s:
         code+=fn('Var64_ReadStoredIn')
     # Select the definition, not its forward declaration.
-    start=s.index('static int Var64_IsStored64(',s.index('static void* Var64_Container('));pos=s.index('\n#define VAR64_DEBT_MAX',start)
-    code+=s[start:pos]
+    code+=function(s,'Var64_IsStored64')
 else:code+='static int Var64_IsStored64(void* self,void* ctx,const char* name){return Var64_IsSixtyFourBitName(name);}\n'
 main=r'''
 static void add(Scope* s,const char* name,long long raw){

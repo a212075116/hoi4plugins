@@ -127,5 +127,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="SDK_RVA\variable64\variable64_language.inc"><Filter>SDK_RVA\variable64</Filter></None>
+    <None Include="SDK_RVA\variable64\variable64_debt.inc"><Filter>SDK_RVA\variable64</Filter></None>
   </ItemGroup>
 </Project>
