@@ -28,6 +28,29 @@ static bool g_console;
 static bool g_interactiveLane;
 static HANDLE g_cancel;
 static std::wstring g_logDirectory;
+static int g_wheelRemainder;
+
+static void ScrollConsole(const MOUSE_EVENT_RECORD& mouse) {
+    if (mouse.dwEventFlags != MOUSE_WHEELED) return;
+    std::lock_guard<std::mutex> lock(g_display);
+    CONSOLE_SCREEN_BUFFER_INFO info;
+    if (!GetConsoleScreenBufferInfo(g_out, &info)) return;
+    UINT lines = 3;
+    SystemParametersInfoW(SPI_GETWHEELSCROLLLINES, 0, &lines, 0);
+    int delta = g_wheelRemainder + (SHORT)HIWORD(mouse.dwButtonState);
+    int notches = delta / WHEEL_DELTA;
+    g_wheelRemainder = delta % WHEEL_DELTA;
+    if (!notches || !lines) return;
+    int height = info.srWindow.Bottom - info.srWindow.Top + 1;
+    if (height <= 0 || height > info.dwSize.Y) return;
+    int bottom = (std::max)(0, (std::min)((int)info.dwSize.Y - height, (int)info.dwCursorPosition.Y - height + 1));
+    int64_t step = lines == WHEEL_PAGESCROLL ? height : lines;
+    int64_t top = (int64_t)info.srWindow.Top - notches * step;
+    SMALL_RECT view = info.srWindow;
+    view.Top = (SHORT)(std::max)((int64_t)0, (std::min)((int64_t)bottom, top));
+    view.Bottom = (SHORT)(view.Top + height - 1);
+    SetConsoleWindowInfo(g_out, TRUE, &view);
+}
 
 static std::wstring Wide(const std::string& text) {
     int n = MultiByteToWideChar(CP_UTF8, 0, text.data(), (int)text.size(), NULL, 0);
@@ -66,9 +89,12 @@ static void Prompt() {
 }
 static void Print(const std::wstring& line) {
     std::lock_guard<std::mutex> lock(g_display);
+    CONSOLE_SCREEN_BUFFER_INFO before;
+    bool history = g_console && GetConsoleScreenBufferInfo(g_out, &before) && before.dwCursorPosition.Y > before.srWindow.Bottom;
     if (g_console) ErasePrompt();
     Write(line + L"\r\n");
     if (g_console) Prompt();
+    if (history) SetConsoleWindowInfo(g_out, TRUE, &before.srWindow);
 }
 
 struct Tail {
@@ -363,7 +389,7 @@ int wmain(int argc, wchar_t** argv) {
     g_console = GetConsoleMode(g_in, &g_oldMode) && GetConsoleMode(g_out, &outMode);
     if (!g_console) { fprintf(stderr, "Interactive console required; use --command for scripted requests.\n"); return 2; }
     g_interactiveLane = true;
-    SetConsoleMode(g_in, (g_oldMode | ENABLE_WINDOW_INPUT | ENABLE_EXTENDED_FLAGS) & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_QUICK_EDIT_MODE | ENABLE_PROCESSED_INPUT));
+    SetConsoleMode(g_in, (g_oldMode | ENABLE_MOUSE_INPUT | ENABLE_WINDOW_INPUT | ENABLE_EXTENDED_FLAGS) & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_QUICK_EDIT_MODE | ENABLE_PROCESSED_INPUT));
     SetConsoleTitleW(L"HOI4 plugin debug console (local / single-player)");
     Write(L"HOI4 external console v1. /help for local actions; game commands use the native dispatcher.\r\n"); Prompt();
     std::thread logs(Logs, std::wstring(gamePath));
@@ -372,6 +398,7 @@ int wmain(int argc, wchar_t** argv) {
     while (!g_stop && !quit) {
         if (WaitForSingleObject(g_in, 100) != WAIT_OBJECT_0) continue;
         INPUT_RECORD rec; DWORD n; if (!ReadConsoleInputW(g_in, &rec, 1, &n)) break;
+        if (rec.EventType == MOUSE_EVENT) { ScrollConsole(rec.Event.MouseEvent); continue; }
         if (rec.EventType != KEY_EVENT || !rec.Event.KeyEvent.bKeyDown) continue;
         auto k = rec.Event.KeyEvent;
         if (k.wVirtualKeyCode == VK_RETURN) {

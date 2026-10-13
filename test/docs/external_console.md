@@ -79,3 +79,6 @@ ROLLBACK接收副本：`*.external-console.dll`恢复本轮原DLL，`*.external-
 - `baseline_native_camera_race.json`、`modified_native_camera_race.json`、`rollback_native_camera_race.json`：相同输入的旧动画竞态与修复 → 参数快照/取消机制可复现 → 更多快速上下限组合和视觉过渡另测。
 - 原生异常分支仅做保护性实现，未故意让游戏实际原生崩溃验收；远程客户端拒绝为代码/API约束，本轮没有联网远端实测。
 - 初次编译、Frida短谓词拦截、别名诊断夹具和旧动画失败原文保留，不算最终通过；仅改正命令/机制后产生的记录作为通过依据。
+## 滚轮修复补充
+
+2026-10-13补齐鼠标滚轮事件处理与后台日志历史视口保持；[复现与验证边界](console_wheel.md)。真实鼠标体验仍由U04确认。
