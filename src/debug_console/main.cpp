@@ -389,7 +389,7 @@ int wmain(int argc, wchar_t** argv) {
     g_console = GetConsoleMode(g_in, &g_oldMode) && GetConsoleMode(g_out, &outMode);
     if (!g_console) { fprintf(stderr, "Interactive console required; use --command for scripted requests.\n"); return 2; }
     g_interactiveLane = true;
-    SetConsoleMode(g_in, (g_oldMode | ENABLE_MOUSE_INPUT | ENABLE_WINDOW_INPUT | ENABLE_EXTENDED_FLAGS) & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_QUICK_EDIT_MODE | ENABLE_PROCESSED_INPUT));
+    SetConsoleMode(g_in, (g_oldMode | ENABLE_WINDOW_INPUT | ENABLE_EXTENDED_FLAGS) & ~(ENABLE_MOUSE_INPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_QUICK_EDIT_MODE | ENABLE_PROCESSED_INPUT));
     SetConsoleTitleW(L"HOI4 plugin debug console (local / single-player)");
     Write(L"HOI4 external console v1. /help for local actions; game commands use the native dispatcher.\r\n"); Prompt();
     std::thread logs(Logs, std::wstring(gamePath));

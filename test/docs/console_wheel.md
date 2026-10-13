@@ -2,7 +2,37 @@
 
 2026-10-13。用户报告：只能拖动右侧滑条，鼠标滚轮不能上下滚动。
 
-## 原因与修复
+## 当前结论：首轮方案未解决真实问题
+
+用户在首轮部署后确认仍无法滚轮滚动。下面17项结果只证明模拟视口与事件算法，不能据此称真实问题已解决。
+第二轮将启动输入模式中的`ENABLE_MOUSE_INPUT`显式清除，让终端宿主管理滚轮与历史；不强制开启Quick Edit，仍保留逐键命令编辑。
+旧`ScrollConsole`仅保留为残余鼠标记录的兼容处理，不再作为当前历史滚动机制。
+
+微软ConPTY模式转换源码在鼠标接管且Quick Edit关闭时启用VT鼠标报告；终端收到鼠标报告请求时，滚轮优先送给程序而非本地历史。
+Windows Terminal的历史由宿主拥有，`GetConsoleScreenBufferInfo`不完整暴露历史，因此首轮`SetConsoleWindowInfo`方案不能当作通用实现。
+参考：[模式转换](https://github.com/microsoft/terminal/blob/main/src/host/getset.cpp)、[滚轮路由](https://github.com/microsoft/terminal/blob/main/src/cascadia/TerminalControl/ControlInteractivity.cpp)、[兼容性记录及后续更正](https://github.com/microsoft/terminal/issues/10191)、[API限制](https://learn.microsoft.com/en-us/windows/console/setconsolewindowinfo)。
+
+当前回归命令：
+
+```powershell
+python test/modules/console/run_host_wheel_regression.py MODIFIED
+```
+
+使用真实`CreatePseudoConsole`、子进程`CONIN$`和`Get/SetConsoleMode`，采用生产启动表达式；不注入真实鼠标事件。
+
+| 当前三态 | 输入模式检查 | ConPTY鼠标报告 | 退出码 |
+|---|---|---|---|
+| BASELINE：首轮EXE对应源码 | 3/5，模式440仍接管鼠标 | 发出`CSI ?1003;1006h` | 1 |
+| MODIFIED：宿主管理滚轮 | 5/5，模式424不接管鼠标 | 不发出上述启用序列 | 0 |
+| ROLLBACK：恢复首轮源码 | 3/5，与BASELINE相同 | 重新发出启用序列 | 1 |
+
+检查涵盖原生模式读写、键盘原始输入、Quick Edit关闭、窗口事件及256种继承模式；另检查实际ConPTY输出流。
+证据保存在`test/reports/20261012_variable64_transaction/console_wheel_host/`。原始命令、输出和错误尝试均保留。
+回滚恢复本轮基线源码SHA-256：`b1ae7a23f07aaa530139f073afaf3e49388aef370e1e84c6c087af8799908309`。
+这是输入路由修正与真实ConPTY接口验证，仍不等于Windows Terminal/Console Host的物理滚轮及视觉验收；用户确认前保持未解决验收状态。
+后台观看历史的跟随策略由宿主实现决定，不能用旧模拟测试承诺所有宿主都不拉回底部。
+
+## 首轮历史实现与模型结果（已被用户否定真实效果）
 
 输入循环原先只处理按下的键盘事件，丢弃鼠标事件。
 现在显式启用`ENABLE_MOUSE_INPUT`并处理`MOUSE_EVENT / MOUSE_WHEELED`，通过`SetConsoleWindowInfo`移动视口，不移动输入光标、不修改命令。
@@ -13,7 +43,7 @@
 键盘编辑仍回到输入行。不会增加日志队列或无限扩展原生屏幕缓冲区；缓冲区已被覆盖的历史无法恢复。
 这不是任务栏归组修改，也不改变游戏命令入口、权限或多人判断。
 
-## 可重复测试
+## 首轮模型测试（不是当前验收入口）
 
 在项目根目录执行：
 
