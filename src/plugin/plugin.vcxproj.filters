@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <Filter Include="SDK_RVA\variable64"><UniqueIdentifier>{A1B2C3D4-1111-4E5F-9A8B-000000000013}</UniqueIdentifier></Filter>
     <Filter Include="SDK_RVA\common"><UniqueIdentifier>{A1B2C3D4-1111-4E5F-9A8B-000000000012}</UniqueIdentifier></Filter>
     <Filter Include="SDK_RVA">
       <UniqueIdentifier>{A1B2C3D4-1111-4E5F-9A8B-000000000001}</UniqueIdentifier>
@@ -84,6 +85,9 @@
     <ClCompile Include="SDK_RVA\minihook\src\hde\hde64.c">
       <Filter>SDK_RVA\minihook\src\hde</Filter>
     </ClCompile>
+    <ClInclude Include="SDK_RVA\variable64\variable64_decimal.h"><Filter>SDK_RVA\variable64</Filter></ClInclude>
+    <ClInclude Include="SDK_RVA\variable64\variable64_text_format.h"><Filter>SDK_RVA\variable64</Filter></ClInclude>
+    <ClInclude Include="SDK_RVA\variable64\variable64_name.h"><Filter>SDK_RVA\variable64</Filter></ClInclude>
     <ClInclude Include="SDK_RVA\common\log.h"><Filter>SDK_RVA\common</Filter></ClInclude>
     <ClInclude Include="SDK_RVA\console\console_cmd.h">
       <Filter>SDK_RVA\console</Filter>

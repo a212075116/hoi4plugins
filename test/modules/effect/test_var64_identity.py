@@ -2,6 +2,9 @@ import pathlib,subprocess,sys,json
 sys.stdout.reconfigure(encoding='utf-8',errors='replace')
 source=pathlib.Path(sys.argv[1]).resolve();out=pathlib.Path(sys.argv[2]).resolve();out.mkdir(parents=True,exist_ok=True)
 s=source.read_text(encoding='utf-8-sig')
+name_header=source.parent/'variable64_name.h'
+if name_header.exists():
+    s=s.replace('#include "variable64_name.h"',name_header.read_text(encoding='utf-8-sig'))
 def fn(name):
     start=s.rfind('static ',0,s.index(name+'('))
     pos=s.index('{',start);depth=1;i=pos+1
@@ -31,7 +34,7 @@ static void* Var64_Container(void* self,void* ctx){return ctx;}
 typedef struct {unsigned char b[48];} Scope;
 static void init(Scope* s){memset(s,0,sizeof(*s));*(void**)(s->b+24)=calloc(512,48);*(int*)(s->b+36)=255;}
 '''
-code=''.join(fn(n) for n in ['Var64_Fnv1a','Var64_LookupInScope','Var64_MakeHighPartName','Var64_MakeFracPartName','Var64_IsSixtyFourBitName','Var64_RememberSixtyFourBitNameSrc'])
+code=(fn('Var64_MakePartName') if 'static int Var64_MakePartName(' in s else '')+''.join(fn(n) for n in ['Var64_Fnv1a','Var64_LookupInScope','Var64_MakeHighPartName','Var64_MakeFracPartName','Var64_IsSixtyFourBitName','Var64_RememberSixtyFourBitNameSrc'])
 if 'static int Var64_IsStored64(' in s:
     if 'static int Var64_ReadStoredIn(' in s:
         code+=fn('Var64_ReadStoredIn')

@@ -34,6 +34,8 @@
 
 ## 原生夹具（受控依赖，不等于游戏/GUI）
 
+2026-10-13数值源码整理的三态行为证据见[文本/侧槽命名回归](var64_refactor.md)；旧功能通过数与本轮实际重跑已分开记录。
+
 ```powershell
 python test/modules/effect/test_array64_group_native.py OUTPUT_DIR
 python test/modules/effect/test_array64_journal_native.py OUTPUT_DIR

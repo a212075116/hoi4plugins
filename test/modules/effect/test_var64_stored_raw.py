@@ -3,13 +3,17 @@ import ast,json,pathlib,random,subprocess,sys
 ROOT=pathlib.Path(__file__).resolve().parents[3]
 sys.stdout.reconfigure(encoding='utf-8',errors='replace')
 source=pathlib.Path(sys.argv[1]).resolve();out=pathlib.Path(sys.argv[2]).resolve();out.mkdir(parents=True,exist_ok=True)
-s=source.read_text(encoding='utf-8-sig');tree=ast.parse((ROOT/'test/modules/effect/test_var64_identity.py').read_text())
+s=source.read_text(encoding='utf-8-sig')
+name_header=source.parent/'variable64_name.h'
+if name_header.exists():
+    s=s.replace('#include "variable64_name.h"',name_header.read_text(encoding='utf-8-sig'))
+tree=ast.parse((ROOT/'test/modules/effect/test_var64_identity.py').read_text(encoding='utf-8'))
 parts={n.targets[0].id:ast.literal_eval(n.value) for n in tree.body if isinstance(n,ast.Assign) and isinstance(n.value,ast.Constant) and n.targets[0].id in ['prefix','main']}
 def fn(name):
  p=s.index(name+'(');start=s.rfind('static ',0,p);a=s.index('{',p);i=a+1;d=1
  while d:d+=(s[i]=='{')-(s[i]=='}');i+=1
  return s[start:i]+'\n'
-code=''.join(fn(n) for n in ['Var64_Fnv1a','Var64_LookupInScope','Var64_MakeHighPartName','Var64_MakeFracPartName','Var64_ReadStoredIn'])
+code=(fn('Var64_MakePartName') if 'static int Var64_MakePartName(' in s else '')+''.join(fn(n) for n in ['Var64_Fnv1a','Var64_LookupInScope','Var64_MakeHighPartName','Var64_MakeFracPartName','Var64_ReadStoredIn'])
 add=parts['main'].split('static void triple(')[0]
 main=r'''
 int main(void){long long lo,hi,frac;while(scanf_s("%lld %lld %lld",&lo,&hi,&frac)==3){Scope c;long long raw=333;int ok;init(&c);add(&c,"value",lo);add(&c,"value_var64h",hi);add(&c,"value_var64f",frac);ok=Var64_ReadStoredIn(&c,"value",&raw);printf("%d %lld\n",ok,raw);free(*(void**)(c.b+24));}return 0;}
