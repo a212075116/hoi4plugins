@@ -12,6 +12,7 @@
 #include "trigger_reg.h"
 
 int TriggerDemo_Register(void);
+int AchievementProbe_RegisterCommands(void);
 #include "file_redirect.h"
 #include "process_block.h"
 #include "gamedate.h"
@@ -258,6 +259,7 @@ static DWORD WINAPI PluginThread(LPVOID p)
         Plugin_Log("[plugin] CrashTest_RegisterCommands -> %d", n);
     }
 
+    Plugin_Log("[plugin] AchievementProbe_RegisterCommands -> %d", AchievementProbe_RegisterCommands());
     DebugConsole_RegisterCommands();
 
     {
