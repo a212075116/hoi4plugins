@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include "../common/native_memory.h"
 #include "../common/native_name_view.h"
+#include "../common/native_string.h"
 #include "trigger_reg.h"
 
 #define RVA_TRIGGER_MAP 0x03330050u
@@ -178,7 +179,7 @@ static int Trigger_HasTemporaryOperand(unsigned char* descriptor, void* context)
     temporary = ((TemporaryFn)(img + 0x0054F730u))();
     if (temporary == NULL) return 0;
     ((NameFn)(img + 0x005454A0u))(descriptor, name, context, *(void**)(descriptor + 160));
-    view.data = *(unsigned long long*)(name + 24) <= 15 ? (const char*)name : *(const char**)name;
+    view.data = NativeString_Data((const NativeString*)name);
     view.size = *(unsigned long long*)(name + 16);
     found = ((ContainsFn)(img + 0x00BC8D20u))(temporary, &view) != 0;
     Trigger_FreeString(name, img);
@@ -344,7 +345,7 @@ void* Trigger_TypedTooltip(TriggerDef* def, void* self, void* out, void* ctx, un
         valid ? (actual ? "PLUGIN_TRIGGER_RESULT_TRUE" : "PLUGIN_TRIGGER_RESULT_FALSE") : "PLUGIN_TRIGGER_RESULT_UNAVAILABLE", NULL, 0);
     ((FormatFn)(img + RVA_FORMAT_TEXT))(resultText, ctx, resultPacked);
     texts[0] = lhs; texts[1] = op; texts[2] = rhs;
-    texts[3] = *(unsigned long long*)(resultText + 24) <= 15 ? (const char*)resultText : *(const char**)resultText;
+    texts[3] = NativeString_Data((const NativeString*)resultText);
     for (i = 0; i < 4; ++i) {
         ((ParamLifeFn)(img + 0x0029DAD0u))(params[i]);
         *(int*)params[i] = 1;

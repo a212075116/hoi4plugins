@@ -1,14 +1,11 @@
 #pragma once
 
 #include <stddef.h>
+#include "../common/native_string.h"
 
 #pragma pack(push, 8)
 
-typedef struct {
-    union { char buf[16]; char* ptr; } u;
-    size_t size;
-    size_t cap;
-} CmdString;
+typedef NativeString CmdString;
 
 #define CMD_MAX_ALIAS 3
 

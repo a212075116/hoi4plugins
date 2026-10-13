@@ -5,6 +5,7 @@
 #include "carrier.h"
 #include "../common/native_memory.h"
 #include "../common/native_name_view.h"
+#include "../common/native_string.h"
 #include "effect_reg.h"
 
 extern void Plugin_Log(const char* fmt, ...);
@@ -118,7 +119,6 @@ void* Effect_BuildTooltip(void* self, void* out, void* ctx, const char* locKey)
     unsigned char packed[32];
     unsigned char fin[32];
     unsigned long long sz;
-    unsigned long long cap;
     unsigned char* src;
 
     if (img == NULL || out == NULL) return out;
@@ -143,8 +143,7 @@ void* Effect_BuildTooltip(void* self, void* out, void* ctx, const char* locKey)
     ((FormatFn)(img + RVA_EFF_FORMAT))(fin, ctx, packed);
 
     sz = *(unsigned long long*)(fin + 0x10);
-    cap = *(unsigned long long*)(fin + 0x18);
-    src = (cap <= EFF_SSO_MAX) ? fin : *(unsigned char**)fin;
+    src = (unsigned char*)NativeString_Data((const NativeString*)fin);
 
     *(unsigned long long*)((unsigned char*)out + 0x10) = 0;
     *(unsigned long long*)((unsigned char*)out + 0x18) = 0;
@@ -158,9 +157,7 @@ void* Effect_BuildTooltip(void* self, void* out, void* ctx, const char* locKey)
 
     {
         unsigned long long osz = *(unsigned long long*)((unsigned char*)out + 0x10);
-        unsigned long long ocap = *(unsigned long long*)((unsigned char*)out + 0x18);
-        unsigned char* op = (ocap <= EFF_SSO_MAX)
-                            ? (unsigned char*)out : *(unsigned char**)out;
+        unsigned char* op = (unsigned char*)NativeString_Data((const NativeString*)out);
         if (g_hasPendingTooltip == 0 && osz > 0 && osz < 150 &&
             NativeMemory_IsReadable(op, (size_t)osz + 1)) {
             unsigned long long j;

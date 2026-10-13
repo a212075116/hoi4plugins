@@ -106,6 +106,7 @@
     <ClInclude Include="SDK_RVA\common\log.h" />
     <ClInclude Include="SDK_RVA\common\native_memory.h" />
     <ClInclude Include="SDK_RVA\common\native_name_view.h" />
+    <ClInclude Include="SDK_RVA\common\native_string.h" />
     <ClInclude Include="SDK_RVA\variable64\variable64_decimal.h" />
     <ClInclude Include="SDK_RVA\variable64\variable64_text_format.h" />
     <ClInclude Include="SDK_RVA\variable64\variable64_name.h" />

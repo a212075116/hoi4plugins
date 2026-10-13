@@ -12,7 +12,6 @@
 #define RVA_CMD_MANAGER   0x35E1A80u
 #define RVA_CMDTBL_MERGE  0x24B4920u
 #define RVA_CMDMGR_INIT   0x24B4C40u
-#define RVA_STR_ASSIGN    0x129CA0u
 
 typedef char assert_cmdstring[(sizeof(CmdString) == 32) ? 1 : -1];
 typedef char assert_cmdentry [(sizeof(CmdEntry)  == 456) ? 1 : -1];
@@ -48,11 +47,10 @@ static void ConsoleCmd_WriteShortString(CmdString* s, const char* str) {
     s->u.buf[n] = 0;
 }
 
-typedef void** (__fastcall *AssignFn)(void** dst, const void* src, size_t len);
 
 static void ConsoleCmd_WriteString(CmdString* s, const char* str) {
     HMODULE base;
-    AssignFn assign;
+    NativeStringAssignFn assign;
     size_t n = 0;
 
     if (s == NULL || str == NULL) return;
@@ -61,7 +59,7 @@ static void ConsoleCmd_WriteString(CmdString* s, const char* str) {
 
     base = GetModuleHandleA(NULL);
     if (base == NULL) { ConsoleCmd_WriteShortString(s, str); return; }
-    assign = (AssignFn)((unsigned char*)base + RVA_STR_ASSIGN);
+    assign = (NativeStringAssignFn)((unsigned char*)base + NATIVE_STRING_ASSIGN_RVA);
     assign((void**)s, str, n);
 }
 

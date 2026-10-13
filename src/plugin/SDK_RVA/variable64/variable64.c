@@ -38,7 +38,6 @@ typedef void* (__fastcall *Var64LookupFn)(void* scopedVar, void* ctx, void* a3);
 #define RVA_APP_GLOBAL         0x332F698u
 #define RVA_SAVEINFO_INIT      0x0BC0880u
 #define RVA_LOAD_SAVEFILE      0x0DA04F0u
-#define RVA_STRING_ASSIGN      0x0129CA0u
 #define RVA_STRING_APPEND      0x0129C10u
 #define VAR64_SAVEINFO_BYTES   256u
 #define VAR64_SAVEINFO_NAME_AT 32u
@@ -1089,7 +1088,6 @@ static void __fastcall ExecVar64GameSyntax(void* self, void* scope)
 typedef void (__fastcall *Var64SaveInfoInitFn)(void* self);
 typedef void (__fastcall *Var64LoadSaveFileFn)(void* loader, void* saveInfo, void* slot);
 typedef void* (__fastcall *Var64LoaderGetterFn)(void* app);
-typedef void** (__fastcall *Var64StringAssignFn)(void** dst, const void* src, size_t len);
 typedef void** (__fastcall *Var64StringAppendFn)(void** dst, const void* src, size_t len);
 
 static int Var64_WriteSaveFileName(CmdString* field, const char* fileName)
@@ -1109,8 +1107,8 @@ static int Var64_WriteSaveFileName(CmdString* field, const char* fileName)
     }
     img = Var64_Image();
     if (img == NULL) return 0;
-    if (!ConsoleCmd_IsReadable(img + RVA_STRING_ASSIGN, 16)) return 0;
-    ((Var64StringAssignFn)(img + RVA_STRING_ASSIGN))((void**)field, fileName, n);
+    if (!ConsoleCmd_IsReadable(img + NATIVE_STRING_ASSIGN_RVA, 16)) return 0;
+    ((NativeStringAssignFn)(img + NATIVE_STRING_ASSIGN_RVA))((void**)field, fileName, n);
     return 1;
 }
 

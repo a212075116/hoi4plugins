@@ -94,6 +94,7 @@
     <ClInclude Include="SDK_RVA\common\log.h"><Filter>SDK_RVA\common</Filter></ClInclude>
     <ClInclude Include="SDK_RVA\common\native_memory.h"><Filter>SDK_RVA\common</Filter></ClInclude>
     <ClInclude Include="SDK_RVA\common\native_name_view.h"><Filter>SDK_RVA\common</Filter></ClInclude>
+    <ClInclude Include="SDK_RVA\common\native_string.h"><Filter>SDK_RVA\common</Filter></ClInclude>
     <ClInclude Include="SDK_RVA\console\console_cmd.h">
       <Filter>SDK_RVA\console</Filter>
     </ClInclude>
