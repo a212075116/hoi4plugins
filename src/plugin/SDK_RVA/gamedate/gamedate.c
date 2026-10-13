@@ -75,19 +75,19 @@ int GameDate_SetRaw(int raw)
 
 int GameDate_DecodeRaw(int raw, int* year, int* month, int* day, int* hour)
 {
-    int off;
-    int days;
+    long long off;
+    long long days;
     int hr;
     int yr;
     int rem;
     int i;
 
-    off = raw - GD_BASE_HOURS;
+    off = (long long)raw - GD_BASE_HOURS;
     days = off / 24;
-    hr = off % 24;
+    hr = (int)(off % 24);
     if (hr < 0) { hr += 24; --days; }
-    yr = days / 365;
-    rem = days % 365;
+    yr = (int)(days / 365);
+    rem = (int)(days % 365);
     if (rem < 0) { rem += 365; --yr; }
 
     if (year != NULL)  *year = yr;
@@ -123,19 +123,28 @@ int GameDate_Add(int unit, int delta)
     int mo;
     int d;
     int h;
+    int scale;
+    long long target;
+    long long months;
 
     raw = GameDate_GetRaw();
     if (raw < 0) return 0;
 
-    if (unit == GD_UNIT_HOUR) return GameDate_SetRaw(raw + delta);
-    if (unit == GD_UNIT_DAY)  return GameDate_SetRaw(raw + delta * 24);
-    if (unit == GD_UNIT_YEAR) return GameDate_SetRaw(raw + delta * 365 * 24);
-
-    if (unit != GD_UNIT_MONTH) return 0;
+    if (unit != GD_UNIT_MONTH) {
+        if (unit == GD_UNIT_HOUR) scale = 1;
+        else if (unit == GD_UNIT_DAY) scale = 24;
+        else if (unit == GD_UNIT_YEAR) scale = 365 * 24;
+        else return 0;
+        target = (long long)raw + (long long)delta * scale;
+        if (target < INT_MIN || target > INT_MAX) return 0;
+        return GameDate_SetRaw((int)target);
+    }
     GameDate_DecodeRaw(raw, &y, &mo, &d, &h);
-    mo += delta;
-    while (mo > 12) { mo -= 12; ++y; }
-    while (mo < 1)  { mo += 12; --y; }
+    months = (long long)mo - 1 + delta;
+    y += (int)(months / 12);
+    mo = (int)(months % 12);
+    if (mo < 0) { mo += 12; --y; }
+    ++mo;
     if (y < 1) y = 1;
     if (y > 9999) y = 9999;
     if (d > kGregorianMonthDayCounts[mo - 1]) d = kGregorianMonthDayCounts[mo - 1];

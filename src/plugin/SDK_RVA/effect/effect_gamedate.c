@@ -2,6 +2,7 @@
 #include <windows.h>
 #include "effect_gamedate.h"
 #include <string.h>
+#include <limits.h>
 
 #include "carrier.h"
 #include "console_cmd.h"
@@ -46,6 +47,7 @@ static void __fastcall ExecSetGameDate(void* self, void* scope)
 
 static void RunAdd(void* self, void* scope, int unit, const char* tag)
 {
+    float value;
     int delta;
     int before;
     int after;
@@ -58,7 +60,12 @@ static void RunAdd(void* self, void* scope, int unit, const char* tag)
     Effect_FlushPendingTooltip();
     ++g_dateEffectExecCount;
 
-    delta = (int)Effect_ParamFloat(self, scope);
+    value = Effect_ParamFloat(self, scope);
+    if (!((double)value >= (double)INT_MIN && (double)value <= (double)INT_MAX)) {
+        Plugin_Log("[eff] %s #%d: bad delta", tag, g_dateEffectExecCount);
+        return;
+    }
+    delta = (int)value;
     before = GameDate_GetRaw();
     if (!GameDate_Add(unit, delta)) {
         Plugin_Log("[eff] %s #%d: add failed delta=%d", tag, g_dateEffectExecCount, delta);

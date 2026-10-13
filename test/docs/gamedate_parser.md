@@ -38,5 +38,5 @@ python test/modules/gamedate/test_gamedate_parser.py SOURCE_ROOT OUTPUT --optimi
 `MODIFIED_FILE.zip`、`DIFF_FILE.patch`、`VERIFICATION.txt`、`ROLLBACK.sh`。
 脚本接受 `*.gamedate-parser.zip`、`*.gamedate-parser.dll`副本，恢复本批基线；完整包另验证补丁重建及最初基线回滚。
 
-没有部署或运行游戏。INT极值的加时间、float转整数及实际GUI不属于本批新验收，下一步继续检查月份归一化与加法边界。
+没有部署或运行游戏。INT极值的加时间、float转整数及实际GUI不属于本批新验收，当前已由[第十四批](gamedate_arithmetic.md)检查并修正月份归一化/加法/float边界。
 设计见[日期整数解析边界](../../ai_docs/03_插件/日期整数解析边界.md)。
