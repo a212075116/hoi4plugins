@@ -87,12 +87,43 @@ static void Prompt() {
     COORD pos = {(SHORT)(2 + g_cursor - begin), info.dwCursorPosition.Y};
     SetConsoleCursorPosition(g_out, pos);
 }
+static WORD LineAttributes(const std::wstring& line, WORD normal) {
+    std::wstring tags = line;
+    for (auto& c : tags) if (c >= L'A' && c <= L'Z') c += L'a' - L'A';
+    WORD foreground;
+    if (tags.find(L"[error]") != std::wstring::npos || tags.find(L"[fatal]") != std::wstring::npos)
+        foreground = FOREGROUND_RED | FOREGROUND_INTENSITY;
+    else if (tags.find(L"[warning]") != std::wstring::npos || tags.find(L"[waring]") != std::wstring::npos || tags.find(L"[warn]") != std::wstring::npos)
+        foreground = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY;
+    else if (tags.find(L"[success]") != std::wstring::npos || tags.find(L"[ok]") != std::wstring::npos || tags.find(L"[pass]") != std::wstring::npos)
+        foreground = FOREGROUND_GREEN | FOREGROUND_INTENSITY;
+    else if (tags.find(L"[info]") != std::wstring::npos || tags.find(L"[notice]") != std::wstring::npos)
+        foreground = FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY;
+    else if (tags.find(L"[debug]") != std::wstring::npos || tags.find(L"[trace]") != std::wstring::npos)
+        foreground = FOREGROUND_INTENSITY;
+    else return normal;
+    return (normal & ~0x0f) | foreground;
+}
 static void Print(const std::wstring& line) {
     std::lock_guard<std::mutex> lock(g_display);
     CONSOLE_SCREEN_BUFFER_INFO before;
-    bool history = g_console && GetConsoleScreenBufferInfo(g_out, &before) && before.dwCursorPosition.Y > before.srWindow.Bottom;
+    bool display = g_console && GetConsoleScreenBufferInfo(g_out, &before);
+    bool history = display && before.dwCursorPosition.Y > before.srWindow.Bottom;
     if (g_console) ErasePrompt();
-    Write(line + L"\r\n");
+    if (!display) Write(line + L"\r\n");
+    else {
+        size_t begin = 0;
+        do {
+            size_t end = line.find(L'\n', begin);
+            std::wstring part = line.substr(begin, end == std::wstring::npos ? end : end - begin + 1);
+            SetConsoleTextAttribute(g_out, LineAttributes(part, before.wAttributes));
+            Write(part);
+            if (end == std::wstring::npos) break;
+            begin = end + 1;
+        } while (begin <= line.size());
+        Write(L"\r\n");
+        SetConsoleTextAttribute(g_out, before.wAttributes);
+    }
     if (g_console) Prompt();
     if (history) SetConsoleWindowInfo(g_out, TRUE, &before.srWindow);
 }
