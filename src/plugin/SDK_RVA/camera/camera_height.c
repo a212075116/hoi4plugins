@@ -7,7 +7,7 @@
 #include "console_cmd.h"
 #include "camera_height.h"
 
-extern void Plugin_Log(const char* fmt, ...);
+#include "../common/plugin_log.h"
 
 typedef void (__fastcall *CamSetHeightFn)(void* cam, float height);
 

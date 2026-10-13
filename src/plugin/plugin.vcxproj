@@ -111,6 +111,7 @@
     <ClInclude Include="SDK_RVA\variable64\array64_api.h" />
     <ClInclude Include="SDK_RVA\variable64\variable64.h" />
     <ClInclude Include="SDK_RVA\common\log.h" />
+    <ClInclude Include="SDK_RVA\common\plugin_log.h" />
     <ClInclude Include="SDK_RVA\common\native_memory.h" />
     <ClInclude Include="SDK_RVA\common\native_name_view.h" />
     <ClInclude Include="SDK_RVA\common\native_string.h" />

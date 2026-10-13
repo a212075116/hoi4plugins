@@ -33,7 +33,7 @@
 #define RVA_VARIABLE_ENTRY_VT 0x0279FF90u
 #define RVA_VARIABLE_FACTORY 0x003E3E10u
 
-extern void Plugin_Log(const char* fmt, ...);
+#include "../common/plugin_log.h"
 extern int Var64_ReadStoredContainerRaw(void* container, const char* name, long long* out);
 typedef void* (__fastcall *GameAllocFn)(size_t);
 typedef void (__fastcall *GameFreeFn)(void*);

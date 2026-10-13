@@ -8,7 +8,7 @@
 #include "MinHook.h"
 #include "achievement_source.h"
 
-extern void Plugin_Log(const char* fmt, ...);
+#include "../common/plugin_log.h"
 static __declspec(thread) int g_sourceContext;
 static volatile LONG g_sourceInstalled, g_sourceMounted, g_sourceLoads, g_sourceRedirects, g_sourceFailed;
 static __int64 (__fastcall *g_loadDefinitions)(__int64, __int64);

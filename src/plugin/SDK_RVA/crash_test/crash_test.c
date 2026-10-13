@@ -5,7 +5,7 @@
 #include "console_cmd.h"
 #include "crash_test.h"
 
-extern void Plugin_Log(const char* fmt, ...);
+#include "../common/plugin_log.h"
 
 static DWORD WINAPI CrashTest_DereferenceNullInWorkerThread(LPVOID param)
 {

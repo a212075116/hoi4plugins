@@ -8,7 +8,7 @@
 #include "console_cmd.h"
 #include "file_redirect.h"
 
-extern void Plugin_Log(const char* fmt, ...);
+#include "../common/plugin_log.h"
 
 typedef HANDLE (WINAPI *CreateFileWFn)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES,
                                        DWORD, DWORD, HANDLE);

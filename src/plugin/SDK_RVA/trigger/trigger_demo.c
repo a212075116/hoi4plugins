@@ -5,7 +5,7 @@
 #include <string.h>
 #include "trigger_reg.h"
 
-extern void Plugin_Log(const char* fmt, ...);
+#include "../common/plugin_log.h"
 
 static int __fastcall PredicateTrue(void* self, void* scope)
 {

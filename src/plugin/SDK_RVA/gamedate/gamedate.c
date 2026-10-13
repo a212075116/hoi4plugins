@@ -7,7 +7,7 @@
 #include "console_cmd.h"
 #include "gamedate.h"
 
-extern void Plugin_Log(const char* fmt, ...);
+#include "../common/plugin_log.h"
 
 static unsigned char* Img(void)
 {

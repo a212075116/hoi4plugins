@@ -204,3 +204,7 @@ scalar64、typed Trigger、Array64正式接口/历史检查点及原生夹具统
 ## 第十批源码简化
 
 入口注册接口与Array64新夹具见[注册接口三态回归](registration_interfaces.md)。构建未部署；用户已授权需要时自行启动游戏，使用 `-start_tag=TAG` 自动开局。
+
+## 第十一批源码简化
+
+17个调用模块的日志声明与生产日志行为见[日志接口三态回归](plugin_log_interface.md)。日志实现和路径不变，新构建仍未部署。

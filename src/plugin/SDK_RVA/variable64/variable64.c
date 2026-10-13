@@ -12,7 +12,7 @@
 #include "variable64_name_field.h"
 #include "variable64_math.h"
 
-extern void Plugin_Log(const char* fmt, ...);
+#include "../common/plugin_log.h"
 
 typedef void (__fastcall *Var64GetParamFn)(void* a1, void* out, void* ctx, void* a4, void* a5);
 typedef void* (__fastcall *Var64FactoryFn)(void);

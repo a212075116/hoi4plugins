@@ -10,7 +10,7 @@
 #include "MinHook.h"
 #include "../../../debug_console/protocol.h"
 
-extern void Plugin_Log(const char* fmt, ...);
+#include "../common/plugin_log.h"
 typedef struct {
     LONG state;
     ULONGLONG deadline;

@@ -8,7 +8,7 @@
 #include "camera_height.h"
 #include "effect_reg.h"
 
-extern void Plugin_Log(const char* fmt, ...);
+#include "../common/plugin_log.h"
 
 static int g_cameraEffectExecCount = 0;
 

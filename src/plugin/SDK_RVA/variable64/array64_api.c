@@ -10,7 +10,7 @@
 #include "file_redirect.h"
 #include "array64_shape_journal.c"
 
-extern void Plugin_Log(const char* fmt,...);
+#include "../common/plugin_log.h"
 typedef void* (__fastcall *A64Lookup)(void*,void*,long long);
 typedef void (__fastcall *A64Erase)(void*,void*);
 typedef void* (__fastcall *A64Resolve)(void*,void*,int*,int*,void**,void**,void**,void**,void**,void**);

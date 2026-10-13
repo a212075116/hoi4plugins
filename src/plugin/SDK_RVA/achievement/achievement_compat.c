@@ -6,7 +6,7 @@
 #include "../hook/inline_hook.h"
 #include "MinHook.h"
 
-extern void Plugin_Log(const char* fmt, ...);
+#include "../common/plugin_log.h"
 typedef unsigned char (__fastcall *Unary)(void*);
 typedef unsigned char (__fastcall *Eval)(void*, void*);
 typedef void (__fastcall *Operation)(unsigned char*, void*);

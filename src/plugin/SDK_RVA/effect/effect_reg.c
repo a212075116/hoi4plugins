@@ -8,7 +8,7 @@
 #include "../common/native_string.h"
 #include "effect_reg.h"
 
-extern void Plugin_Log(const char* fmt, ...);
+#include "../common/plugin_log.h"
 
 typedef void* (__fastcall *AddTokenFn)(void* outId, void* view, void* a3);
 typedef void* (__fastcall *StabFactoryFn)(void);

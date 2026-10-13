@@ -5,7 +5,7 @@
 #include "inline_hook.h"
 #include "carrier.h"
 
-extern void Plugin_Log(const char* fmt, ...);
+#include "../common/plugin_log.h"
 
 static int g_hookInit = 0;
 

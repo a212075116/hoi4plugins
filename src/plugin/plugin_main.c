@@ -6,6 +6,7 @@
 
 #include "carrier.h"
 #include "SDK_RVA/common/log.h"
+#include "SDK_RVA/common/plugin_log.h"
 #include "console_cmd.h"
 #include "debug_console.h"
 #include "camera_height.h"

@@ -6,7 +6,7 @@
 #include "inline_hook.h"
 #include "hook_guard.h"
 
-extern void Plugin_Log(const char* fmt, ...);
+#include "../common/plugin_log.h"
 
 __declspec(thread) int g_hookReentry = 0;
 

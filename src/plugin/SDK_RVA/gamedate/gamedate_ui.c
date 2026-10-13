@@ -5,7 +5,7 @@
 #include "gamedate.h"
 #include "inline_hook.h"
 
-extern void Plugin_Log(const char* fmt, ...);
+#include "../common/plugin_log.h"
 
 typedef long long (__fastcall *UiDateUpdateFn)(void* panel, void* unused);
 
