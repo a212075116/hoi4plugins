@@ -1,5 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include "effect_camera.h"
 #include <string.h>
 
 #include "carrier.h"

@@ -106,6 +106,10 @@
     <ClInclude Include="SDK_RVA\achievement\achievement_compat.h" />
     <ClInclude Include="SDK_RVA\achievement\achievement_probe.h" />
     <ClInclude Include="SDK_RVA\achievement\achievement_ui.h" />
+    <ClInclude Include="SDK_RVA\effect\effect_camera.h" />
+    <ClInclude Include="SDK_RVA\trigger\trigger_demo.h" />
+    <ClInclude Include="SDK_RVA\variable64\array64_api.h" />
+    <ClInclude Include="SDK_RVA\variable64\variable64.h" />
     <ClInclude Include="SDK_RVA\common\log.h" />
     <ClInclude Include="SDK_RVA\common\native_memory.h" />
     <ClInclude Include="SDK_RVA\common\native_name_view.h" />

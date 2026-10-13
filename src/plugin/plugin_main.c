@@ -14,20 +14,17 @@
 #include "SDK_RVA/achievement/achievement_compat.h"
 #include "SDK_RVA/achievement/achievement_probe.h"
 #include "SDK_RVA/achievement/achievement_ui.h"
+#include "SDK_RVA/effect/effect_camera.h"
+#include "SDK_RVA/effect/effect_gamedate.h"
+#include "SDK_RVA/trigger/trigger_demo.h"
+#include "SDK_RVA/variable64/variable64.h"
+#include "SDK_RVA/variable64/array64_api.h"
 
-int TriggerDemo_Register(void);
 #include "file_redirect.h"
 #include "process_block.h"
 #include "gamedate.h"
 #include "crash_test.h"
 
-int EffectCameras_Register(void);
-int EffectGameDate_Register(void);
-int Var64_RegisterEffects(void);
-int Var64_RegisterLoadGameCommand(void);
-void Var64_InstallLanguageBridge(void);
-int Array64_RegisterEffects(void);
-int Array64_RegisterTriggers(void);
 
 #define RVA_GS_GLOBAL   0x332F260u
 #define RVA_VT_MAIN     0x2721158u

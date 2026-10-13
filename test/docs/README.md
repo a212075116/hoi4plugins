@@ -200,3 +200,7 @@ scalar64、typed Trigger、Array64正式接口/历史检查点及原生夹具统
 ## 第九批源码简化
 
 成就模块公开声明与启动依赖的三态原生夹具见[模块接口回归](module_interfaces.md)。本批构建未部署，不替代游戏/Steam/GUI验收。
+
+## 第十批源码简化
+
+入口注册接口与Array64新夹具见[注册接口三态回归](registration_interfaces.md)。构建未部署；用户已授权需要时自行启动游戏，使用 `-start_tag=TAG` 自动开局。
