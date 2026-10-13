@@ -37,7 +37,9 @@ static void init(Scope* s){memset(s,0,sizeof(*s));*(void**)(s->b+24)=calloc(512,
 '''
 math_header=source.parent/'variable64_math.h'
 math_include=('#include "'+math_header.as_posix()+'"\n') if math_header.exists() else ''
-code=math_include+(fn('Var64_MakePartName') if 'static int Var64_MakePartName(' in s else '')+''.join(fn(n) for n in ['Var64_Fnv1a','Var64_LookupInScope','Var64_MakeHighPartName','Var64_MakeFracPartName','Var64_IsSixtyFourBitName','Var64_RememberSixtyFourBitNameSrc'])
+code=math_include+(fn('Var64_MakePartName') if 'static int Var64_MakePartName(' in s else '')+''.join(fn(n) for n in ['Var64_Fnv1a','Var64_LookupInScope','Var64_MakeHighPartName','Var64_MakeFracPartName','Var64_RememberSixtyFourBitNameSrc'])
+if 'static int Var64_IsSixtyFourBitName(' in s:
+    code+=fn('Var64_IsSixtyFourBitName')
 if 'static int Var64_IsStored64(' in s:
     if 'static int Var64_ReadStoredIn(' in s:
         code+=fn('Var64_ReadStoredIn')

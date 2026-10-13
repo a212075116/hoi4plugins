@@ -34,7 +34,7 @@
 
 ## 原生夹具（受控依赖，不等于游戏/GUI）
 
-2026-10-13数值源码整理的三态行为证据见[文本/侧槽命名回归](var64_refactor.md)、[名称字段/桥接回归](var64_name_fields.md)、[算术/解码回归](var64_math_refactor.md)及[债务生命周期回归](var64_debt_lifecycle.md)；旧功能通过数与本轮实际重跑已分开记录。
+2026-10-13数值源码整理的三态行为证据见[文本/侧槽命名回归](var64_refactor.md)、[名称字段/桥接回归](var64_name_fields.md)、[算术/解码回归](var64_math_refactor.md)、[债务生命周期回归](var64_debt_lifecycle.md)及[遗留/注册回归](var64_cleanup.md)；旧功能通过数与本轮实际重跑已分开记录。
 
 ```powershell
 python test/modules/effect/test_array64_group_native.py OUTPUT_DIR
