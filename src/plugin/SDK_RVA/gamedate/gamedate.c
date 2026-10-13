@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <stdio.h>
 #include <string.h>
+#include <limits.h>
 
 #include "console_cmd.h"
 #include "gamedate.h"
@@ -156,12 +157,15 @@ int GameDate_GetParts4(int* year, int* month, int* day, int* hour)
 
 static int ParseInt(const char** pp)
 {
-    const char* p = *pp;
+    const char* p;
     int v = 0;
     int seen = 0;
-    if (pp == NULL) return -1;
+    if (pp == NULL || *pp == NULL) return -1;
+    p = *pp;
     while (*p >= '0' && *p <= '9') {
-        v = v * 10 + (int)(*p - '0');
+        int digit = (int)(*p - '0');
+        if (v > (INT_MAX - digit) / 10) return -1;
+        v = v * 10 + digit;
         ++p;
         seen = 1;
     }
