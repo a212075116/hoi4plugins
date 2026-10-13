@@ -1,6 +1,7 @@
 #define wmain DebugConsoleOriginalMain
 #include "../../../src/debug_console/main.cpp"
 #undef wmain
+#include "../../../src/debug_console/command_catalog.cpp"
 int main() {
     wchar_t dir[MAX_PATH], path[MAX_PATH]; GetTempPathW(MAX_PATH, dir); GetTempFileNameW(dir, L"dcq", 0, path);
     HANDLE h = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, CREATE_ALWAYS, 0, NULL);

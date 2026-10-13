@@ -76,6 +76,7 @@
 
   <ItemGroup>
     <ClCompile Include="plugin_main.c" />
+    <ClCompile Include="SDK_RVA\common\log.c" />
     <ClCompile Include="SDK_RVA\console\debug_console.c" />
     <ClCompile Include="SDK_RVA\console\console_cmd.c" />
     <ClCompile Include="SDK_RVA\camera\camera_height.c" />
@@ -101,6 +102,7 @@
     <ClCompile Include="SDK_RVA\minihook\src\hde\hde64.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="SDK_RVA\common\log.h" />
     <ClInclude Include="SDK_RVA\console\console_cmd.h" />
     <ClInclude Include="SDK_RVA\console\debug_console.h" />
     <ClInclude Include="SDK_RVA\camera\camera_height.h" />

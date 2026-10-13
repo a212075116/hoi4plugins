@@ -60,6 +60,9 @@ int main() {
  printf("%d/%d\n",passed,total);return passed==total?0:1;
 }
 '''.replace('SOURCE', source.resolve().as_posix()).replace('PREFIX', prefix)
+catalog = source.resolve().parent / 'command_catalog.cpp'
+if catalog.exists():
+    harness += '\n#include "' + catalog.as_posix() + '"\n'
 cpp = D / f'{phase}_harness.cpp'
 exe = D / f'{phase}_harness.exe'
 cpp.write_text(harness, encoding='utf-8')

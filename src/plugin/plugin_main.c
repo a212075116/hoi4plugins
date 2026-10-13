@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "carrier.h"
+#include "SDK_RVA/common/log.h"
 #include "console_cmd.h"
 #include "debug_console.h"
 #include "camera_height.h"
@@ -37,35 +38,11 @@ int Array64_RegisterTriggers(void);
 
 static HMODULE g_self = NULL;
 
-void Plugin_Log(const char* fmt, ...)
-{
-    char buf[2048];
-    char path[MAX_PATH];
-    SYSTEMTIME st;
-    HANDLE h;
-    DWORD written = 0;
-    va_list ap;
-    int n;
-
-    va_start(ap, fmt);
-    n = _vsnprintf_s(buf, sizeof(buf), _TRUNCATE, fmt, ap);
-    va_end(ap);
-    if (n < 0) return;
-
-    GetLocalTime(&st);
-    _snprintf_s(path, sizeof(path), _TRUNCATE,
-                "%s/mod_loader_" CARRIER_LIBRARY ".log", LOADER_LOG_DIR);
-    h = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                    NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (h == INVALID_HANDLE_VALUE) return;
-    {
-        char line[2304];
-        int m = _snprintf_s(line, sizeof(line), _TRUNCATE,
-                            "[%02d:%02d:%02d.%03d] %s\r\n",
-                            st.wHour, st.wMinute, st.wSecond, st.wMilliseconds, buf);
-        if (m > 0) WriteFile(h, line, (DWORD)m, &written, NULL);
-    }
-    CloseHandle(h);
+void Plugin_Log(const char* fmt, ...) {
+    va_list arguments;
+    va_start(arguments, fmt);
+    Log_AppendV(LOADER_LOG_DIR "/mod_loader_" CARRIER_LIBRARY ".log", fmt, arguments);
+    va_end(arguments);
 }
 
 static void VerifyClassStructure(void)

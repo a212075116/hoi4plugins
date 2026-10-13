@@ -74,4 +74,13 @@
   </ItemDefinitionGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-<ItemGroup><ClCompile Include="main.cpp" /><ClInclude Include="protocol.h" /></ItemGroup></Project>
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="command_catalog.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="protocol.h" />
+    <ClInclude Include="completion.h" />
+    <ClInclude Include="command_catalog.h" />
+  </ItemGroup>
+</Project>

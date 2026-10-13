@@ -1,5 +1,6 @@
 #include "protocol.h"
 #include "completion.h"
+#include "command_catalog.h"
 #include <tlhelp32.h>
 #include <shlobj.h>
 #include <stdio.h>
@@ -243,72 +244,10 @@ static bool Send(const std::string& line, DcResponse& result, std::string& outpu
     return false;
 }
 
-static std::vector<std::string> QueryCompletion(const std::string& prefix, std::string& error) {
-    if (!prefix.empty() && prefix[0] == '/') {
-        std::vector<std::string> names;
-        for (const char* name : {"/help", "/filter", "/clear", "/reconnect", "/quit"}) if (Completion::Starts(name, prefix)) names.emplace_back(name);
-        std::sort(names.begin(), names.end()); return names;
-    }
-    HANDLE process = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, g_pid);
-    if (!process) { error = "Cannot read this game's command catalog."; return {}; }
-    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, g_pid);
-    MODULEENTRY32W module = {}; module.dwSize = sizeof(module);
-    uintptr_t base = 0;
-    if (snapshot != INVALID_HANDLE_VALUE) {
-        if (Module32FirstW(snapshot, &module)) do { if (!_wcsicmp(module.szModule, L"hoi4.exe")) { base = (uintptr_t)module.modBaseAddr; break; } } while (Module32NextW(snapshot, &module));
-        CloseHandle(snapshot);
-    }
-    auto read = [&](uintptr_t address, void* out, size_t size) {
-        SIZE_T got = 0; return address && ReadProcessMemory(process, (const void*)address, out, size, &got) && got == size;
-    };
-    IMAGE_DOS_HEADER dos = {}; IMAGE_NT_HEADERS64 nt = {};
-    if (!read(base, &dos, sizeof(dos)) || dos.e_magic != IMAGE_DOS_SIGNATURE || dos.e_lfanew <= 0 || dos.e_lfanew > 4096 ||
-        !read(base + dos.e_lfanew, &nt, sizeof(nt)) || nt.Signature != IMAGE_NT_SIGNATURE || nt.FileHeader.TimeDateStamp != 0x6AA123BB || nt.OptionalHeader.SizeOfImage != 0x37EC000) {
-        CloseHandle(process); error = "Unsupported game version; command catalog not read."; return {};
-    }
-    struct Table { uintptr_t data; int capacity, count; };
-    struct RemoteString { unsigned char data[16]; uint64_t size, capacity; };
-    auto name = [&](const RemoteString& value, std::string& text) {
-        if (!value.size || value.size > 128 || value.capacity < value.size) return false;
-        if (value.capacity <= 15) text.assign((const char*)value.data, (size_t)value.size);
-        else { uintptr_t pointer = 0; memcpy(&pointer, value.data, sizeof(pointer)); text.resize((size_t)value.size); if (!read(pointer, &text[0], text.size())) return false; }
-        return std::all_of(text.begin(), text.end(), Completion::NameChar);
-    };
-    std::vector<std::string> names;
-    bool stable = false;
-    for (int attempt = 0; attempt < 3 && !stable; ++attempt) {
-        uintptr_t manager = 0; Table before = {}, after = {}; names.clear();
-        if (!read(base + 0x35E1A80, &manager, sizeof(manager)) || !read(manager, &before, sizeof(before)) || before.count <= 0 || before.count > 8192 || before.capacity < before.count || before.capacity > 100000) break;
-        std::vector<unsigned char> entries((size_t)before.count * 456);
-        if (!read(before.data, entries.data(), entries.size())) continue;
-        bool valid = true;
-        for (int i = 0; i < before.count && valid; ++i) {
-            const unsigned char* entry = entries.data() + (size_t)i * 456;
-            RemoteString value = {}; std::string text;
-            memcpy(&value, entry + 8, sizeof(value));
-            if (!name(value, text)) { valid = false; break; }
-            if (Completion::Starts(text, prefix)) names.push_back(text);
-            int aliases = 0; memcpy(&aliases, entry + 40, sizeof(aliases));
-            if (aliases < 0 || aliases > 3) { valid = false; break; }
-            for (int j = 0; j < aliases; ++j) {
-                uintptr_t pointer = 0; memcpy(&pointer, entry + 48 + j * 8, sizeof(pointer));
-                text.clear(); bool terminated = false;
-                for (int k = 0; k < 129; ++k) { char c = 0; if (!read(pointer + k, &c, 1)) break; if (!c) { terminated = true; break; } if (!Completion::NameChar(c)) break; text += c; }
-                if (!terminated || text.empty()) { valid = false; break; }
-                if (Completion::Starts(text, prefix)) names.push_back(text);
-            }
-        }
-        uintptr_t currentManager = 0;
-        stable = valid && read(base + 0x35E1A80, &currentManager, sizeof(currentManager)) && currentManager == manager && read(manager, &after, sizeof(after)) && memcmp(&before, &after, sizeof(before)) == 0;
-    }
-    CloseHandle(process);
-    if (!stable) { error = "Command catalog not ready or changed during snapshot; try Tab again."; return {}; }
-    std::sort(names.begin(), names.end()); names.erase(std::unique(names.begin(), names.end()), names.end()); return names;
-}
 static void CompleteWorker() {
     std::string prefix;
     { std::lock_guard<std::mutex> lock(g_display); prefix = g_completion.prefix; }
-    std::string error; auto names = QueryCompletion(prefix, error);
+    std::string error; auto names = CommandCatalog::Query(g_pid, prefix, error);
     { std::lock_guard<std::mutex> lock(g_display); g_completion.names = std::move(names); g_completion.error = error; g_completion.ready = true; }
 }
 static void PrintCompletionCandidates(const std::vector<std::string>& names) {
@@ -357,11 +296,11 @@ static void PumpCompletion() {
 static int CompletionSelfTest() {
     int passed = 0, total = 0;
     auto check = [&](bool value) { ++total; if (value) ++passed; else printf("FAIL completion case=%d\n", total); };
-    auto names = Completion::ParseHelp("set_variable64(sv64) [args]\n - description\nset_ruling_party [args]\nreset_variable [args]\nset_variable64(sv64) [args]\n", "set_");
+    auto names = Completion::Matching({"set_variable64", "set_ruling_party", "reset_variable", "set_variable64"}, "set_");
     check(names == std::vector<std::string>({"set_ruling_party", "set_variable64"}));
     check(Completion::Common(names) == "set_");
-    check(Completion::ParseHelp("set_variable64(sv64) [args]\n", "sv") == std::vector<std::string>({"sv64"}));
-    check(Completion::ParseHelp("set_variable64\n", "SET_").size() == 1);
+    check(Completion::Matching({"set_variable64", "sv64"}, "sv") == std::vector<std::string>({"sv64"}));
+    check(Completion::Matching({"set_variable64"}, "SET_").size() == 1);
     check(Completion::Common({"set_variable64"}) == "set_variable64");
     check(Completion::Common({"set_variable", "set_variable64"}) == "set_variable");
     size_t begin, end; std::string prefix;
@@ -369,9 +308,9 @@ static int CompletionSelfTest() {
     check(!Completion::Token(L"set_variable foo", 16, begin, end, prefix));
     check(!Completion::Token(L"set_;quit", 9, begin, end, prefix));
     check(Completion::Token(L"/he", 3, begin, end, prefix) && prefix == "/he");
-    check(Completion::ParseHelp("[error] bad\n - desc\n", "").empty());
+    check(Completion::Matching({"[error] bad", " - desc"}, "").empty());
     check(Completion::Token(L"", 0, begin, end, prefix) && prefix.empty());
-    check(Completion::ParseHelp("Use help to list commands\nUnknown command\n", "").empty());
+    check(Completion::Matching({"Use help to list commands", "Unknown command"}, "").empty());
     check(Completion::SnapshotMatches(1, 1, L"set_", L"set_", 4, 4));
     check(!Completion::SnapshotMatches(1, 2, L"set_", L"set_", 4, 4));
     check(!Completion::SnapshotMatches(1, 1, L"set_", L"set_x", 4, 4));
@@ -559,7 +498,7 @@ int wmain(int argc, wchar_t** argv) {
     if (completionOnly) {
         std::string prefix = Utf8(command), error;
         if (prefix.size() > 128 || !std::all_of(prefix.begin(), prefix.end(), Completion::NameChar)) return 2;
-        auto names = QueryCompletion(prefix, error);
+        auto names = CommandCatalog::Query(g_pid, prefix, error);
         if (!error.empty()) { fprintf(stderr, "%s\n", error.c_str()); return 3; }
         for (const auto& name : names) printf("%s\n", name.c_str());
         return 0;

@@ -52,6 +52,8 @@ int wmain(int argc,wchar_t** argv){
  std::string text;std::thread reader([&]{char b[4096];DWORD m;while(ReadFile(orr,b,sizeof(b),&m,NULL)&&m)text.append(b,m);});WaitForSingleObject(pi.hProcess,30000);DWORD code=2;GetExitCodeProcess(pi.hProcess,&code);ClosePseudoConsole(pc);CloseHandle(iw);reader.join();CloseHandle(orr);CloseHandle(pi.hThread);CloseHandle(pi.hProcess);fwrite(text.data(),1,text.size(),stdout);return (int)code;
 }
 '''.replace('SOURCE',source.resolve().as_posix())
+catalog=source.resolve().parent/'command_catalog.cpp'
+if catalog.exists():cpp += '\n#include "'+catalog.as_posix()+'"\n'
 p=D/(phase+'_color.cpp');p.write_text(cpp,encoding='utf-8');exe=D/(phase+'_color.exe');vc='C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Auxiliary/Build/vcvars64.bat'
 cmd=f'"{vc}" >nul && cl /nologo /EHsc /std:c++17 /MT "{p}" /Fe:"{exe}" /Fo:"{D/(phase+".obj")}" user32.lib shell32.lib advapi32.lib'
 def run(c):

@@ -5,6 +5,8 @@
 #include <string.h>
 
 #include "console_cmd.h"
+#include "carrier.h"
+#include "../common/log.h"
 
 #define RVA_CMD_MANAGER   0x35E1A80u
 #define RVA_CMDTBL_MERGE  0x24B4920u
@@ -15,33 +17,10 @@ typedef char assert_cmdstring[(sizeof(CmdString) == 32) ? 1 : -1];
 typedef char assert_cmdentry [(sizeof(CmdEntry)  == 456) ? 1 : -1];
 
 static void ConsoleCmd_DefaultLog(const char* fmt, ...) {
-    char buf[2048];
-    char path[MAX_PATH];
-    SYSTEMTIME st;
-    HANDLE h;
-    DWORD written = 0;
-    va_list ap;
-    int n;
-
-    va_start(ap, fmt);
-    n = _vsnprintf_s(buf, sizeof(buf), _TRUNCATE, fmt, ap);
-    va_end(ap);
-    if (n < 0) return;
-
-    GetLocalTime(&st);
-    _snprintf_s(path, sizeof(path), _TRUNCATE, "%s/console_cmd.log",
-                "D:/SteamLibrary/steamapps/common/Hearts of Iron IV/reports");
-    h = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                    NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (h == INVALID_HANDLE_VALUE) return;
-    {
-        char line[2304];
-        int m = _snprintf_s(line, sizeof(line), _TRUNCATE,
-                            "[%02d:%02d:%02d.%03d] %s\r\n",
-                            st.wHour, st.wMinute, st.wSecond, st.wMilliseconds, buf);
-        if (m > 0) WriteFile(h, line, (DWORD)m, &written, NULL);
-    }
-    CloseHandle(h);
+    va_list arguments;
+    va_start(arguments, fmt);
+    Log_AppendV(LOADER_LOG_DIR "/console_cmd.log", fmt, arguments);
+    va_end(arguments);
 }
 
 CmdLogFn g_CmdLog = ConsoleCmd_DefaultLog;
@@ -100,34 +79,13 @@ static void ConsoleCmd_WriteString(CmdString* s, const char* str) {
 }
 
 void ConsoleCmd_SetMessage(CmdResult* out, const char* s) {
-    HMODULE base;
-    typedef void** (__fastcall *AssignFn)(void** dst, const void* src, size_t len);
-    AssignFn assign;
-    size_t n;
-
     if (out == NULL || s == NULL) return;
-
-    if (out->message.cap != 15 && out->message.cap != 0) {
-
-    }
     if (out->message.cap == 0) {
         out->message.u.buf[0] = 0;
         out->message.size = 0;
-        out->message.cap  = 15;
+        out->message.cap = CMD_SSO_MAX;
     }
-
-    n = 0;
-    while (s[n] != 0) ++n;
-
-    if (n <= CMD_SSO_MAX) {
-        ConsoleCmd_WriteShortString(&out->message, s);
-        return;
-    }
-
-    base = GetModuleHandleA(NULL);
-    if (base == NULL) { ConsoleCmd_WriteShortString(&out->message, s); return; }
-    assign = (AssignFn)((unsigned char*)base + RVA_STR_ASSIGN);
-    assign((void**)&out->message, s, n);
+    ConsoleCmd_WriteString(&out->message, s);
 }
 
 int ConsoleCmd_GetArg(CmdArgs* args, int i, char* dst, size_t dstn) {

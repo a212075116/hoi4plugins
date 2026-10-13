@@ -2,7 +2,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
-#include <sstream>
+#include <cstddef>
 #include <cstdint>
 
 namespace Completion {
@@ -18,32 +18,12 @@ inline bool Starts(const std::string& name, const std::string& prefix) {
     for (size_t i = 0; i < prefix.size(); ++i) if (Lower(name[i]) != Lower(prefix[i])) return false;
     return true;
 }
-inline std::vector<std::string> ParseHelp(const std::string& text, const std::string& prefix) {
-    std::vector<std::string> names;
-    std::istringstream input(text); std::string line;
-    while (std::getline(input, line)) {
-        if (line.empty() || line[0] == ' ' || line[0] == '\t' || line[0] == '[') continue;
-        size_t end = 0;
-        while (end < line.size() && NameChar(line[end])) ++end;
-        if (!end) continue;
-        size_t next = end;
-        while (next < line.size() && line[next] == ' ') ++next;
-        if (next < line.size() && line[next] != '(' && line[next] != '[' && line[next] != '\r') continue;
-        auto add = [&](const std::string& name) { if (name.size() <= 128 && Starts(name, prefix)) names.push_back(name); };
-        add(line.substr(0, end));
-        if (end < line.size() && line[end] == '(') {
-            size_t close = line.find(')', end), start = end + 1;
-            if (close != std::string::npos) {
-                while (start < close) {
-                    size_t next = line.find(',', start); if (next == std::string::npos || next > close) next = close;
-                    std::string alias = line.substr(start, next - start);
-                    if (!alias.empty() && std::all_of(alias.begin(), alias.end(), NameChar)) add(alias);
-                    start = next + 1;
-                }
-            }
-        }
-    }
-    std::sort(names.begin(), names.end()); names.erase(std::unique(names.begin(), names.end()), names.end());
+inline std::vector<std::string> Matching(std::vector<std::string> names, const std::string& prefix) {
+    names.erase(std::remove_if(names.begin(), names.end(), [&](const std::string& name) {
+        return name.empty() || name.size() > 128 || !std::all_of(name.begin(), name.end(), NameChar) || !Starts(name, prefix);
+    }), names.end());
+    std::sort(names.begin(), names.end());
+    names.erase(std::unique(names.begin(), names.end()), names.end());
     return names;
 }
 inline std::string Common(const std::vector<std::string>& names) {
