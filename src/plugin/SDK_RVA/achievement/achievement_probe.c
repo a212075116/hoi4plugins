@@ -1,14 +1,14 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <stdio.h>
+#include "achievement_probe.h"
+#include "achievement_compat.h"
 #include "../console/console_cmd.h"
 #include "../hook/inline_hook.h"
 #include "MinHook.h"
 #include "achievement_source.h"
 
 extern void Plugin_Log(const char* fmt, ...);
-int AchievementCompat_Installed(void);
-void AchievementCompat_DefinitionsLoaded(void);
 static __declspec(thread) int g_sourceContext;
 static volatile LONG g_sourceInstalled, g_sourceMounted, g_sourceLoads, g_sourceRedirects, g_sourceFailed;
 static __int64 (__fastcall *g_loadDefinitions)(__int64, __int64);

@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <stdio.h>
+#include "achievement_compat.h"
 #include "../console/console_cmd.h"
 #include "../hook/inline_hook.h"
 #include "MinHook.h"

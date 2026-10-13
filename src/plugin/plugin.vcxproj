@@ -103,6 +103,9 @@
     <ClCompile Include="SDK_RVA\minihook\src\hde\hde64.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="SDK_RVA\achievement\achievement_compat.h" />
+    <ClInclude Include="SDK_RVA\achievement\achievement_probe.h" />
+    <ClInclude Include="SDK_RVA\achievement\achievement_ui.h" />
     <ClInclude Include="SDK_RVA\common\log.h" />
     <ClInclude Include="SDK_RVA\common\native_memory.h" />
     <ClInclude Include="SDK_RVA\common\native_name_view.h" />

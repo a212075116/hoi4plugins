@@ -11,14 +11,11 @@
 #include "camera_height.h"
 #include "effect_reg.h"
 #include "trigger_reg.h"
+#include "SDK_RVA/achievement/achievement_compat.h"
+#include "SDK_RVA/achievement/achievement_probe.h"
+#include "SDK_RVA/achievement/achievement_ui.h"
 
 int TriggerDemo_Register(void);
-int AchievementProbe_RegisterCommands(void);
-int AchievementSource_Install(void);
-int AchievementCompat_Install(void);
-int AchievementCompat_RegisterCommands(void);
-int AchievementUi_Install(void);
-int AchievementUi_RegisterCommands(void);
 #include "file_redirect.h"
 #include "process_block.h"
 #include "gamedate.h"

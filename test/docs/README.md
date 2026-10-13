@@ -196,3 +196,7 @@ scalar64、typed Trigger、Array64正式接口/历史检查点及原生夹具统
 2026-10-13第一版已实现，使用、自动测试与边界见[外部控制台测试入口](external_console.md)。`-debug`自动打开，可用`-no-plugin-console`禁止自动弹出；用户显示体验单独列在[用户待办](用户尚未测试的待办事项.md)的U04。
 
 最新外部控制台保护与45分钟共享运行核结果见[抗压记录](console_stress.md)，实际GUI/GPU与多人边界不扩大为通过。
+
+## 第九批源码简化
+
+成就模块公开声明与启动依赖的三态原生夹具见[模块接口回归](module_interfaces.md)。本批构建未部署，不替代游戏/Steam/GUI验收。

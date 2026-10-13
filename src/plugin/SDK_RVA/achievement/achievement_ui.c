@@ -2,6 +2,8 @@
 #include <windows.h>
 #include <intrin.h>
 #include <stdio.h>
+#include "achievement_ui.h"
+#include "achievement_compat.h"
 #include <string.h>
 #include "../console/console_cmd.h"
 #include "../hook/inline_hook.h"
@@ -13,7 +15,6 @@ static unsigned char* g_uiBase;
 static __int64 (__fastcall *g_frontUpdate)(void*);
 static unsigned char (__fastcall *g_frontTooltip)(void*, void*, CmdString*);
 static volatile LONG g_uiInstalled, g_uiUpdates, g_uiTooltips;
-extern int AchievementCompat_Installed(void);
 
 static int IsIcon(void* widget) {
     typedef const CmdString* (__fastcall *GetName)(void*);
