@@ -34,7 +34,7 @@
 |---|---|
 | `modules/gamedate/` | `SDK_RVA/gamedate/`（日期读写、界面刷新） |
 | `modules/camera/` | `SDK_RVA/camera/`（摄像机高度） |
-| `modules/console/` | `SDK_RVA/console/`（控制台指令注册） |
+| `modules/console/` | `SDK_RVA/console/`（控制台指令注册；[外部控制台 Tab 补全](console_completion.md)） |
 | `modules/achievement/` | `SDK_RVA/achievement/`（[阶段记录](achievement_compat.md)、[真实解锁](achievement_eligibility.md)、[前端图标](achievement_ui.md)，更多平台/模式覆盖待扩展） |
 | `modules/effect/` | Effect注册、scalar64与Array64阶段测试 |
 | `modules/trigger/` | Bool/typed注册、比较、原生tooltip与动态/数组隔离 |

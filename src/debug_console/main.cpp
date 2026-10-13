@@ -1,4 +1,5 @@
 #include "protocol.h"
+#include "completion.h"
 #include <tlhelp32.h>
 #include <shlobj.h>
 #include <stdio.h>
@@ -29,6 +30,16 @@ static bool g_interactiveLane;
 static HANDLE g_cancel;
 static std::wstring g_logDirectory;
 static int g_wheelRemainder;
+static uint64_t g_editRevision;
+struct CompletionState {
+    bool pending = false, ready = false;
+    uint64_t revision = 0;
+    std::wstring edit;
+    size_t cursor = 0, begin = 0, end = 0;
+    std::string prefix, error;
+    std::vector<std::string> names;
+};
+static CompletionState g_completion;
 
 static void ScrollConsole(const MOUSE_EVENT_RECORD& mouse) {
     if (mouse.dwEventFlags != MOUSE_WHEELED) return;
@@ -232,6 +243,145 @@ static bool Send(const std::string& line, DcResponse& result, std::string& outpu
     return false;
 }
 
+static std::vector<std::string> QueryCompletion(const std::string& prefix, std::string& error) {
+    if (!prefix.empty() && prefix[0] == '/') {
+        std::vector<std::string> names;
+        for (const char* name : {"/help", "/filter", "/clear", "/reconnect", "/quit"}) if (Completion::Starts(name, prefix)) names.emplace_back(name);
+        std::sort(names.begin(), names.end()); return names;
+    }
+    HANDLE process = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, g_pid);
+    if (!process) { error = "Cannot read this game's command catalog."; return {}; }
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, g_pid);
+    MODULEENTRY32W module = {}; module.dwSize = sizeof(module);
+    uintptr_t base = 0;
+    if (snapshot != INVALID_HANDLE_VALUE) {
+        if (Module32FirstW(snapshot, &module)) do { if (!_wcsicmp(module.szModule, L"hoi4.exe")) { base = (uintptr_t)module.modBaseAddr; break; } } while (Module32NextW(snapshot, &module));
+        CloseHandle(snapshot);
+    }
+    auto read = [&](uintptr_t address, void* out, size_t size) {
+        SIZE_T got = 0; return address && ReadProcessMemory(process, (const void*)address, out, size, &got) && got == size;
+    };
+    IMAGE_DOS_HEADER dos = {}; IMAGE_NT_HEADERS64 nt = {};
+    if (!read(base, &dos, sizeof(dos)) || dos.e_magic != IMAGE_DOS_SIGNATURE || dos.e_lfanew <= 0 || dos.e_lfanew > 4096 ||
+        !read(base + dos.e_lfanew, &nt, sizeof(nt)) || nt.Signature != IMAGE_NT_SIGNATURE || nt.FileHeader.TimeDateStamp != 0x6AA123BB || nt.OptionalHeader.SizeOfImage != 0x37EC000) {
+        CloseHandle(process); error = "Unsupported game version; command catalog not read."; return {};
+    }
+    struct Table { uintptr_t data; int capacity, count; };
+    struct RemoteString { unsigned char data[16]; uint64_t size, capacity; };
+    auto name = [&](const RemoteString& value, std::string& text) {
+        if (!value.size || value.size > 128 || value.capacity < value.size) return false;
+        if (value.capacity <= 15) text.assign((const char*)value.data, (size_t)value.size);
+        else { uintptr_t pointer = 0; memcpy(&pointer, value.data, sizeof(pointer)); text.resize((size_t)value.size); if (!read(pointer, &text[0], text.size())) return false; }
+        return std::all_of(text.begin(), text.end(), Completion::NameChar);
+    };
+    std::vector<std::string> names;
+    bool stable = false;
+    for (int attempt = 0; attempt < 3 && !stable; ++attempt) {
+        uintptr_t manager = 0; Table before = {}, after = {}; names.clear();
+        if (!read(base + 0x35E1A80, &manager, sizeof(manager)) || !read(manager, &before, sizeof(before)) || before.count <= 0 || before.count > 8192 || before.capacity < before.count || before.capacity > 100000) break;
+        std::vector<unsigned char> entries((size_t)before.count * 456);
+        if (!read(before.data, entries.data(), entries.size())) continue;
+        bool valid = true;
+        for (int i = 0; i < before.count && valid; ++i) {
+            const unsigned char* entry = entries.data() + (size_t)i * 456;
+            RemoteString value = {}; std::string text;
+            memcpy(&value, entry + 8, sizeof(value));
+            if (!name(value, text)) { valid = false; break; }
+            if (Completion::Starts(text, prefix)) names.push_back(text);
+            int aliases = 0; memcpy(&aliases, entry + 40, sizeof(aliases));
+            if (aliases < 0 || aliases > 3) { valid = false; break; }
+            for (int j = 0; j < aliases; ++j) {
+                uintptr_t pointer = 0; memcpy(&pointer, entry + 48 + j * 8, sizeof(pointer));
+                text.clear(); bool terminated = false;
+                for (int k = 0; k < 129; ++k) { char c = 0; if (!read(pointer + k, &c, 1)) break; if (!c) { terminated = true; break; } if (!Completion::NameChar(c)) break; text += c; }
+                if (!terminated || text.empty()) { valid = false; break; }
+                if (Completion::Starts(text, prefix)) names.push_back(text);
+            }
+        }
+        uintptr_t currentManager = 0;
+        stable = valid && read(base + 0x35E1A80, &currentManager, sizeof(currentManager)) && currentManager == manager && read(manager, &after, sizeof(after)) && memcmp(&before, &after, sizeof(before)) == 0;
+    }
+    CloseHandle(process);
+    if (!stable) { error = "Command catalog not ready or changed during snapshot; try Tab again."; return {}; }
+    std::sort(names.begin(), names.end()); names.erase(std::unique(names.begin(), names.end()), names.end()); return names;
+}
+static void CompleteWorker() {
+    std::string prefix;
+    { std::lock_guard<std::mutex> lock(g_display); prefix = g_completion.prefix; }
+    std::string error; auto names = QueryCompletion(prefix, error);
+    { std::lock_guard<std::mutex> lock(g_display); g_completion.names = std::move(names); g_completion.error = error; g_completion.ready = true; }
+}
+static void PrintCompletionCandidates(const std::vector<std::string>& names) {
+    Print(L"[info] Matching commands (" + std::to_wstring(names.size()) + L"):");
+    std::lock_guard<std::mutex> lock(g_display);
+    CONSOLE_SCREEN_BUFFER_INFO before = {};
+    bool display = g_console && GetConsoleScreenBufferInfo(g_out, &before);
+    if (display) ErasePrompt();
+    size_t rowCount = 0, rowWidth = 2;
+    for (size_t i = 0; i < names.size(); ++i) {
+        size_t width = display && before.dwSize.X > 4 ? (size_t)before.dwSize.X : 160;
+        if (rowCount && (rowCount == Completion::RowSize() || rowWidth + names[i].size() + 2 > width)) { Write(L"\r\n"); rowCount = 0; rowWidth = 2; }
+        if (!rowCount) Write(L"  ");
+        if (display) SetConsoleTextAttribute(g_out, (before.wAttributes & 0xfff0) | Completion::CandidateColor(i));
+        Write(Wide(names[i]));
+        if (display) SetConsoleTextAttribute(g_out, before.wAttributes);
+        ++rowCount; rowWidth += names[i].size() + 2;
+        Write(i + 1 == names.size() ? L"\r\n" : L"  ");
+    }
+    if (display) { SetConsoleTextAttribute(g_out, before.wAttributes); Prompt(); }
+}
+static void PumpCompletion() {
+    std::vector<std::string> names; std::string error; bool applied = false;
+    {
+        std::lock_guard<std::mutex> lock(g_display);
+        if (!g_completion.ready) return;
+        g_completion.ready = false; g_completion.pending = false;
+        if (!Completion::SnapshotMatches(g_completion.revision, g_editRevision, g_completion.edit, g_edit, g_completion.cursor, g_cursor)) return;
+        names = g_completion.names; error = g_completion.error;
+        if (error.empty() && !names.empty()) {
+            std::string common = Completion::Common(names);
+            if (common.size() >= g_completion.prefix.size()) {
+                std::wstring replacement = Wide(common), edit = g_edit;
+                edit.replace(g_completion.begin, g_completion.end - g_completion.begin, replacement);
+                if (Utf8(edit).size() <= DC_INPUT_MAX) { ErasePrompt(); g_edit = edit; g_cursor = g_completion.begin + replacement.size(); ++g_editRevision; Prompt(); applied = true; }
+            }
+        }
+    }
+    if (!error.empty()) Print(L"[warning] Completion unavailable: " + Wide(error));
+    else if (names.empty()) Print(L"[info] No matching command.");
+    else if (names.size() > 1) PrintCompletionCandidates(names);
+    else if (!applied) Print(L"[warning] Completion would exceed the input limit.");
+    else Print(L"[info] Completed: " + Wide(names[0]));
+}
+
+static int CompletionSelfTest() {
+    int passed = 0, total = 0;
+    auto check = [&](bool value) { ++total; if (value) ++passed; else printf("FAIL completion case=%d\n", total); };
+    auto names = Completion::ParseHelp("set_variable64(sv64) [args]\n - description\nset_ruling_party [args]\nreset_variable [args]\nset_variable64(sv64) [args]\n", "set_");
+    check(names == std::vector<std::string>({"set_ruling_party", "set_variable64"}));
+    check(Completion::Common(names) == "set_");
+    check(Completion::ParseHelp("set_variable64(sv64) [args]\n", "sv") == std::vector<std::string>({"sv64"}));
+    check(Completion::ParseHelp("set_variable64\n", "SET_").size() == 1);
+    check(Completion::Common({"set_variable64"}) == "set_variable64");
+    check(Completion::Common({"set_variable", "set_variable64"}) == "set_variable");
+    size_t begin, end; std::string prefix;
+    check(Completion::Token(L"  set_ arg", 6, begin, end, prefix) && begin == 2 && end == 6 && prefix == "set_");
+    check(!Completion::Token(L"set_variable foo", 16, begin, end, prefix));
+    check(!Completion::Token(L"set_;quit", 9, begin, end, prefix));
+    check(Completion::Token(L"/he", 3, begin, end, prefix) && prefix == "/he");
+    check(Completion::ParseHelp("[error] bad\n - desc\n", "").empty());
+    check(Completion::Token(L"", 0, begin, end, prefix) && prefix.empty());
+    check(Completion::ParseHelp("Use help to list commands\nUnknown command\n", "").empty());
+    check(Completion::SnapshotMatches(1, 1, L"set_", L"set_", 4, 4));
+    check(!Completion::SnapshotMatches(1, 2, L"set_", L"set_", 4, 4));
+    check(!Completion::SnapshotMatches(1, 1, L"set_", L"set_x", 4, 4));
+    check(!Completion::SnapshotMatches(1, 1, L"set_", L"set_", 4, 3));
+    check(Completion::RowSize() == 5);
+    check(Completion::CandidateColor(0) == 9 && Completion::CandidateColor(1) == 11);
+    check(Completion::CandidateColor(4) == 9 && Completion::CandidateColor(5) == 11);
+    printf("%d/%d completion tests; no game commands executed\n", passed, total); return passed == total ? 0 : 1;
+}
+
 static void Logs(std::wstring root) {
     wchar_t docs[MAX_PATH];
     std::vector<Tail> tails;
@@ -350,19 +500,21 @@ static int SelfTest() {
 
 int wmain(int argc, wchar_t** argv) {
     std::wstring command;
-    DWORD logsMs = 0; bool sessionStdio = false;
+    DWORD logsMs = 0; bool sessionStdio = false, completionOnly = false;
     for (int i = 1; i < argc; ++i) {
         if (!wcscmp(argv[i], L"--self-test")) return SelfTest();
+        if (!wcscmp(argv[i], L"--completion-self-test")) return CompletionSelfTest();
         if (!wcscmp(argv[i], L"--pid") && i + 1 < argc) g_pid = wcstoul(argv[++i], NULL, 10);
         else if (!wcscmp(argv[i], L"--session-stdio")) { sessionStdio = true; g_interactiveLane = true; }
         else if (!wcscmp(argv[i], L"--log-dir") && i + 1 < argc) g_logDirectory = argv[++i];
         else if (!wcscmp(argv[i], L"--interactive-command") && i + 1 < argc) { command = argv[++i]; g_interactiveLane = true; }
         else if (!wcscmp(argv[i], L"--command") && i + 1 < argc) command = argv[++i];
+        else if (!wcscmp(argv[i], L"--complete") && i + 1 < argc) { command = argv[++i]; completionOnly = true; }
         else if (!wcscmp(argv[i], L"--logs-ms") && i + 1 < argc) {
             logsMs = wcstoul(argv[++i], NULL, 10);
             if (!logsMs || logsMs > 60000) { fprintf(stderr, "--logs-ms range: 1..60000\n"); return 2; }
         }
-        else { fwprintf(stderr, L"Usage: hoi4_debug_console.exe [--pid GAME_PID] [--command \"game command\" | --logs-ms 1000] | --self-test\n"); return 2; }
+        else { fwprintf(stderr, L"Usage: hoi4_debug_console.exe [--pid GAME_PID] [--command \"game command\" | --complete PREFIX | --logs-ms 1000] | --self-test | --completion-self-test\n"); return 2; }
     }
     if (!g_pid) {
         HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0); PROCESSENTRY32W e = {sizeof(e)};
@@ -404,6 +556,14 @@ int wmain(int argc, wchar_t** argv) {
         std::thread logs(Logs, std::wstring(gamePath)); Sleep(logsMs); g_stop = true; logs.join();
         CloseHandle(g_game); return 0;
     }
+    if (completionOnly) {
+        std::string prefix = Utf8(command), error;
+        if (prefix.size() > 128 || !std::all_of(prefix.begin(), prefix.end(), Completion::NameChar)) return 2;
+        auto names = QueryCompletion(prefix, error);
+        if (!error.empty()) { fprintf(stderr, "%s\n", error.c_str()); return 3; }
+        for (const auto& name : names) printf("%s\n", name.c_str());
+        return 0;
+    }
     if (!command.empty()) {
         DcResponse result = {0}; std::string text;
         bool ok = Send(Utf8(command), result, text);
@@ -424,21 +584,33 @@ int wmain(int argc, wchar_t** argv) {
     SetConsoleTitleW(L"HOI4 plugin debug console (local / single-player)");
     Write(L"HOI4 external console v1. /help for local actions; game commands use the native dispatcher.\r\n"); Prompt();
     std::thread logs(Logs, std::wstring(gamePath));
-    CommandQueue commands(ExecuteLine);
+    CommandQueue commands([](const std::string& line) { if (line == "/__tab_completion__") CompleteWorker(); else ExecuteLine(line); });
     std::deque<std::wstring> history; size_t hist = 0; bool quit = false;
     while (!g_stop && !quit) {
+        PumpCompletion();
         if (WaitForSingleObject(g_in, 100) != WAIT_OBJECT_0) continue;
         INPUT_RECORD rec; DWORD n; if (!ReadConsoleInputW(g_in, &rec, 1, &n)) break;
         if (rec.EventType == MOUSE_EVENT) { ScrollConsole(rec.Event.MouseEvent); continue; }
         if (rec.EventType != KEY_EVENT || !rec.Event.KeyEvent.bKeyDown) continue;
         auto k = rec.Event.KeyEvent;
+        if (k.wVirtualKeyCode == VK_TAB) {
+            bool submit = false;
+            {
+                std::lock_guard<std::mutex> lock(g_display);
+                if (!g_completion.pending && Completion::Token(g_edit, g_cursor, g_completion.begin, g_completion.end, g_completion.prefix)) {
+                    g_completion.pending = true; g_completion.edit = g_edit; g_completion.cursor = g_cursor; g_completion.revision = g_editRevision; submit = true;
+                }
+            }
+            if (submit && !commands.Submit("/__tab_completion__")) { std::lock_guard<std::mutex> lock(g_display); g_completion.pending = false; }
+            continue;
+        }
         if (k.wVirtualKeyCode == VK_RETURN) {
             std::wstring line;
-            { std::lock_guard<std::mutex> lock(g_display); line = g_edit; ErasePrompt(); Write(L"> " + line + L"\r\n"); g_edit.clear(); g_cursor = 0; Prompt(); }
+            { std::lock_guard<std::mutex> lock(g_display); line = g_edit; ErasePrompt(); Write(L"> " + line + L"\r\n"); g_edit.clear(); g_cursor = 0; ++g_editRevision; Prompt(); }
             if (line.empty()) continue;
             if (history.empty() || history.back() != line) { history.push_back(line); if (history.size() > 128) history.pop_front(); } hist = history.size();
             if (line == L"/quit") quit = true;
-            else if (line == L"/help") Print(L"[CONSOLE] /filter all|game|error|plugin, /clear, /reconnect, /quit; Up/Down history; Left/Right/Home/End/Delete edit. No OS shell.");
+            else if (line == L"/help") Print(L"[CONSOLE] /filter all|game|error|plugin, /clear, /reconnect, /quit; Tab lists/completes command names; Up/Down history; Left/Right/Home/End/Delete edit. No OS shell.");
             else if (line == L"/reconnect") { if (!commands.Submit("/reconnect")) Print(L"[CONSOLE] Queue busy; reconnect not accepted."); }
             else if (line == L"/clear") {
                 std::lock_guard<std::mutex> lock(g_display); CONSOLE_SCREEN_BUFFER_INFO info; GetConsoleScreenBufferInfo(g_out, &info); DWORD w; COORD zero = {0,0};
@@ -454,6 +626,7 @@ int wmain(int argc, wchar_t** argv) {
             continue;
         }
         std::lock_guard<std::mutex> lock(g_display); ErasePrompt();
+        ++g_editRevision;
         switch (k.wVirtualKeyCode) {
         case VK_LEFT: if (g_cursor) --g_cursor; break;
         case VK_RIGHT: if (g_cursor < g_edit.size()) ++g_cursor; break;
