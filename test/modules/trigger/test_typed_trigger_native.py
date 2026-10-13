@@ -53,7 +53,7 @@ int main(void){
  printf("checks=%d passed=%d failed=%d\n",checks,checks-failures,failures);return failures?1:0;
 }
 '''
-src=(ROOT/'src/plugin/SDK_RVA/trigger/trigger_reg.c').as_posix()
+src=(pathlib.Path(sys.argv[2]).resolve() if len(sys.argv)>2 else ROOT/'src/plugin/SDK_RVA/trigger/trigger_reg.c').as_posix()
 (out/'fixture.c').write_text(parts['prefix']+'\n#include "'+src+'"\n'+body+extra,encoding='ascii')
 vc=r'C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat';inc=(ROOT/'src/plugin/SDK_RVA/console').as_posix()
 (out/'compile.cmd').write_text('@echo off\r\ncall "'+vc+'" >nul\r\ncl /nologo /W3 /TC /I"'+inc+'" fixture.c /Fe:fixture.exe >compile.stdout.txt 2>compile.stderr.txt\r\nexit /b %errorlevel%\r\n',encoding='ascii')

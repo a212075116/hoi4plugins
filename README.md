@@ -19,6 +19,8 @@ HOI4 1.19.3、Windows x64 原生插件工程：提供脚本数值扩展、Effect
 - `src/plugin/`：构建 `hoi4_mod_plugin.dll`，游戏内功能按 `SDK_RVA/` 子目录分工。
 - `src/debug_console/`：构建 `hoi4_debug_console.exe`，独立进程的日志显示、输入、只读补全查询。
 
+common还提供单区域内存检查与借用名称view，详见[基础机制](ai_docs/03_插件/基础内存检查与借用名称视图.md)。
+
 公共插件日志在 `src/plugin/SDK_RVA/common/log.c`；它不承担游戏日志读取或载体启动日志职责。
 
 ## 构建
@@ -44,4 +46,4 @@ msbuild hoi4plugins.sln /p:Configuration=Release /p:Platform=x64
 - 游戏成就条件仍由原版判断；兼容功能不是批量赠送成就。
 - `test/` 不参与生产构建，测试报告在 `test/reports/`；报告与二进制不纳入 Git。
 
-目前完成前六批行为保持重构，不表示整个项目已完成规范化；大型数值后端和 hook 生命周期仍需要分批处理。
+目前完成前七批行为保持重构，不表示整个项目已完成规范化；大型数值后端和 hook 生命周期仍需要分批处理。

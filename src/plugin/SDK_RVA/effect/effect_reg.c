@@ -3,7 +3,8 @@
 #include <string.h>
 
 #include "carrier.h"
-#include "console_cmd.h"
+#include "../common/native_memory.h"
+#include "../common/native_name_view.h"
 #include "effect_reg.h"
 
 extern void Plugin_Log(const char* fmt, ...);
@@ -50,7 +51,7 @@ int Effect_RegistryReady(void)
 {
     unsigned char* img = Effect_GetModuleBase();
     if (img == NULL) return 0;
-    if (!ConsoleCmd_IsReadable(img + RVA_LEXER_INIT, 2)) return 0;
+    if (!NativeMemory_IsReadable(img + RVA_LEXER_INIT, 2)) return 0;
     if (img[RVA_LEXER_INIT] == 0) return 0;
     if (img[RVA_LEXER_SYNC] == 0) return 0;
     return 1;
@@ -58,19 +59,19 @@ int Effect_RegistryReady(void)
 
 static int Effect_AddToken(const char* name, int* outId)
 {
-    struct NameView { const char* data; unsigned long long len; } view;
+    NativeNameView view;
     unsigned char* img = Effect_GetModuleBase();
     AddTokenFn fn;
     int id = 0;
     unsigned long long n = 0;
 
     if (img == NULL || name == NULL || outId == NULL) return 0;
-    if (!ConsoleCmd_IsReadable(img + RVA_ADD_TOKEN, 16)) return 0;
+    if (!NativeMemory_IsReadable(img + RVA_ADD_TOKEN, 16)) return 0;
     while (name[n] != 0) ++n;
     if (n == 0) return 0;
 
     view.data = name;
-    view.len  = n;
+    view.size  = n;
     fn = (AddTokenFn)(img + RVA_ADD_TOKEN);
     fn(&id, &view, NULL);
     *outId = id;
@@ -84,7 +85,7 @@ void* Effect_NewInstance(void* vt)
     void* inst;
 
     if (img == NULL || vt == NULL) return NULL;
-    if (!ConsoleCmd_IsReadable(img + RVA_STAB_FACTORY, 16)) return NULL;
+    if (!NativeMemory_IsReadable(img + RVA_STAB_FACTORY, 16)) return NULL;
     make = (StabFactoryFn)(img + RVA_STAB_FACTORY);
     inst = make();
     if (inst != NULL) *(void**)inst = vt;
@@ -97,7 +98,7 @@ float Effect_ParamFloat(void* self, void* ctx)
     long long fixed = 0;
 
     if (img == NULL || self == NULL) return 0.0f;
-    if (!ConsoleCmd_IsReadable(img + RVA_EFF_GETPARAM, 16)) return 0.0f;
+    if (!NativeMemory_IsReadable(img + RVA_EFF_GETPARAM, 16)) return 0.0f;
     ((GetParamFn)(img + RVA_EFF_GETPARAM))((unsigned char*)self + 0x58, &fixed, ctx, 0, 0);
     return (float)((double)fixed / EFF_FIXED_SCALE);
 }
@@ -106,7 +107,7 @@ void Effect_SetParamFixed(void* self, double value)
 {
     unsigned char* p = (unsigned char*)self;
     if (self == NULL) return;
-    if (!ConsoleCmd_IsReadable(p + 0x98, 8)) return;
+    if (!NativeMemory_IsReadable(p + 0x98, 8)) return;
     *(long long*)(p + 0x98) = (long long)(value * EFF_FIXED_SCALE);
 }
 
@@ -122,7 +123,7 @@ void* Effect_BuildTooltip(void* self, void* out, void* ctx, const char* locKey)
 
     if (img == NULL || out == NULL) return out;
     if (locKey == NULL) locKey = "";
-    if (!ConsoleCmd_IsReadable(img + RVA_EFF_PACKKEY, 16)) return out;
+    if (!NativeMemory_IsReadable(img + RVA_EFF_PACKKEY, 16)) return out;
 
     memset(paramDesc, 0, sizeof(paramDesc));
     memset(packed, 0, sizeof(packed));
@@ -151,7 +152,7 @@ void* Effect_BuildTooltip(void* self, void* out, void* ctx, const char* locKey)
     *((unsigned char*)out + 0x18) = EFF_SSO_MAX;
     *(unsigned char*)out = 0;
 
-    if (sz > 0 && sz < 400 && ConsoleCmd_IsReadable(src, (size_t)sz)) {
+    if (sz > 0 && sz < 400 && NativeMemory_IsReadable(src, (size_t)sz)) {
         ((StrAppendFn)(img + RVA_EFF_STR_APPEND))(out, (const char*)src, (size_t)sz);
     }
 
@@ -161,7 +162,7 @@ void* Effect_BuildTooltip(void* self, void* out, void* ctx, const char* locKey)
         unsigned char* op = (ocap <= EFF_SSO_MAX)
                             ? (unsigned char*)out : *(unsigned char**)out;
         if (g_hasPendingTooltip == 0 && osz > 0 && osz < 150 &&
-            ConsoleCmd_IsReadable(op, (size_t)osz + 1)) {
+            NativeMemory_IsReadable(op, (size_t)osz + 1)) {
             unsigned long long j;
             int n = 0;
             for (j = 0; j < osz && n < 180; ++j) {

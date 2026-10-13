@@ -2,7 +2,8 @@
 #include <windows.h>
 #include <string.h>
 #include <stdio.h>
-#include "console_cmd.h"
+#include "../common/native_memory.h"
+#include "../common/native_name_view.h"
 #include "trigger_reg.h"
 
 #define RVA_TRIGGER_MAP 0x03330050u
@@ -86,13 +87,13 @@ int Trigger_RegistryReady(void)
     unsigned char* img = Trigger_Image();
     unsigned char* map;
     void* head;
-    if (img == NULL || !ConsoleCmd_IsReadable(img + RVA_LEXER_INIT, 2)) return 0;
+    if (img == NULL || !NativeMemory_IsReadable(img + RVA_LEXER_INIT, 2)) return 0;
     if (!img[RVA_LEXER_INIT] || !img[RVA_LEXER_SYNC]) return 0;
-    if (!ConsoleCmd_IsReadable(img + RVA_TRIGGER_MAP, sizeof(void*))) return 0;
+    if (!NativeMemory_IsReadable(img + RVA_TRIGGER_MAP, sizeof(void*))) return 0;
     map = *(unsigned char**)(img + RVA_TRIGGER_MAP);
-    if (map == NULL || !ConsoleCmd_IsReadable(map + 24, 16)) return 0;
+    if (map == NULL || !NativeMemory_IsReadable(map + 24, 16)) return 0;
     head = *(void**)(map + 24);
-    return head != NULL && ConsoleCmd_IsReadable(head, 48);
+    return head != NULL && NativeMemory_IsReadable(head, 48);
 }
 
 static void* Trigger_FindEntry(void* object, int id)
@@ -100,13 +101,13 @@ static void* Trigger_FindEntry(void* object, int id)
     unsigned char* head;
     unsigned char* node;
     int guard;
-    if (object == NULL || !ConsoleCmd_IsReadable((unsigned char*)object + 24, 8)) return NULL;
+    if (object == NULL || !NativeMemory_IsReadable((unsigned char*)object + 24, 8)) return NULL;
     head = *(unsigned char**)((unsigned char*)object + 24);
-    if (head == NULL || !ConsoleCmd_IsReadable(head, 48)) return NULL;
+    if (head == NULL || !NativeMemory_IsReadable(head, 48)) return NULL;
     node = *(unsigned char**)(head + 8);
     for (guard = 0; guard < 65536; ++guard) {
         int key;
-        if (node == NULL || !ConsoleCmd_IsReadable(node, 48) || node[25] != 0) return NULL;
+        if (node == NULL || !NativeMemory_IsReadable(node, 48) || node[25] != 0) return NULL;
         key = *(int*)(node + 32);
         if (id == key) return *(void**)(node + 40);
         node = *(unsigned char**)(node + (id < key ? 0 : 16));
@@ -119,7 +120,7 @@ static int Trigger_StaticTokenId(int id)
     unsigned char* img = Trigger_Image();
     int i;
     if (img == NULL || id == 0) return 0;
-    if (!ConsoleCmd_IsReadable(img + RVA_STATIC_TOKENS, (size_t)STATIC_TOKEN_COUNT * 72)) return 1;
+    if (!NativeMemory_IsReadable(img + RVA_STATIC_TOKENS, (size_t)STATIC_TOKEN_COUNT * 72)) return 1;
     for (i = 0; i < STATIC_TOKEN_COUNT; ++i) {
         unsigned char* item = img + RVA_STATIC_TOKENS + (size_t)i * 72;
         if (*(int*)item == id) return 1;
@@ -131,7 +132,7 @@ void* Trigger_NewInstance(void* vt)
 {
     unsigned char* img = Trigger_Image();
     void* instance;
-    if (img == NULL || vt == NULL || !ConsoleCmd_IsReadable(img + RVA_ALWAYS_FACTORY, 16)) return NULL;
+    if (img == NULL || vt == NULL || !NativeMemory_IsReadable(img + RVA_ALWAYS_FACTORY, 16)) return NULL;
     instance = ((GameFactoryFn)(img + RVA_ALWAYS_FACTORY))();
     if (instance != NULL) *(void**)instance = vt;
     return instance;
@@ -143,7 +144,7 @@ void* Trigger_NewTypedInstance(TriggerDef* def)
     unsigned char* img = Trigger_Image();
     void* instance;
     if (img == NULL || def == NULL || !Trigger_Template(def->parameterTemplate, &t)
-        || !ConsoleCmd_IsReadable(img + t.factory, 16)) return NULL;
+        || !NativeMemory_IsReadable(img + t.factory, 16)) return NULL;
     instance = ((GameFactoryFn)(img + t.factory))();
     if (instance != NULL) *(void**)instance = def->vtStorage + 1;
     return instance;
@@ -155,8 +156,8 @@ int Trigger_ScopeView(void* context, TriggerScopeView* out)
     typedef unsigned int (__fastcall *ScopeMaskFn)(void*);
     if (out == NULL) return 0;
     out->nativeContext = NULL; out->mask = 0;
-    if (img == NULL || !ConsoleCmd_IsReadable(context, 176)
-        || !ConsoleCmd_IsReadable(img + 0x00537D90u, 16)) return 0;
+    if (img == NULL || !NativeMemory_IsReadable(context, 176)
+        || !NativeMemory_IsReadable(img + 0x00537D90u, 16)) return 0;
     out->nativeContext = context;
     out->mask = ((ScopeMaskFn)(img + 0x00537D90u))(context);
     return 1;
@@ -168,7 +169,7 @@ static int Trigger_HasTemporaryOperand(unsigned char* descriptor, void* context)
     unsigned char name[32] = {0};
     void* temporary;
     int found;
-    struct NameView { const char* data; unsigned long long size; } view;
+    NativeNameView view;
     typedef void* (__fastcall *TemporaryFn)(void);
     typedef void* (__fastcall *NameFn)(void*, void*, void*, void*);
     typedef unsigned char (__fastcall *ContainsFn)(void*, void*);
@@ -194,26 +195,26 @@ static int Trigger_HasDynamicBinding(void* container, const char* name, size_t l
     unsigned long long mask;
     unsigned int hash = 2166136261u;
     size_t i;
-    if (!ConsoleCmd_IsReadable(container, 56)) return 1;
+    if (!NativeMemory_IsReadable(container, 56)) return 1;
     map = *(unsigned char**)((unsigned char*)container + 48);
     if (map == NULL) return 0;
-    if (!ConsoleCmd_IsReadable(map, 56)) return 1;
+    if (!NativeMemory_IsReadable(map, 56)) return 1;
     sentinel = *(void**)(map + 8);
     buckets = *(unsigned char**)(map + 24);
     mask = *(unsigned long long*)(map + 48);
     if (buckets == NULL || mask > 0x100000) return 1;
     for (i = 0; i < length; ++i) hash = (hash ^ (unsigned char)name[i]) * 16777619u;
     buckets += 16 * (hash & mask);
-    if (!ConsoleCmd_IsReadable(buckets, 16)) return 1;
+    if (!NativeMemory_IsReadable(buckets, 16)) return 1;
     last = *(void**)buckets; node = *(unsigned char**)(buckets + 8);
     for (i = 0; i < 65536; ++i) {
         unsigned char* text;
         unsigned long long size, cap;
         if (node == sentinel) return 0;
-        if (!ConsoleCmd_IsReadable(node, 112)) return 1;
+        if (!NativeMemory_IsReadable(node, 112)) return 1;
         size = *(unsigned long long*)(node + 32); cap = *(unsigned long long*)(node + 40);
         text = cap <= 15 ? node + 16 : *(unsigned char**)(node + 16);
-        if (size == length && ConsoleCmd_IsReadable(text, length) && memcmp(text, name, length) == 0) return 1;
+        if (size == length && NativeMemory_IsReadable(text, length) && memcmp(text, name, length) == 0) return 1;
         if (node == last) return 0;
         node = *(unsigned char**)(node + 8);
     }
@@ -229,7 +230,7 @@ int Trigger_ReadRawParameter(void* self, const TriggerScopeView* scope, unsigned
     if (img == NULL || self == NULL || scope == NULL || scope->nativeContext == NULL || out == NULL) return 0;
     if (offset != 88u && offset != 96u && offset != 296u) return 0;
     descriptor = (unsigned char*)self + offset;
-    if (!ConsoleCmd_IsReadable(descriptor, 208) || !descriptor[8]) return 0;
+    if (!NativeMemory_IsReadable(descriptor, 208) || !descriptor[8]) return 0;
     if (!descriptor[9] && !descriptor[10] && !descriptor[11] && *(void**)(descriptor + 144) == NULL
         && *(void**)(descriptor + 160) == NULL && *(void**)(descriptor + 168) == NULL
         && !Trigger_HasTemporaryOperand(descriptor, scope->nativeContext)) {
@@ -237,7 +238,7 @@ int Trigger_ReadRawParameter(void* self, const TriggerScopeView* scope, unsigned
         unsigned long long size = *(unsigned long long*)(text + 16);
         unsigned long long cap = *(unsigned long long*)(text + 24);
         const char* name = cap <= 15 ? (const char*)text : *(const char**)text;
-        if (size > 0 && size <= 33 && size <= cap && ConsoleCmd_IsReadable(name, (size_t)size + 1)
+        if (size > 0 && size <= 33 && size <= cap && NativeMemory_IsReadable(name, (size_t)size + 1)
             && name[size] == 0 && memchr(name, 0, (size_t)size) == NULL) {
             int a = 0, b = 0;
             void* extra[6] = {0};
@@ -270,7 +271,7 @@ unsigned char Trigger_EvaluateValue(void* self, void* scope, TriggerValueFn valu
     TriggerScopeView view;
     long long rhs;
     int token;
-    if (value == NULL || !ConsoleCmd_IsReadable(self, 304) || !Trigger_ScopeView(scope, &view)
+    if (value == NULL || !NativeMemory_IsReadable(self, 304) || !Trigger_ScopeView(scope, &view)
         || !Trigger_ReadRawParameter(self, &view, 96u, &rhs)) return 0;
     token = *(int*)((unsigned char*)self + 88);
     if (token != 467 && token != 468) return 0;
@@ -281,7 +282,7 @@ unsigned char __fastcall Trigger_EvaluateVariable(void* self, void* scope)
 {
     TriggerScopeView view;
     long long lhs, rhs;
-    if (!ConsoleCmd_IsReadable(self, 544) || !Trigger_ScopeView(scope, &view)
+    if (!NativeMemory_IsReadable(self, 544) || !Trigger_ScopeView(scope, &view)
         || !Trigger_ReadRawParameter(self, &view, 88u, &lhs)
         || !Trigger_ReadRawParameter(self, &view, 296u, &rhs)) return 0;
     return (unsigned char)Trigger_CompareRaw(lhs, rhs, *(int*)((unsigned char*)self + 504));
@@ -306,9 +307,9 @@ void* Trigger_TypedTooltip(TriggerDef* def, void* self, void* out, void* ctx, un
     if (img == NULL || def == NULL || out == NULL || ctx == NULL || def->locKey == NULL) return out;
     if (def->parameterTemplate != TRG_TEMPLATE_VALUE && def->parameterTemplate != TRG_TEMPLATE_VARIABLE) return out;
     if (def->parameterTemplate == TRG_TEMPLATE_VALUE) { lhsOffset = 96u; rhsOffset = 96u; }
-    if (ConsoleCmd_IsReadable(self, def->parameterTemplate == TRG_TEMPLATE_VALUE ? 304 : 544))
+    if (NativeMemory_IsReadable(self, def->parameterTemplate == TRG_TEMPLATE_VALUE ? 304 : 544))
         token = *(int*)((unsigned char*)self + (def->parameterTemplate == TRG_TEMPLATE_VALUE ? 88 : 504));
-    if (ConsoleCmd_IsReadable(self, def->parameterTemplate == TRG_TEMPLATE_VALUE ? 304 : 544)
+    if (NativeMemory_IsReadable(self, def->parameterTemplate == TRG_TEMPLATE_VALUE ? 304 : 544)
         && Trigger_ScopeView(ctx, &view)
         && !*((unsigned char*)self + lhsOffset + 11) && !*((unsigned char*)self + rhsOffset + 11)) {
         if (def->parameterTemplate == TRG_TEMPLATE_VALUE) {
@@ -377,7 +378,7 @@ int Trigger_FormatRaw(long long raw, char* out, size_t capacity)
 
 int Trigger_ParamBool(void* self)
 {
-    if (self == NULL || !ConsoleCmd_IsReadable((unsigned char*)self + TRG_PARAM_BOOL_OFFSET, 1)) return 0;
+    if (self == NULL || !NativeMemory_IsReadable((unsigned char*)self + TRG_PARAM_BOOL_OFFSET, 1)) return 0;
     return *((unsigned char*)self + TRG_PARAM_BOOL_OFFSET) != 0;
 }
 
@@ -396,7 +397,7 @@ static void Trigger_FreeString(unsigned char* value, unsigned char* img)
     if (p == NULL) return;
     if (cap + 1 >= 0x1000) {
         unsigned char* base;
-        if (!ConsoleCmd_IsReadable(p - 8, 8)) return;
+        if (!NativeMemory_IsReadable(p - 8, 8)) return;
         base = *(unsigned char**)(p - 8);
         if (base == NULL || p < base + 8 || (size_t)(p - base - 8) > 0x1F) return;
         p = base;
@@ -411,7 +412,7 @@ void* Trigger_BuildTooltip(void* self, void* out, void* ctx,
     unsigned char packed[32];
     const char* suffix;
     if (img == NULL || out == NULL || ctx == NULL || locKey == NULL) return out;
-    if (!ConsoleCmd_IsReadable(img + RVA_FORMAT_TEXT, 16)) return out;
+    if (!NativeMemory_IsReadable(img + RVA_FORMAT_TEXT, 16)) return out;
     memset(packed, 0, sizeof(packed));
     ((PackFn)(img + RVA_PACK_KEY))(packed, locKey, NULL, 0);
     ((FormatFn)(img + RVA_FORMAT_TEXT))(out, ctx, packed);
@@ -428,7 +429,7 @@ int Trigger_RegistryRegister(TriggerDef* def)
     void* map;
     int id;
     int i;
-    struct NameView { const char* data; unsigned long long size; } view;
+    NativeNameView view;
     unsigned char* entry;
     if (def == NULL) return 0;
     if (!Trigger_ValidName(def->name) || def->desc == NULL || def->locKey == NULL
@@ -443,8 +444,8 @@ int Trigger_RegistryRegister(TriggerDef* def)
     map = *(void**)(img + RVA_TRIGGER_MAP);
     if (def->state == TRG_STATE_OK)
         return Trigger_FindEntry(map, def->tokenId) == def->entry;
-    if (!ConsoleCmd_IsReadable(img + t.vt - 8, (size_t)(t.slots + 1) * 8)
-        || !ConsoleCmd_IsReadable(img + t.entryVt - 8, 24)
+    if (!NativeMemory_IsReadable(img + t.vt - 8, (size_t)(t.slots + 1) * 8)
+        || !NativeMemory_IsReadable(img + t.entryVt - 8, 24)
         || *(void**)(img + t.vt + 4 * 8) != img + t.parse
         || *(void**)(img + t.vt + TRG_VT_EVAL * 8) != img + t.eval
         || *(void**)(img + t.entryVt + 8) != img + t.factory) {

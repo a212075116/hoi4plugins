@@ -40,6 +40,7 @@
   <ItemGroup>
     <ClCompile Include="plugin_main.c" />
     <ClCompile Include="SDK_RVA\common\log.c"><Filter>SDK_RVA\common</Filter></ClCompile>
+    <ClCompile Include="SDK_RVA\common\native_memory.c"><Filter>SDK_RVA\common</Filter></ClCompile>
     <ClCompile Include="SDK_RVA\console\console_cmd.c">
       <Filter>SDK_RVA\console</Filter>
     </ClCompile>
@@ -91,6 +92,8 @@
     <ClInclude Include="SDK_RVA\variable64\variable64_name_field.h"><Filter>SDK_RVA\variable64</Filter></ClInclude>
     <ClInclude Include="SDK_RVA\variable64\variable64_math.h"><Filter>SDK_RVA\variable64</Filter></ClInclude>
     <ClInclude Include="SDK_RVA\common\log.h"><Filter>SDK_RVA\common</Filter></ClInclude>
+    <ClInclude Include="SDK_RVA\common\native_memory.h"><Filter>SDK_RVA\common</Filter></ClInclude>
+    <ClInclude Include="SDK_RVA\common\native_name_view.h"><Filter>SDK_RVA\common</Filter></ClInclude>
     <ClInclude Include="SDK_RVA\console\console_cmd.h">
       <Filter>SDK_RVA\console</Filter>
     </ClInclude>

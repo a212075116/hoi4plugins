@@ -86,7 +86,11 @@ int main(void) {
 '''
     cpp = template.replace('CONSOLE_SOURCE', (source/'src/plugin/SDK_RVA/console/console_cmd.c').as_posix())
     cpp = cpp.replace('CARRIER_HEADER', (source/'src/carrier/carrier.h').as_posix())
-    cpp = cpp.replace('COMMON_SOURCE', '#include "'+common.as_posix()+'"' if common.exists() else '')
+    memory=source/'src/plugin/SDK_RVA/common/native_memory.c'
+    common_code=('#include "'+common.as_posix()+'"\n') if common.exists() else ''
+    if memory.exists():
+        common_code += '#include "'+memory.as_posix()+'"\n'
+    cpp = cpp.replace('COMMON_SOURCE', common_code)
     cpp = cpp.replace('PLUGIN_LOG', (output/(args.phase+'_plugin_log.inc')).as_posix())
     fixture, exe = output/(args.phase+'_source.c'), output/(args.phase+'_source.exe')
     fixture.write_text(cpp, encoding='utf-8')

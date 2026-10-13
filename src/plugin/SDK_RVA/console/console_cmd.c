@@ -7,6 +7,7 @@
 #include "console_cmd.h"
 #include "carrier.h"
 #include "../common/log.h"
+#include "../common/native_memory.h"
 
 #define RVA_CMD_MANAGER   0x35E1A80u
 #define RVA_CMDTBL_MERGE  0x24B4920u
@@ -26,21 +27,7 @@ static void ConsoleCmd_DefaultLog(const char* fmt, ...) {
 CmdLogFn g_CmdLog = ConsoleCmd_DefaultLog;
 
 int ConsoleCmd_IsReadable(const void* p, size_t n) {
-    MEMORY_BASIC_INFORMATION mbi;
-    const unsigned char* end;
-    DWORD readable;
-
-    if (p == NULL) return 0;
-    if (VirtualQuery(p, &mbi, sizeof(mbi)) == 0) return 0;
-    if (mbi.State != MEM_COMMIT) return 0;
-    if (mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD)) return 0;
-    readable = PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY
-             | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY;
-    if ((mbi.Protect & readable) == 0) return 0;
-    end = (const unsigned char*)p + n;
-    if (end < (const unsigned char*)p) return 0;
-    if (end > (const unsigned char*)mbi.BaseAddress + mbi.RegionSize) return 0;
-    return 1;
+    return NativeMemory_IsReadable(p, n);
 }
 
 void ConsoleCmd_InitResult(CmdResult* out) {

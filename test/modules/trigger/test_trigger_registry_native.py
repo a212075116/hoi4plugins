@@ -1,9 +1,9 @@
 import argparse,json,pathlib,subprocess,sys
 ROOT=pathlib.Path(__file__).resolve().parents[3]
 sys.stdout.reconfigure(encoding='utf-8',errors='replace')
-ap=argparse.ArgumentParser();ap.add_argument('output');args=ap.parse_args()
+ap=argparse.ArgumentParser();ap.add_argument('output');ap.add_argument('--source',type=pathlib.Path,default=ROOT/'src/plugin/SDK_RVA/trigger/trigger_reg.c');args=ap.parse_args()
 out=pathlib.Path(args.output).resolve();out.mkdir(parents=True,exist_ok=True)
-source=ROOT/'src/plugin/SDK_RVA/trigger/trigger_reg.c'
+source=args.source.resolve()
 prefix=r'''
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -22,6 +22,7 @@ static unsigned char tokenData[72*64];
 void Plugin_Log(const char* fmt,...){(void)fmt;}
 int Var64_ReadStoredContainerRaw(void* container,const char* name,long long* out){(void)container;(void)name;(void)out;return 0;}
 int ConsoleCmd_IsReadable(const void* p,size_t n){MEMORY_BASIC_INFORMATION b;if(!p||!VirtualQuery(p,&b,sizeof(b)))return 0;return b.State==MEM_COMMIT&&!(b.Protect&PAGE_NOACCESS)&&n<=(size_t)((char*)b.BaseAddress+b.RegionSize-(char*)p);}
+int NativeMemory_IsReadable(const void* p,size_t n){return ConsoleCmd_IsReadable(p,n);}
 static void* __fastcall alloc(size_t n){return allocFailure?NULL:calloc(1,n);}
 static void __fastcall release(void* p){free(p);}
 static void* __fastcall factory(void){unsigned char* p=calloc(1,96);*(void**)p=image+RVA_ALWAYS_VT;return p;}
