@@ -88,6 +88,7 @@
     <ClInclude Include="SDK_RVA\variable64\variable64_decimal.h"><Filter>SDK_RVA\variable64</Filter></ClInclude>
     <ClInclude Include="SDK_RVA\variable64\variable64_text_format.h"><Filter>SDK_RVA\variable64</Filter></ClInclude>
     <ClInclude Include="SDK_RVA\variable64\variable64_name.h"><Filter>SDK_RVA\variable64</Filter></ClInclude>
+    <ClInclude Include="SDK_RVA\variable64\variable64_name_field.h"><Filter>SDK_RVA\variable64</Filter></ClInclude>
     <ClInclude Include="SDK_RVA\common\log.h"><Filter>SDK_RVA\common</Filter></ClInclude>
     <ClInclude Include="SDK_RVA\console\console_cmd.h">
       <Filter>SDK_RVA\console</Filter>
@@ -122,5 +123,8 @@
     <ClInclude Include="SDK_RVA\minihook\include\MinHook.h">
       <Filter>SDK_RVA\minihook\include</Filter>
     </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="SDK_RVA\variable64\variable64_language.inc"><Filter>SDK_RVA\variable64</Filter></None>
   </ItemGroup>
 </Project>

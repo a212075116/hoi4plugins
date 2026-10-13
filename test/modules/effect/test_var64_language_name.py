@@ -6,6 +6,9 @@ sys.stdout.reconfigure(encoding='utf-8',errors='replace')
 source=pathlib.Path(sys.argv[1]).resolve()
 out=pathlib.Path(sys.argv[2]).resolve();out.mkdir(parents=True,exist_ok=True)
 s=source.read_text(encoding='utf-8-sig')
+language=source.parent/'variable64_language.inc'
+if language.exists():
+    s=s.replace('#include "variable64_language.inc"',language.read_text(encoding='utf-8-sig'))
 start=s.rindex('static int Var64_LangResolveSlotValue(')
 end=s.index('static void Var64_LangAppendText(',start)
 fn=s[start:end]

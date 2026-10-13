@@ -106,6 +106,7 @@
     <ClInclude Include="SDK_RVA\variable64\variable64_decimal.h" />
     <ClInclude Include="SDK_RVA\variable64\variable64_text_format.h" />
     <ClInclude Include="SDK_RVA\variable64\variable64_name.h" />
+    <ClInclude Include="SDK_RVA\variable64\variable64_name_field.h" />
     <ClInclude Include="SDK_RVA\console\console_cmd.h" />
     <ClInclude Include="SDK_RVA\console\debug_console.h" />
     <ClInclude Include="SDK_RVA\camera\camera_height.h" />
@@ -118,6 +119,10 @@
     <ClInclude Include="SDK_RVA\effect\effect_gamedate.h" />
     <ClInclude Include="SDK_RVA\hook\inline_hook.h" />
     <ClInclude Include="SDK_RVA\minihook\include\MinHook.h" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="SDK_RVA\variable64\variable64_language.inc" />
   </ItemGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
