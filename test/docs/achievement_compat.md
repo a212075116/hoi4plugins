@@ -1,6 +1,6 @@
 # 成就模块：第一阶段测试
 
-2026-10-13。**只读探针已部署，实际资格放行和Steam解锁未启用。**
+2026-10-13。**只读探针和原版定义来源第一版已构建/实测；实际资格放行和Steam解锁未启用。**
 
 ## 查看状态
 
@@ -32,7 +32,12 @@ python test/modules/achievement/run_policy_matrix.py MODIFIED
 | ROLLBACK | 509/512，exit1 | Unknown command，exit1 |
 
 100次原生读取成功，manager168字节前后SHA256相同；未调用SetAchievement、StoreStats、ClearAchievement或ResetAllStats。
-本次真实铁人位为1，原版定义数为0；实际mod用0字节`common/achievements.txt`覆盖原版，这不是“已达成仍不解锁”的实机验收。
+历史第一阶段真实铁人位为1、定义数为0，原因是测试mod的0字节覆盖；这不是当前CHI测试局。
+后续非铁人CHI现场定义数为293、候选为0；用户吞并全部国家并推进一月仍未解锁，资格兼容未启用。
+原版来源新命令为`achievementsource`/`achsource`，读取Hook/挂载/加载/重定向/失败计数。
+真实来源读取已出现loads=1、redirects=1、failures=0；不等于实际资格或Steam解锁验收。
+用户允许真实条件达成后的账号解锁，不使用成就清除/重置回滚。
+详见[原版来源测试](achievement_original_source.md)、[CHI端到端流程](achievement_chi_annex_flow.md)。
 
 证据与基线位于`test/reports/20261013_achievement_compat/`。
 真正放行后的未达成/达成/重复/重载/平台未就绪及Steam回调仍待后续验证；账号成就不作为文件回滚的一部分。

@@ -13,6 +13,7 @@
 
 int TriggerDemo_Register(void);
 int AchievementProbe_RegisterCommands(void);
+int AchievementSource_Install(void);
 #include "file_redirect.h"
 #include "process_block.h"
 #include "gamedate.h"
@@ -158,6 +159,7 @@ static DWORD WINAPI PluginThread(LPVOID p)
     (void)p;
     Plugin_Log("[plugin] thread start, pid=%lu", (unsigned long)GetCurrentProcessId());
     Plugin_Log("[plugin] hoi4 base=%p", (void*)GetModuleHandleA(NULL));
+    Plugin_Log("[plugin] AchievementSource_Install -> %d", AchievementSource_Install());
 
     {
         int ok = FileRedirect_Install();
