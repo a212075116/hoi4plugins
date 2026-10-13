@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "carrier.h"
 #include "console_cmd.h"
 #include "gamedate.h"
 
@@ -208,9 +207,6 @@ int GameDate_SetFromText(const char* text)
     int mo;
     int d;
     int h;
-    int days;
-    int raw;
-    int i;
 
     if (!ParseDateText(text, &y, &mo, &d, &h)) return 0;
     if (y < 1 || y > 9999) return 0;
@@ -218,11 +214,7 @@ int GameDate_SetFromText(const char* text)
     if (d < 1 || d > kGregorianMonthDayCounts[mo - 1]) return 0;
     if (h < 0 || h > 23) return 0;
 
-    days = 365 * (y - 500);
-    for (i = 0; i < mo - 1; ++i) days += kGregorianMonthDayCounts[i];
-    days += (d - 1);
-    raw = GD_BASE_HOURS + (GD_BASE_DAYS + days) * 24 + h;
-    return GameDate_SetRaw(raw);
+    return GameDate_SetRaw(GameDate_EncodeParts(y, mo, d, h));
 }
 
 int GameDate_ReadParamText(void* effectInstance, char* dst, int dstn)

@@ -1,7 +1,6 @@
 #include <windows.h>
 
-#include "carrier.h"
-#include "console_cmd.h"
+#include "../common/native_memory.h"
 #include "gamedate.h"
 #include "inline_hook.h"
 
@@ -55,7 +54,7 @@ int GameDateUi_Refresh(void)
     long long r;
 
     if (g_uiPanel == NULL || g_origUiDate == NULL) return 0;
-    if (!ConsoleCmd_IsReadable(g_uiPanel, 8)) {
+    if (!NativeMemory_IsReadable(g_uiPanel, 8)) {
         g_uiPanel = NULL;
         Plugin_Log("[gamedate] ui panel gone, dropped");
         return 0;

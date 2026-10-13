@@ -1,7 +1,5 @@
 #pragma once
 
-#include "console_cmd.h"
-
 #define RVA_GD_GS_GLOBAL   0x332F260u
 #define RVA_GD_DATE_PARSE  0x00533D60u
 #define OFF_GD_CGAMEDATE   0x460u
