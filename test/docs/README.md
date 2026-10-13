@@ -43,7 +43,7 @@
 
 ---
 
-源码规范化回归见[第一批源码简化](source_refactor.md)、[第二批数值显示/命名](var64_refactor.md)与[第三批字段/语言桥接](var64_name_fields.md)：同输入比较旧版、新版和回滚版，不执行游戏指令。
+源码规范化回归见[第一批源码简化](source_refactor.md)、[第二批数值显示/命名](var64_refactor.md)、[第三批字段/语言桥接](var64_name_fields.md)与[第四批算术/解码](var64_math_refactor.md)：同输入比较旧版、新版和回滚版，不执行游戏指令。
 
 ## 正确的测试流程（照这个做，不要自创）
 

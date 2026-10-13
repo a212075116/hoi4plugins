@@ -5,7 +5,8 @@ root=pathlib.Path(__file__).resolve().parents[3]
 source=pathlib.Path(sys.argv[1]).resolve()
 out=pathlib.Path(sys.argv[2]).resolve();out.mkdir(parents=True,exist_ok=True)
 s=source.read_text(encoding='utf-8-sig')
-code=s[s.index('static long long Var64_SaturatingAdd('):s.index('static int Var64_TryDebtArithmetic(')]
+math_header=source.parent/'variable64_math.h'
+code=('#include "'+math_header.as_posix()+'"\n') if math_header.exists() else s[s.index('static long long Var64_SaturatingAdd('):s.index('static int Var64_TryDebtArithmetic(')]
 prefix='#include <stdio.h>\n#include <intrin.h>\n#define VAR64_TRUE_CLAMP 9223372036854775807LL\n#define VAR64_FRAC_SCALE 100000LL\n#define VAR64_OP_ADD 0\n#define VAR64_OP_SUB 1\n#define VAR64_OP_MUL 2\n#define VAR64_OP_DIV 3\n'
 main='int main(void){long long a,b,result;int op;while(scanf_s("%lld %lld %d",&a,&b,&op)==3){int ok=Var64_CalculateRaw(a,b,op,&result);if(ok)printf("%lld\\n",result);else printf("ZERO\\n");}return 0;}\n'
 (out/'fixture.c').write_text(prefix+code+main,encoding='ascii')

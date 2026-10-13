@@ -13,7 +13,9 @@ def fn(name):
  p=s.index(name+'(');start=s.rfind('static ',0,p);a=s.index('{',p);i=a+1;d=1
  while d:d+=(s[i]=='{')-(s[i]=='}');i+=1
  return s[start:i]+'\n'
-code=(fn('Var64_MakePartName') if 'static int Var64_MakePartName(' in s else '')+''.join(fn(n) for n in ['Var64_Fnv1a','Var64_LookupInScope','Var64_MakeHighPartName','Var64_MakeFracPartName','Var64_ReadStoredIn'])
+math_header=source.parent/'variable64_math.h'
+math_include=('#include "'+math_header.as_posix()+'"\n') if math_header.exists() else ''
+code=math_include+(fn('Var64_MakePartName') if 'static int Var64_MakePartName(' in s else '')+''.join(fn(n) for n in ['Var64_Fnv1a','Var64_LookupInScope','Var64_MakeHighPartName','Var64_MakeFracPartName','Var64_ReadStoredIn'])
 add=parts['main'].split('static void triple(')[0]
 main=r'''
 int main(void){long long lo,hi,frac;while(scanf_s("%lld %lld %lld",&lo,&hi,&frac)==3){Scope c;long long raw=333;int ok;init(&c);add(&c,"value",lo);add(&c,"value_var64h",hi);add(&c,"value_var64f",frac);ok=Var64_ReadStoredIn(&c,"value",&raw);printf("%d %lld\n",ok,raw);free(*(void**)(c.b+24));}return 0;}

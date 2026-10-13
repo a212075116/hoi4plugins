@@ -107,6 +107,7 @@
     <ClInclude Include="SDK_RVA\variable64\variable64_text_format.h" />
     <ClInclude Include="SDK_RVA\variable64\variable64_name.h" />
     <ClInclude Include="SDK_RVA\variable64\variable64_name_field.h" />
+    <ClInclude Include="SDK_RVA\variable64\variable64_math.h" />
     <ClInclude Include="SDK_RVA\console\console_cmd.h" />
     <ClInclude Include="SDK_RVA\console\debug_console.h" />
     <ClInclude Include="SDK_RVA\camera\camera_height.h" />

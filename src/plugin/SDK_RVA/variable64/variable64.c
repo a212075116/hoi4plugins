@@ -10,6 +10,7 @@
 #include "variable64.h"
 #include "variable64_name.h"
 #include "variable64_name_field.h"
+#include "variable64_math.h"
 
 extern void Plugin_Log(const char* fmt, ...);
 
@@ -337,7 +338,6 @@ static unsigned char* Var64_ResolveAddressByName(void* self, void* ctx, const ch
     return addr;
 }
 
-#define VAR64_SLOT_SCALE  100000LL
 #define RVA_VARCLAMP_ENTRYVT 0x277C680u
 #define RVA_VARCLAMP_EXEC    0x0034F750u
 #define RVA_VAR_CLEAR_EXEC   0x00350240u
@@ -347,14 +347,6 @@ static unsigned char* Var64_ResolveAddressByName(void* self, void* ctx, const ch
 #define RVA_VAR_SUB_EXEC     0x00366BC0u
 #define RVA_VAR_MUL_EXEC     0x0035B9E0u
 #define RVA_VAR_DIV_EXEC     0x00355C70u
-
-#define VAR64_OP_ADD 0
-#define VAR64_OP_SUB 1
-#define VAR64_OP_MUL 2
-#define VAR64_OP_DIV 3
-
-#define VAR64_FRAC_SCALE  100000LL
-#define VAR64_FRAC_BIAS   100000LL
 
 static int Var64_IsStored64(void* self, void* ctx, const char* name);
 static void Var64_ResetDebtForSet(void* self, void* ctx, const char* name);
@@ -703,32 +695,8 @@ static int Var64_ReadStoredIn(void* container, const char* name, long long* outR
         || frac % VAR64_SLOT_SCALE != 0
         || !Var64_LookupInScope(container, highName, &hi)
         || !Var64_LookupInScope(container, name, &lo)) return 0;
-    if (!(lo % VAR64_SLOT_SCALE == 0 && hi % VAR64_SLOT_SCALE == 0
-        && lo / VAR64_SLOT_SCALE >= (-2147483647LL - 1)
-        && lo / VAR64_SLOT_SCALE <= 2147483647LL
-        && hi / VAR64_SLOT_SCALE >= (-2147483647LL - 1)
-        && hi / VAR64_SLOT_SCALE <= 2147483647LL)) return 0;
-    if (outRaw != NULL) {
-        long long integer = (long long)(((unsigned long long)(unsigned int)(hi / VAR64_SLOT_SCALE) << 32)
-            | (unsigned int)(lo / VAR64_SLOT_SCALE));
-        long long fraction = frac / VAR64_SLOT_SCALE - VAR64_FRAC_BIAS;
-        long long raw;
-        if (integer > 9223372036854775807LL / VAR64_FRAC_SCALE) {
-            if (integer != 9223372036854775807LL / VAR64_FRAC_SCALE + 1 || fraction >= 0) return 0;
-            --integer; fraction += VAR64_FRAC_SCALE;
-        }
-        if (integer < (-9223372036854775807LL - 1) / VAR64_FRAC_SCALE) {
-            if (integer != (-9223372036854775807LL - 1) / VAR64_FRAC_SCALE - 1 || fraction <= 0) return 0;
-            ++integer; fraction -= VAR64_FRAC_SCALE;
-        }
-        raw = integer * VAR64_FRAC_SCALE;
-        if ((fraction > 0 && raw > 9223372036854775807LL - fraction)
-            || (fraction < 0 && raw < (-9223372036854775807LL - 1) - fraction)) return 0;
-        *outRaw = raw + fraction;
-    }
-    return 1;
+    return Var64_DecodeStoredParts(lo, hi, frac, outRaw);
 }
-
 static int Var64_IsStored64(void* self, void* ctx, const char* name)
 {
     return Var64_ReadStoredIn(Var64_Container(self, ctx), name, NULL);
@@ -741,8 +709,6 @@ int Var64_ReadStoredContainerRaw(void* container, const char* name, long long* o
 }
 
 #define VAR64_DEBT_MAX 64
-#define VAR64_INT32_MAX  2147483647LL
-#define VAR64_INT32_MIN  (-2147483648LL)
 
 typedef struct {
     char      name[40];
@@ -864,8 +830,6 @@ static int Var64_ReadStoredOperandAt(void* self, void* ctx, unsigned int offset,
     return Var64_ReadStoredIn(Var64_ContainerAt(self, ctx, offset), name, out);
 }
 
-#define VAR64_TRUE_CLAMP 9223372036854775807LL
-
 static long long Var64_ReadTrueRaw(void* self, void* ctx, const char* name, unsigned char* addr)
 {
     Var64DebtRecord* d;
@@ -936,41 +900,6 @@ static void Var64_WriteTrueRaw(void* self, void* ctx, const char* name,
                    lockedRaw / VAR64_FRAC_SCALE,
                    d->debtInt, d->debtFrac < 0 ? -d->debtFrac : d->debtFrac);
     }
-}
-
-static long long Var64_SaturatingAdd(long long a, long long b)
-{
-    if (b > 0 && a > VAR64_TRUE_CLAMP - b) return VAR64_TRUE_CLAMP;
-    if (b < 0 && a < -VAR64_TRUE_CLAMP - b) return -VAR64_TRUE_CLAMP;
-    return a + b < -VAR64_TRUE_CLAMP ? -VAR64_TRUE_CLAMP : a + b;
-}
-
-static long long Var64_SaturatingSub(long long a, long long b)
-{
-    if (b > 0 && a < -VAR64_TRUE_CLAMP + b) return -VAR64_TRUE_CLAMP;
-    if (b < 0 && a > VAR64_TRUE_CLAMP + b) return VAR64_TRUE_CLAMP;
-    return a - b < -VAR64_TRUE_CLAMP ? -VAR64_TRUE_CLAMP : a - b;
-}
-
-static int Var64_CalculateRaw(long long a, long long b, int op, long long* out)
-{
-    unsigned long long x, y, hi, lo, q, rem, divisor;
-    int negative;
-    if (op == VAR64_OP_ADD) { *out = Var64_SaturatingAdd(a, b); return 1; }
-    if (op == VAR64_OP_SUB) { *out = Var64_SaturatingSub(a, b); return 1; }
-    if (op == VAR64_OP_DIV && b == 0) return 0;
-    x = a < 0 ? 0ULL - (unsigned long long)a : (unsigned long long)a;
-    y = b < 0 ? 0ULL - (unsigned long long)b : (unsigned long long)b;
-    negative = (a < 0) != (b < 0);
-    lo = _umul128(x, op == VAR64_OP_MUL ? y : VAR64_FRAC_SCALE, &hi);
-    divisor = op == VAR64_OP_MUL ? VAR64_FRAC_SCALE : y;
-    if (hi >= divisor) q = (unsigned long long)VAR64_TRUE_CLAMP;
-    else {
-        q = _udiv128(hi, lo, divisor, &rem);
-        if (q > (unsigned long long)VAR64_TRUE_CLAMP) q = (unsigned long long)VAR64_TRUE_CLAMP;
-    }
-    *out = negative ? -(long long)q : (long long)q;
-    return 1;
 }
 
 static int Var64_TryDebtArithmetic(void* self, void* ctx, int op, const char* opName)

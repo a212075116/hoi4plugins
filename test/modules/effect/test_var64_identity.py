@@ -34,7 +34,9 @@ static void* Var64_Container(void* self,void* ctx){return ctx;}
 typedef struct {unsigned char b[48];} Scope;
 static void init(Scope* s){memset(s,0,sizeof(*s));*(void**)(s->b+24)=calloc(512,48);*(int*)(s->b+36)=255;}
 '''
-code=(fn('Var64_MakePartName') if 'static int Var64_MakePartName(' in s else '')+''.join(fn(n) for n in ['Var64_Fnv1a','Var64_LookupInScope','Var64_MakeHighPartName','Var64_MakeFracPartName','Var64_IsSixtyFourBitName','Var64_RememberSixtyFourBitNameSrc'])
+math_header=source.parent/'variable64_math.h'
+math_include=('#include "'+math_header.as_posix()+'"\n') if math_header.exists() else ''
+code=math_include+(fn('Var64_MakePartName') if 'static int Var64_MakePartName(' in s else '')+''.join(fn(n) for n in ['Var64_Fnv1a','Var64_LookupInScope','Var64_MakeHighPartName','Var64_MakeFracPartName','Var64_IsSixtyFourBitName','Var64_RememberSixtyFourBitNameSrc'])
 if 'static int Var64_IsStored64(' in s:
     if 'static int Var64_ReadStoredIn(' in s:
         code+=fn('Var64_ReadStoredIn')
