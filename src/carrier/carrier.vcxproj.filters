@@ -6,9 +6,11 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\plugin\SDK_RVA\common\log.c"><Filter>src</Filter></ClCompile>
     <ClCompile Include="carrier_loader.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClInclude Include="..\plugin\SDK_RVA\common\log.h"><Filter>src</Filter></ClInclude>
     <ClInclude Include="carrier.h">
       <Filter>src</Filter>
     </ClInclude>

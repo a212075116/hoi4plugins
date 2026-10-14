@@ -5,36 +5,19 @@
 #include <vector>
 
 #include "carrier.h"
+#include "../plugin/SDK_RVA/common/log.h"
 
 static void LogPath(char* out, size_t n) {
     _snprintf_s(out, n, _TRUNCATE, "%s/mod_loader_" CARRIER_LIBRARY ".log", LOADER_LOG_DIR);
 }
 
 static void PLog(const char* fmt, ...) {
-    char buf[2048];
     char path[MAX_PATH];
-    SYSTEMTIME st;
-    HANDLE h;
-    DWORD written = 0;
-    va_list ap;
-    int n;
-    va_start(ap, fmt);
-    n = _vsnprintf_s(buf, sizeof(buf), _TRUNCATE, fmt, ap);
-    va_end(ap);
-    if (n < 0) return;
-    GetLocalTime(&st);
+    va_list arguments;
     LogPath(path, sizeof(path));
-    h = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                    NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (h == INVALID_HANDLE_VALUE) return;
-    {
-        char line[2304];
-        int m = _snprintf_s(line, sizeof(line), _TRUNCATE,
-                            "[%02d:%02d:%02d.%03d] %s\r\n",
-                            st.wHour, st.wMinute, st.wSecond, st.wMilliseconds, buf);
-        if (m > 0) WriteFile(h, line, (DWORD)m, &written, NULL);
-    }
-    CloseHandle(h);
+    va_start(arguments, fmt);
+    Log_AppendV(path, fmt, arguments);
+    va_end(arguments);
 }
 
 static BYTE* g_image = NULL;

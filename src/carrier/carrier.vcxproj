@@ -76,9 +76,11 @@
 
   <ItemGroup>
     <ClCompile Include="carrier_loader.cpp" />
+    <ClCompile Include="..\plugin\SDK_RVA\common\log.c"><CompileAs>CompileAsC</CompileAs></ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="carrier.h" />
+    <ClInclude Include="..\plugin\SDK_RVA\common\log.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="carrier.def" />

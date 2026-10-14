@@ -244,3 +244,7 @@ Array64记录和owner键的独立oracle、完整存储夹具及golden字节见[�
 ## 第二十批源码规范化
 
 日期/process/scalar/语言桥十一个original槽位和六项算术绑定见[预发布三态回归](original_publication.md)。Enable期间校验，失败/ready规则保留；新DLL未部署。
+
+## 第二十一批实机收口
+
+载体日志和三个独立CHI版本对照见[规范化集成记录](normalization_integration.md)。当前修改版已重新部署，40既有保存哈希不变；诊断分支差异及完整验收边界明确保留。
