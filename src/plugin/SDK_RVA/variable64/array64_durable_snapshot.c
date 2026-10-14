@@ -1,26 +1,5 @@
 #include "array64_recovery.c"
-
-static unsigned long long ad_get(const unsigned char* p, int n)
-{
-    unsigned long long v = 0;
-    int i;
-    for (i = 0; i < n; ++i) v |= (unsigned long long)p[i] << (8*i);
-    return v;
-}
-
-static void ad_put(unsigned char* p, unsigned long long v, int n)
-{
-    int i;
-    for (i = 0; i < n; ++i) p[i] = (unsigned char)(v >> (8*i));
-}
-
-static unsigned long long ad_hash(const unsigned char* p, unsigned int n)
-{
-    unsigned long long h = 14695981039346656037ull;
-    unsigned int i;
-    for (i = 0; i < n; ++i) h = (h ^ p[i]) * 1099511628211ull;
-    return h;
-}
+#include "array64_wire.h"
 
 static int ad_scope(const char* s)
 {
@@ -102,8 +81,7 @@ int Array64_ImportBaseline(void* current_container, const char* expected_name, c
     snapshot->generation=(int)gen;snapshot->consumed=0;
     for(i=0;i<21;++i)snapshot->name[i]=i<n?name[i]:0;
     for(i=0;i<length;++i)for(j=0;j<3;++j){
-        unsigned long long bits=ad_get(record+pos,8);pos+=8;
-        snapshot->parts[i][j]=bits<=9223372036854775807ull?(long long)bits:-1-(long long)(~bits);
+        snapshot->parts[i][j]=ad_i64(record+pos);pos+=8;
     }
     for(i=0;i<length;++i)if(!ar_valid_parts(snapshot->parts[i]))return -3;
     snapshot->checksum=ar_hash(snapshot);snapshot->magic=0x3250414e53343641ull;

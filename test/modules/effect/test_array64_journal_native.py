@@ -6,8 +6,11 @@ def literal(file,name):
     raise ValueError(name)
 prefix=literal(ROOT/'test/modules/effect/test_array64_group_native.py','prefix')
 helpers=''.join(literal(ROOT/('test/modules/effect/'+p),'main').split('int main(void)')[0] for p in ['test_array64_group_native.py','test_array64_transaction_native.py','test_array64_ownership_native.py','test_array64_shape_native.py'])
-folder=ROOT/'src/plugin/SDK_RVA/variable64';source=(folder/'native_array_readonly.c').read_text(encoding='utf-8')
+folder=(pathlib.Path(sys.argv[2]).resolve() if len(sys.argv)>2 else ROOT)/'src/plugin/SDK_RVA/variable64';source=(folder/'native_array_readonly.c').read_text(encoding='utf-8')
 for name,previous in [('array64_group_readonly.c','native_array_readonly.c'),('array64_existing_transaction.c','array64_group_readonly.c'),('array64_recovery.c','array64_existing_transaction.c'),('array64_durable_snapshot.c','array64_recovery.c'),('array64_ownership_gate.c','array64_durable_snapshot.c'),('array64_shape_transaction.c','array64_ownership_gate.c'),('array64_shape_journal.c','array64_shape_transaction.c')]:source=(folder/name).read_text(encoding='utf-8').replace('#include "'+previous+'"',source)
+for header in ['array64_wire.h','array64_owner_key.h']:
+    directive='#include "'+header+'"'
+    if directive in source:source=source.replace(directive,(folder/header).read_text(encoding='utf-8').replace('#pragma once\n',''))
 main=r'''
 int main(void){Array64Journal* j=malloc(sizeof(*j));Array64ShapeWork* w=malloc(sizeof(*w));unsigned char* record=malloc(100000),*bad=malloc(100000),*before=malloc(sizeof(nodes));unsigned int bytes,stamps[8]={1,2,3,4,5,6,7,8},nonce[4]={9,10,11,12};int s,i,n,g;long long raw;
  prepare();stamp("demo",200);check("prepare_resize",Array64_JournalPrepare(header,"demo","country:ABY",123,5,0,2,250000,0,4,0,nonce,record,100000,&bytes,j)==1);check("begin",Array64_JournalBegin(header,"demo","country:ABY",123,record,bytes,j)==1);

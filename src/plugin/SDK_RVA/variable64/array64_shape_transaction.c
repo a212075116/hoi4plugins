@@ -12,14 +12,6 @@ typedef struct {
 
 unsigned int Array64_ShapeBytes(void){return (unsigned int)sizeof(Array64ShapeWork);}
 
-static void as_owner_key(char* key,const char* name,int i)
-{
-    int j=0,n=0;const char* prefix="__v64o_";
-    for(j=0;j<7;++j)key[j]=prefix[j];
-    while(name[n])key[j++]=name[n++];
-    key[j++]='_';key[j++]=i<4?'b':'i';key[j++]=(char)('0'+i%4);key[j]=0;
-}
-
 static int as_put(void* c,const char* key,long long raw,int* step,int fail)
 {
     long long value;

@@ -1,17 +1,14 @@
 #include "array64_durable_snapshot.c"
+#include "array64_owner_key.h"
 
 static int ao_stamps(void* container, const char* name, unsigned int stamps[8])
 {
     char roots[6][40], key[40];
-    int i, n=0, j;
+    int i;
     long long raw;
     if(!ag_name(name,roots))return 0;
-    while(name[n])++n;
     for(i=0;i<8;++i){
-        const char* prefix="__v64o_";
-        for(j=0;j<7;++j)key[j]=prefix[j];
-        for(j=0;j<n;++j)key[7+j]=name[j];
-        key[7+n]='_';key[8+n]=i<4?'b':'i';key[9+n]=(char)('0'+i%4);key[10+n]=0;
+        as_owner_key(key,name,i);
         if(na_lookup(container,key,&raw)!=1 || raw<100000 || raw%100000 || raw/100000>2147483647LL)return 0;
         stamps[i]=(unsigned int)(raw/100000);
     }

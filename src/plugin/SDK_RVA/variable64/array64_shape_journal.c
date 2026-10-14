@@ -36,12 +36,6 @@ static int aj_absent(void* c,const char* name)
     return ag_inventory(c,roots,&count)&&count==0;
 }
 
-static int aj_i32(const unsigned char* p)
-{
-    unsigned int v=(unsigned int)ad_get(p,4);
-    return v<=2147483647u?(int)v:-1-(int)(~v);
-}
-
 int Array64_JournalPrepare(void* c,const char* name,const char* scope,unsigned long long lineage,int op,int index,
     int expected_gen,long long raw,int wide,int size,const unsigned int* fresh_stamps,const unsigned int* nonce,
     unsigned char* output,unsigned int capacity,unsigned int* written,Array64Journal* scratch)
@@ -89,9 +83,9 @@ static int aj_parse(void* c,const char* name,const char* scope,unsigned long lon
     if(scope[sl])return -3;
     for(unsigned int i=0;i<n;++i)if(!record[120+sl+i]||record[120+sl+i]!=(unsigned char)name[i])return -3;
     if(name[n])return -3;
-    j->op=aj_i32(record+12);j->index=aj_i32(record+16);j->old_length=aj_i32(record+20);j->old_generation=aj_i32(record+24);
-    j->target_length=aj_i32(record+28);j->wide=aj_i32(record+40);j->size=aj_i32(record+44);
-    {unsigned long long bits=ad_get(record+32,8);j->raw=bits<=9223372036854775807ull?(long long)bits:-1-(long long)(~bits);}
+    j->op=ad_i32(record+12);j->index=ad_i32(record+16);j->old_length=ad_i32(record+20);j->old_generation=ad_i32(record+24);
+    j->target_length=ad_i32(record+28);j->wide=ad_i32(record+40);j->size=ad_i32(record+44);
+    j->raw=ad_i64(record+32);
     if(j->op<0||j->op>6||j->old_length<-1||j->old_length>4096||j->old_generation<0||j->old_generation>2147483644||
         j->old_generation%2||j->size<0||j->size>4096||!as_encode(j->raw,j->wide,encoded)||
         aj_target(j->op,j->index,j->old_length,j->size)!=j->target_length||j->target_length<-1||j->target_length>4096)return -2;
@@ -108,12 +102,11 @@ static int aj_parse(void* c,const char* name,const char* scope,unsigned long lon
     for(int i=0;i<8;++i)if(ad_get(owned+16+4*i,4)!=j->stamps[i])return -2;
     base=owned+48;
     if(bsize!=48+sl+n+24*(unsigned int)j->old_length||ad_get(base,8)!=0x3245534142343641ull||ad_get(base+8,4)!=1||ad_get(base+12,4)!=2||
-        aj_i32(base+16)!=j->old_length||aj_i32(base+20)!=j->old_generation||ad_get(base+24,8)!=lineage||ad_get(base+32,4)!=sl||ad_get(base+36,4)!=n||
+        ad_i32(base+16)!=j->old_length||ad_i32(base+20)!=j->old_generation||ad_get(base+24,8)!=lineage||ad_get(base+32,4)!=sl||ad_get(base+36,4)!=n||
         ad_get(base+bsize-8,8)!=ad_hash(base,bsize-8))return -2;
     for(unsigned int i=0;i<sl+n;++i)if(base[40+i]!=record[120+i])return -2;
     pos=40+sl+n;
-    for(int i=0;i<j->old_length;++i)for(int k=0;k<3;++k){unsigned long long bits=ad_get(base+pos,8);pos+=8;
-        j->baseline.parts[i][k]=bits<=9223372036854775807ull?(long long)bits:-1-(long long)(~bits);}
+    for(int i=0;i<j->old_length;++i)for(int k=0;k<3;++k){j->baseline.parts[i][k]=ad_i64(base+pos);pos+=8;}
     for(int i=0;i<j->old_length;++i)if(!ar_valid_parts(j->baseline.parts[i]))return -2;
     }
     j->baseline.checksum=ar_hash(&j->baseline);j->baseline.magic=0x3250414e53343641ull;return 1;

@@ -91,6 +91,8 @@
     <ClInclude Include="SDK_RVA\variable64\variable64_name.h"><Filter>SDK_RVA\variable64</Filter></ClInclude>
     <ClInclude Include="SDK_RVA\variable64\variable64_name_field.h"><Filter>SDK_RVA\variable64</Filter></ClInclude>
     <ClInclude Include="SDK_RVA\variable64\variable64_math.h"><Filter>SDK_RVA\variable64</Filter></ClInclude>
+    <ClInclude Include="SDK_RVA\variable64\array64_wire.h"><Filter>SDK_RVA\variable64</Filter></ClInclude>
+    <ClInclude Include="SDK_RVA\variable64\array64_owner_key.h"><Filter>SDK_RVA\variable64</Filter></ClInclude>
     <ClInclude Include="SDK_RVA\common\log.h"><Filter>SDK_RVA\common</Filter></ClInclude>
     <ClInclude Include="SDK_RVA\common\plugin_log.h"><Filter>SDK_RVA\common</Filter></ClInclude>
     <ClInclude Include="SDK_RVA\common\native_memory.h"><Filter>SDK_RVA\common</Filter></ClInclude>

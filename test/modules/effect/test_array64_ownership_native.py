@@ -5,8 +5,11 @@ def literal(file,name):
         if isinstance(n,ast.Assign) and isinstance(n.targets[0],ast.Name) and n.targets[0].id==name:return ast.literal_eval(n.value)
     raise ValueError(name)
 prefix=literal(ROOT/'test/modules/effect/test_array64_group_native.py','prefix');helpers=literal(ROOT/'test/modules/effect/test_array64_group_native.py','main').split('int main(void)')[0]+literal(ROOT/'test/modules/effect/test_array64_transaction_native.py','main').split('int main(void)')[0]
-folder=ROOT/'src/plugin/SDK_RVA/variable64';source=(folder/'native_array_readonly.c').read_text(encoding='utf-8')
+folder=(pathlib.Path(sys.argv[2]).resolve() if len(sys.argv)>2 else ROOT)/'src/plugin/SDK_RVA/variable64';source=(folder/'native_array_readonly.c').read_text(encoding='utf-8')
 for name,previous in [('array64_group_readonly.c','native_array_readonly.c'),('array64_existing_transaction.c','array64_group_readonly.c'),('array64_recovery.c','array64_existing_transaction.c'),('array64_durable_snapshot.c','array64_recovery.c'),('array64_ownership_gate.c','array64_durable_snapshot.c')]:source=(folder/name).read_text(encoding='utf-8').replace('#include "'+previous+'"',source)
+for header in ['array64_wire.h','array64_owner_key.h']:
+    directive='#include "'+header+'"'
+    if directive in source:source=source.replace(directive,(folder/header).read_text(encoding='utf-8').replace('#pragma once\n',''))
 main=r'''
 static void stamp(const char* name,unsigned birth){char key[40];for(int i=0;i<8;i++){sprintf_s(key,40,"__v64o_%s_%c%d",name,i<4?'b':'i',i%4);put(key,(i<4?123+i:birth+i)*100000LL);}}
 int main(void){Array64Snapshot* s=malloc(sizeof(*s)),*loaded=malloc(sizeof(*s));unsigned char* record=malloc(100000),*bad=malloc(100000),*before=malloc(sizeof(nodes));unsigned int bytes;int i;

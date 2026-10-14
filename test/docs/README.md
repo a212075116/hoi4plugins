@@ -220,3 +220,7 @@ scalar64、typed Trigger、Array64正式接口/历史检查点及原生夹具统
 ## 第十四批源码简化
 
 日期增量与Effect浮点边界见[日期增量三态回归](gamedate_arithmetic.md)。旧定义域状态保持，越界拒绝；新构建未部署，不夸大微基准为游戏收益。
+
+## 第十五批源码规范化
+
+Array64记录和owner键的独立oracle、完整存储夹具及golden字节见[记录/键三态回归](array64_helpers.md)。格式、校验与恢复不变，新构建未部署。

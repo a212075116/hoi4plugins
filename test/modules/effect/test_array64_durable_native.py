@@ -6,8 +6,11 @@ def literal(file,name):
     raise ValueError(name)
 prefix=literal(ROOT/'test/modules/effect/test_array64_group_native.py','prefix')
 helpers=literal(ROOT/'test/modules/effect/test_array64_group_native.py','main').split('int main(void)')[0]+literal(ROOT/'test/modules/effect/test_array64_transaction_native.py','main').split('int main(void)')[0]
-folder=ROOT/'src/plugin/SDK_RVA/variable64';source=(folder/'native_array_readonly.c').read_text(encoding='utf-8')
+folder=(pathlib.Path(sys.argv[2]).resolve() if len(sys.argv)>2 else ROOT)/'src/plugin/SDK_RVA/variable64';source=(folder/'native_array_readonly.c').read_text(encoding='utf-8')
 for name,previous in [('array64_group_readonly.c','native_array_readonly.c'),('array64_existing_transaction.c','array64_group_readonly.c'),('array64_recovery.c','array64_existing_transaction.c'),('array64_durable_snapshot.c','array64_recovery.c')]:source=(folder/name).read_text(encoding='utf-8').replace('#include "'+previous+'"',source)
+for header in ['array64_wire.h','array64_owner_key.h']:
+    directive='#include "'+header+'"'
+    if directive in source:source=source.replace(directive,(folder/header).read_text(encoding='utf-8').replace('#pragma once\n',''))
 main=r'''
 static void rehash(unsigned char* b,unsigned int n){ad_put(b+n-8,ad_hash(b,n-8),8);}
 int main(void){Array64Snapshot* s=malloc(sizeof(*s)),*loaded=malloc(sizeof(*s));unsigned char* record=malloc(100000),*bad=malloc(100000),*before=malloc(sizeof(nodes));unsigned int bytes;int i,n,g;long long raw;

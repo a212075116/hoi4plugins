@@ -5,8 +5,11 @@ def literal(file,name):
         if isinstance(n,ast.Assign) and isinstance(n.targets[0],ast.Name) and n.targets[0].id==name:return ast.literal_eval(n.value)
     raise ValueError(name)
 prefix=literal(ROOT/'test/modules/effect/test_array64_group_native.py','prefix');helpers=literal(ROOT/'test/modules/effect/test_array64_group_native.py','main').split('int main(void)')[0]+literal(ROOT/'test/modules/effect/test_array64_transaction_native.py','main').split('int main(void)')[0]+literal(ROOT/'test/modules/effect/test_array64_ownership_native.py','main').split('int main(void)')[0]
-folder=ROOT/'src/plugin/SDK_RVA/variable64';source=(folder/'native_array_readonly.c').read_text(encoding='utf-8')
+folder=(pathlib.Path(sys.argv[2]).resolve() if len(sys.argv)>2 else ROOT)/'src/plugin/SDK_RVA/variable64';source=(folder/'native_array_readonly.c').read_text(encoding='utf-8')
 for name,previous in [('array64_group_readonly.c','native_array_readonly.c'),('array64_existing_transaction.c','array64_group_readonly.c'),('array64_recovery.c','array64_existing_transaction.c'),('array64_durable_snapshot.c','array64_recovery.c'),('array64_ownership_gate.c','array64_durable_snapshot.c'),('array64_shape_transaction.c','array64_ownership_gate.c')]:source=(folder/name).read_text(encoding='utf-8').replace('#include "'+previous+'"',source)
+for header in ['array64_wire.h','array64_owner_key.h']:
+    directive='#include "'+header+'"'
+    if directive in source:source=source.replace(directive,(folder/header).read_text(encoding='utf-8').replace('#pragma once\n',''))
 main=r'''
 int as_native_put(void* c,const char* key,long long raw){(void)c;put(key,raw);return 1;}
 int as_native_erase(void* c,const char* key){(void)c;unsigned h=hash(key),mask=*(unsigned*)(header+36);unsigned char* p=nodes+(h&mask)*48;
