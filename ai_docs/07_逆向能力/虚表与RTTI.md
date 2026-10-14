@@ -7,7 +7,7 @@
 
 **能，而且已经验证过。**
 
-游戏对象的前 8 字节就是虚表指针：
+对于已验证的多态子对象，其 vptr 位于该子对象开头；不要推广为所有对象都只有一个首部虚表：
 
     void** vt = *(void***)obj;          // obj->vftable
 
@@ -39,9 +39,12 @@ Frida 在游戏内（已进地图）执行，结果如下：
 
 虚表往前 8 字节是 COL（Complete Object Locator），由它可拿到类名。
 
-### 关键陷阱：这个 exe 的 RTTI 指针是 4 字节 RVA
+### 关键区别：COL 内部是 4 字节 RVA，表前缀是 8 字节指针
 
-标准 MSVC x64 RTTI 用 8 字节绝对地址，**但 hoi4.exe 不是**。
+旧文档此处错误地称标准 MSVC x64 RTTI 内部使用 8 字节绝对地址。2026-10-14 更正：
+正常含 RTTI 的 Microsoft x64 COL 内部类型/类层级/自引用字段使用 32 位 image-relative 值，这是常规 ABI，不是 HOI4 特例。
+vftable[-1] 指向 COL 的前缀指针仍是 64 位，不能混淆两者。
+依据：[LLVM Microsoft ABI 实现](https://github.com/llvm/llvm-project/blob/main/clang/lib/CodeGen/MicrosoftCXXABI.cpp#L454-L547)。
 
 COL 的实际字节（位于 0x142cdec08）：
 
@@ -56,6 +59,7 @@ COL 的实际字节（位于 0x142cdec08）：
 | +0x08 | 0x00000000 | cdOffset |
 | +0x0C | **0x0323c0d0** | pTypeDescriptor（RVA） |
 | +0x10 | **0x02cdec30** | pClassDescriptor（RVA） |
+| +0x14 | **0x02cdec08** | pSelf（RVA） |
 
 **按 8 字节读会把两个 RVA 拼成 0x2cdec0802cdec30 这种垃圾值**，
 表现为「类名读出来是乱码」或「指针明显非法」。
@@ -77,7 +81,10 @@ COL 的实际字节（位于 0x142cdec08）：
     vftable - 8 处存着它自己的 COL，且 COL.signature == 1
     且 COL+0x0C 指向的 TypeDescriptor 名字以 .?AV 开头
 
-用这个判据从任意槽位往前扫，即可定位虚表起点与类名。
+这些是候选判据，不应无界向前扫；还需检查映像/节范围、pSelf、函数目标与主/次级子对象差异。
+多继承可能使一个类名对应多个表，不能取第一个当成唯一结果。
 
 从 0x142969118（CInGameIdler 的一个槽）往前扫 37 个槽，
 得到虚表起点 0x142968ff0 —— 与静态分析的 RVA 0x2968ff0 一致。
+
+2026-10-14 两映像复核见[接口复核](有没有官方接口.md)。类名定位不证明槽位语义跨版本保持。

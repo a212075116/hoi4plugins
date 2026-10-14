@@ -71,3 +71,5 @@ Array64已正式接入10个effect与1个trigger，使用[Array64单人交付说�
 | https://learn.microsoft.com/en-us/windows/win32/dlls/dllmain | DllMain 的 Windows 限制 |
 
 本次源码整理已收尾，最终状态与保留边界见[交付核对](01_工程与构建/源码规范化交付总结.md)；历史批次记录保持原始测试范围。
+
+跨版本研究：[官方接口证据复核与RTTI定位原型](07_逆向能力/有没有官方接口.md)；仅静态研究，尚未接入生产插件。
