@@ -79,6 +79,7 @@ static int ConsoleCmd_IsReadable(const void* p,size_t n){
  return ok;
 }
 static void* InlineHook_Install(void* target,void* detour){(void)target;(void)detour;++hookCalls;return hookFails?NULL:(void*)Original;}
+int InlineHook_InstallInto(void* target,void* detour,void** original){void* value=InlineHook_Install(target,detour);if(!value)return 0;*original=value;return 1;}
 READERS
 LANGUAGE
 static void __fastcall Resolve(void* ctx,void** out,void* field){

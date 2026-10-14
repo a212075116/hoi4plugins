@@ -34,7 +34,7 @@ live内容/状态见各命令literal输出、日志、comparison及实际loaded 
 最初effect命令是scripted effect名接口；改为eval_effect后执行真实内联代码。
 最初check_variable64不是本项目实际trigger；改为plugin_check_variable64，失败记录 `syntax_error_wrong_trigger.json`保留。
 trigger输出是Result=yes而非true，已修验证器；不伪造代码失败。
-未标记变量log_variable64显示1，而真实语言值2.5；比较以语言/回收标记证明setter结果，诊断差异在三态原始输出中保留待审。
+未标记变量log_variable64显示1，而真实语言值2.5；比较以语言/回收标记证明setter结果，诊断差异的历史三态原始输出保留，当前见[第二十二批修正](var64_log_reader.md)。
 exit命令未知、quit补全为空后改为明确CloseMainWindow；没有到期kill；实际退出后才覆盖DLL。
 
 ## 归档和验收边界

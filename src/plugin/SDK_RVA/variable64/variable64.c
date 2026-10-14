@@ -445,6 +445,8 @@ static long long __fastcall Var64_DoAddToVariable64(void* self, void* ctx)
     return after;
 }
 
+static long long Var64_ReadTrueRaw(void* self, void* ctx, const char* name, unsigned char* addr);
+
 static long long __fastcall Var64_DoLogVariable64(void* self, void* ctx)
 {
     unsigned char* addr = NULL;
@@ -452,12 +454,16 @@ static long long __fastcall Var64_DoLogVariable64(void* self, void* ctx)
     unsigned int lo = 0;
     unsigned int hi = 0;
     long long current;
+    unsigned long long integer;
 
     if (!Var64_ResolveGameVariable(self, ctx, NULL, &addr, name, sizeof(name))) {
         Plugin_Log("[var64] log_variable64 failed to resolve");
         return 0;
     }
-    current = Var64_LoadSplit64(self, ctx, name, addr, &lo, &hi);
+    current = Var64_ReadTrueRaw(self, ctx, name, addr);
+    integer = (unsigned long long)(current / VAR64_FRAC_SCALE);
+    lo = (unsigned int)(integer & 0xFFFFFFFFull);
+    hi = (unsigned int)(integer >> 32);
     {
         char shown[48];
         Var64_FormatPartsToText(current / VAR64_FRAC_SCALE, current % VAR64_FRAC_SCALE,
