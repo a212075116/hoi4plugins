@@ -298,6 +298,11 @@ static DWORD WINAPI Peer(LPVOID value) {
     }
 }
 
+static void CloseStartupHandles(int pipeCount, int eventCount) {
+    while (eventCount) CloseHandle(g_queue[--eventCount].done);
+    while (pipeCount) CloseHandle(g_pipes[--pipeCount]);
+}
+
 static DWORD WINAPI StartDebugService(LPVOID unused) {
     HANDLE token; DWORD bytes = 0; TOKEN_USER* user; LPWSTR sid = NULL;
     wchar_t sddl[512], name[128]; PSECURITY_DESCRIPTOR sd = NULL;
@@ -328,15 +333,14 @@ static DWORD WINAPI StartDebugService(LPVOID unused) {
             i == DC_PEERS ? 1 : DC_PEERS, DC_OUTPUT_MAX + 32, DC_INPUT_MAX + 32, 5000, &sa);
         if (g_pipes[i] == INVALID_HANDLE_VALUE) {
             Plugin_Log("[debugconsole] pipe creation failed error=%lu", GetLastError());
-            while (i--) CloseHandle(g_pipes[i]); LocalFree(sd); return 4;
+            CloseStartupHandles(i, 0); LocalFree(sd); return 4;
         }
     }
     LocalFree(sd);
     for (i = 0; i < DC_QUEUE_MAX; ++i) {
         g_queue[i].done = CreateEventW(NULL, TRUE, FALSE, NULL);
         if (!g_queue[i].done) {
-            while (i--) CloseHandle(g_queue[i].done);
-            for (i = 0; i <= DC_PEERS; ++i) CloseHandle(g_pipes[i]);
+            CloseStartupHandles(DC_PEERS + 1, i);
             Plugin_Log("[debugconsole] completion event creation failed"); return 7;
         }
     }
@@ -344,8 +348,7 @@ static DWORD WINAPI StartDebugService(LPVOID unused) {
     if (!g_thread || !InlineHook_Init() ||
         !InlineHook_InstallInto((char*)GetModuleHandleW(NULL) + 0xDD3A50, Frame, (void**)&g_frame)) {
         Plugin_Log("[debugconsole] scheduler unavailable; service not enabled");
-        for (i = 0; i <= DC_PEERS; ++i) CloseHandle(g_pipes[i]);
-        for (i = 0; i < DC_QUEUE_MAX; ++i) CloseHandle(g_queue[i].done);
+        CloseStartupHandles(DC_PEERS + 1, DC_QUEUE_MAX);
         return 5;
     }
     for (i = 0; i <= DC_PEERS; ++i) { HANDLE t = CreateThread(NULL, 0, Peer, g_pipes[i], 0, NULL); if (t) CloseHandle(t); }

@@ -43,8 +43,8 @@ static HLOCAL WINAPI MockAlloc(UINT flags,SIZE_T size){event('L',(int)size);CHEC
 static HLOCAL WINAPI MockFree(HLOCAL p){event('F',0);CHECK(p&&localLive>0);--localLive;free(p);return NULL;}
 static BOOL WINAPI MockSid(PSID p,LPWSTR* out){event('S',0);CHECK(p==(void*)1);if(mode==5)return FALSE;*out=(LPWSTR)calloc(32,sizeof(wchar_t));++localLive;wcscpy_s(*out,32,L"S-1-5-21");return TRUE;}
 static BOOL WINAPI MockSd(LPCWSTR s,DWORD revision,PSECURITY_DESCRIPTOR* out,PULONG size){event('s',0);CHECK(revision==SDDL_REVISION_1&&wcsstr(s,L"S-1-5-21")&&!size);if(mode==6)return FALSE;*out=calloc(1,16);++localLive;return TRUE;}
-static HANDLE WINAPI MockPipe(LPCWSTR name,DWORD flags,DWORD modes,DWORD instances,DWORD out,DWORD in,DWORD timeout,LPSECURITY_ATTRIBUTES sa){int i=pipeCalls++;event('P',i);CHECK(name&&flags==(PIPE_ACCESS_DUPLEX|FILE_FLAG_OVERLAPPED|((i&&i!=DC_PEERS)?0:FILE_FLAG_FIRST_PIPE_INSTANCE))&&modes==(PIPE_TYPE_BYTE|PIPE_READMODE_BYTE|PIPE_WAIT|PIPE_REJECT_REMOTE_CLIENTS)&&instances==(i==DC_PEERS?1:DC_PEERS)&&out==DC_OUTPUT_MAX+32&&in==DC_INPUT_MAX+32&&timeout==5000&&sa&&sa->lpSecurityDescriptor&&!sa->bInheritHandle);if((mode==7&&i==0)||(mode==8&&i==2)||(mode==9&&i==4))return INVALID_HANDLE_VALUE;pipes[i]=1;return (HANDLE)(size_t)(0x100+i);}
-static HANDLE WINAPI MockEvent(LPSECURITY_ATTRIBUTES sa,BOOL manual,BOOL initial,LPCWSTR name){int i=eventCalls++;event('V',i);CHECK(!sa&&manual&&!initial&&!name);if((mode==10&&i==0)||(mode==11&&i==7)||(mode==12&&i==31))return NULL;events[i]=1;return (HANDLE)(size_t)(0x200+i);}
+static HANDLE WINAPI MockPipe(LPCWSTR name,DWORD flags,DWORD modes,DWORD instances,DWORD out,DWORD in,DWORD timeout,LPSECURITY_ATTRIBUTES sa){int i=pipeCalls++;event('P',i);CHECK(name&&flags==(PIPE_ACCESS_DUPLEX|FILE_FLAG_OVERLAPPED|((i&&i!=DC_PEERS)?0:FILE_FLAG_FIRST_PIPE_INSTANCE))&&modes==(PIPE_TYPE_BYTE|PIPE_READMODE_BYTE|PIPE_WAIT|PIPE_REJECT_REMOTE_CLIENTS)&&instances==(i==DC_PEERS?1:DC_PEERS)&&out==DC_OUTPUT_MAX+32&&in==DC_INPUT_MAX+32&&timeout==5000&&sa&&sa->lpSecurityDescriptor&&!sa->bInheritHandle);if((mode==7&&i==0)||(mode==8&&i==2)||(mode==9&&i==4)||(mode>=25&&mode<30&&i==mode-25))return INVALID_HANDLE_VALUE;pipes[i]=1;return (HANDLE)(size_t)(0x100+i);}
+static HANDLE WINAPI MockEvent(LPSECURITY_ATTRIBUTES sa,BOOL manual,BOOL initial,LPCWSTR name){int i=eventCalls++;event('V',i);CHECK(!sa&&manual&&!initial&&!name);if((mode==10&&i==0)||(mode==11&&i==7)||(mode==12&&i==31)||(mode>=30&&mode<62&&i==mode-30))return NULL;events[i]=1;return (HANDLE)(size_t)(0x200+i);}
 static BOOL WINAPI MockClose(HANDLE h){size_t n=(size_t)h;if(n==0x11){event('c',0);CHECK(tokenLive);tokenLive=0;}else if(n>=0x100&&n<0x105){event('p',(int)n-0x100);CHECK(pipes[n-0x100]);pipes[n-0x100]=0;}else if(n>=0x200&&n<0x220){event('v',(int)n-0x200);CHECK(events[n-0x200]);events[n-0x200]=0;}else{event('r',(int)n-0x400);CHECK(n>=0x400&&n<0x405);}return TRUE;}
 static BOOL WINAPI MockEnum(WNDENUMPROC p,LPARAM value){CHECK(p==FindWindowThread&&!value);if(mode!=13){g_thread=77;event('W',0);}return TRUE;}
 static void WINAPI MockSleep(DWORD n){CHECK(n==100);}
@@ -83,16 +83,16 @@ prefix += pending + "\nstatic Pending g_queue[DC_QUEUE_MAX];\nstatic HANDLE g_pi
 main = r'''
 int main(void){
  host=(unsigned char*)calloc(1,0x37EC000);if(!host)return 2;IMAGE_DOS_HEADER* dos=(IMAGE_DOS_HEADER*)host;dos->e_magic=IMAGE_DOS_SIGNATURE;dos->e_lfanew=256;IMAGE_NT_HEADERS64* nt=(IMAGE_NT_HEADERS64*)(host+256);nt->OptionalHeader.SizeOfImage=0x37EC000;
- for(mode=0;mode<25;++mode){
+ for(mode=0;mode<62;++mode){
   pipeCalls=eventCalls=threadCalls=openHelper=localLive=tokenLive=enabled=removeCalls=foreignRemoved=used=0;trace[0]=0;hook=mode==16?2:0;g_thread=mode==24?77:0;g_frame=NULL;g_started=1;g_hookInit=0;memset(pipes,0,sizeof(pipes));memset(events,0,sizeof(events));memset(g_pipes,0,sizeof(g_pipes));memset(g_queue,0,sizeof(g_queue));nt->FileHeader.TimeDateStamp=mode==1?0:0x6AA123BB;
-  DWORD result=StartDebugService(NULL);int wanted=mode==1?6:mode==2?1:mode>=3&&mode<=5?2:mode==6?3:mode>=7&&mode<=9?4:mode>=10&&mode<=12?7:mode>=13&&mode<=18||mode==23?5:0;
+  DWORD result=StartDebugService(NULL);int wanted=mode==1?6:mode==2?1:mode>=3&&mode<=5?2:mode==6?3:mode>=7&&mode<=9?4:mode>=10&&mode<=12?7:mode>=13&&mode<=18||mode==23?5:mode>=25&&mode<30?4:mode>=30?7:0;
   CHECK(result==wanted);CHECK(!localLive&&!tokenLive&&!foreignRemoved);
   if(wanted){for(int i=0;i<5;++i)CHECK(!pipes[i]);for(int i=0;i<32;++i)CHECK(!events[i]);CHECK(g_started==1);}
   else{CHECK(g_started==2&&threadCalls==5&&enabled&&hook==1&&(void*)g_frame==(void*)Original);CHECK(openHelper==(mode==19));}
   if(mode==16)CHECK(hook==2&&removeCalls==0);if(mode==17)CHECK(hook==0&&removeCalls==1);if(mode==18)CHECK(hook==1&&removeCalls==1);
   printf("case=%d result=%lu started=%ld pipe_calls=%d event_calls=%d peers=%d helper=%d hook=%d enabled=%d removed=%d foreign=%d trace=%s\n",mode,result,g_started,pipeCalls,eventCalls,threadCalls,openHelper,hook,enabled,removeCalls,foreignRemoved,trace);
  }
- printf("service_cases=25 checks=%d failed=%d;actual startup/adaptor,fake native APIs,no game\n",checks,failed);free(host);return failed?1:0;
+ printf("service_cases=62 checks=%d failed=%d;actual startup/adaptor,fake native APIs,no game\n",checks,failed);free(host);return failed?1:0;
 }
 '''
 if "InlineHook_InstallInto" in (sdk / "hook/inline_hook.h").read_text(encoding="utf-8"):
@@ -103,7 +103,15 @@ if "InlineHook_InstallInto" in (sdk / "hook/inline_hook.h").read_text(encoding="
     CHECK(slot==(void*)0xDEAD&&used==before);}
 '''
     main = main.replace(' printf("service_cases=', extra + ' printf("service_cases=')
-(output / "fixture.c").write_text(prefix + text[match.start():end] + "\n" + main, encoding="ascii")
+helper = ""
+helper_match = re.search(r"^static void CloseStartupHandles\([^;]+?\{", text, re.M)
+if helper_match:
+    helper_end, helper_depth = helper_match.end(), 1
+    while helper_depth:
+        helper_depth += (text[helper_end] == "{") - (text[helper_end] == "}")
+        helper_end += 1
+    helper = text[helper_match.start():helper_end] + "\n"
+(output / "fixture.c").write_text(prefix + helper + text[match.start():end] + "\n" + main, encoding="ascii")
 vc = "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Auxiliary/Build/vcvars64.bat"
 command = 'cmd /d /s /c "' + f'"{vc}" >nul && cl /nologo /W3 /TC /MT /I"{sdk / "minihook/include"}" /I"{root / "src/carrier"}" fixture.c /Fe:fixture.exe' + '"'
 def run(command):
