@@ -1,7 +1,5 @@
 #pragma once
 
-#include "effect_reg.h"
-
 #define VAR64_SLOT_COUNT 9
 
 int       Var64_RegisterEffects(void);
