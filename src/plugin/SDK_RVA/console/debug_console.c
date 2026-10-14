@@ -228,14 +228,13 @@ static long long __fastcall OpenCommand(CmdResult* out, CmdArgs* args) {
 static DWORD WINAPI Peer(LPVOID value) {
     HANDLE h = (HANDLE)value;
     for (;;) {
-        OVERLAPPED ov = {0}; BOOL connected; DWORD err, n;
+        BOOL connected = DcConnect(h);
         uint32_t lastId = 0;
-        ov.hEvent = CreateEventW(NULL, TRUE, FALSE, NULL);
-        connected = ConnectNamedPipe(h, &ov); err = connected ? 0 : GetLastError();
-        if (!connected && err == ERROR_IO_PENDING) {
-            WaitForSingleObject(ov.hEvent, INFINITE); connected = GetOverlappedResult(h, &ov, &n, FALSE);
-        } else if (err == ERROR_PIPE_CONNECTED) connected = TRUE;
-        CloseHandle(ov.hEvent);
+        if (!connected) {
+            DisconnectNamedPipe(h);
+            Sleep(50);
+            continue;
+        }
         if (connected) {
             ULONG pid; DWORD mine = 0, theirs = 1;
             if (!GetNamedPipeClientProcessId(h, &pid) || !ProcessIdToSessionId(pid, &theirs) ||

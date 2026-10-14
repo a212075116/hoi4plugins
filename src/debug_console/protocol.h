@@ -19,6 +19,32 @@ static void DcPipeName(wchar_t* out, size_t count, DWORD pid) {
 static void DcInteractivePipeName(wchar_t* out, size_t count, DWORD pid) {
     _snwprintf_s(out, count, _TRUNCATE, L"\\\\.\\pipe\\hoi4-plugin-debug-ui-v1-%lu", pid);
 }
+static BOOL DcAwaitOverlapped(HANDLE h, OVERLAPPED* ov, DWORD* count, DWORD timeout, HANDLE cancel) {
+    HANDLE events[2] = {ov->hEvent, cancel};
+    DWORD waited = cancel ? WaitForMultipleObjects(2, events, FALSE, timeout) : WaitForSingleObject(ov->hEvent, timeout);
+    if (waited == WAIT_OBJECT_0) {
+        BOOL ok = GetOverlappedResult(h, ov, count, FALSE);
+        if (ok || GetLastError() != ERROR_IO_INCOMPLETE) return ok;
+    }
+    CancelIoEx(h, ov);
+    GetOverlappedResult(h, ov, count, TRUE);
+    return FALSE;
+}
+
+static int DcConnect(HANDLE h) {
+    OVERLAPPED ov = {0};
+    DWORD n = 0, err;
+    BOOL connected;
+    ov.hEvent = CreateEventW(NULL, TRUE, FALSE, NULL);
+    if (!ov.hEvent) return 0;
+    connected = ConnectNamedPipe(h, &ov);
+    err = connected ? ERROR_SUCCESS : GetLastError();
+    if (!connected && err == ERROR_IO_PENDING) connected = DcAwaitOverlapped(h, &ov, &n, INFINITE, NULL);
+    else if (err == ERROR_PIPE_CONNECTED) connected = TRUE;
+    CloseHandle(ov.hEvent);
+    return connected;
+}
+
 static int DcTransferWithCancel(HANDLE h, void* data, DWORD count, int writing, DWORD timeout, HANDLE cancel) {
     unsigned char* p = (unsigned char*)data;
     ULONGLONG end = GetTickCount64() + timeout;
@@ -31,14 +57,7 @@ static int DcTransferWithCancel(HANDLE h, void* data, DWORD count, int writing, 
         ok = writing ? WriteFile(h, p, count, &n, &ov) : ReadFile(h, p, count, &n, &ov);
         err = ok ? ERROR_SUCCESS : GetLastError();
         if (!ok && err == ERROR_IO_PENDING) {
-            HANDLE events[2] = {ov.hEvent, cancel};
-            DWORD waited = cancel ? WaitForMultipleObjects(2, events, FALSE, (DWORD)(end-now)) : WaitForSingleObject(ov.hEvent, (DWORD)(end-now));
-            if (waited != WAIT_OBJECT_0) {
-                CancelIoEx(h, &ov);
-                GetOverlappedResult(h, &ov, &n, TRUE);
-                CloseHandle(ov.hEvent); return 0;
-            }
-            ok = GetOverlappedResult(h, &ov, &n, FALSE);
+            ok = DcAwaitOverlapped(h, &ov, &n, (DWORD)(end-now), cancel);
         }
         CloseHandle(ov.hEvent);
         if (!ok || !n) return 0;
