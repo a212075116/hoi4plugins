@@ -342,8 +342,7 @@ static DWORD WINAPI StartDebugService(LPVOID unused) {
     }
     for (i = 0; i < 1200 && !g_thread; ++i) { EnumWindows(FindWindowThread, 0); if (!g_thread) Sleep(100); }
     if (!g_thread || !InlineHook_Init() ||
-        MH_CreateHook((char*)GetModuleHandleW(NULL) + 0xDD3A50, Frame, (void**)&g_frame) != MH_OK ||
-        MH_EnableHook((char*)GetModuleHandleW(NULL) + 0xDD3A50) != MH_OK) {
+        !InlineHook_InstallInto((char*)GetModuleHandleW(NULL) + 0xDD3A50, Frame, (void**)&g_frame)) {
         Plugin_Log("[debugconsole] scheduler unavailable; service not enabled");
         for (i = 0; i <= DC_PEERS; ++i) CloseHandle(g_pipes[i]);
         for (i = 0; i < DC_QUEUE_MAX; ++i) CloseHandle(g_queue[i].done);

@@ -34,5 +34,5 @@ Debug/Release、源码ZIP/DLL副本回滚和完整包重建通过，第三方Min
 `MODIFIED_FILE.zip`、`DIFF_FILE.patch`、`VERIFICATION.txt`、`ROLLBACK.sh`。
 回滚脚本对 `*.hook-batch.zip`或 `*.hook-batch.dll`副本恢复本批基线，完整包另验证binary patch及最初基线回滚。
 
-没有部署、进入游戏或实际patch；native线程/trampoline运行生命周期和服务端scheduler失败清理仍待进一步复核。
+没有部署、进入游戏或实际patch；native线程/trampoline运行生命周期和scheduler失败清理已由[第十九批](service_scheduler.md)覆盖，其他运行生命周期仍需复核。
 设计见[批量Hook启用与创建所有权](../../ai_docs/03_插件/批量Hook启用与创建所有权.md)。

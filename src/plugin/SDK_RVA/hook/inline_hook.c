@@ -24,27 +24,33 @@ int InlineHook_Init(void)
     return 1;
 }
 
-void* InlineHook_Install(void* target, void* detour)
+int InlineHook_InstallInto(void* target, void* detour, void** original)
 {
     MH_STATUS st;
-    void* orig = NULL;
 
-    if (target == NULL || detour == NULL) return NULL;
-    if (!InlineHook_Init()) return NULL;
+    if (target == NULL || detour == NULL || original == NULL) return 0;
+    if (!InlineHook_Init()) return 0;
 
-    st = MH_CreateHook(target, detour, &orig);
+    st = MH_CreateHook(target, detour, original);
     if (st != MH_OK) {
         Plugin_Log("[hook] MH_CreateHook(%p) failed: %s", target, MH_StatusToString(st));
-        return NULL;
+        return 0;
     }
     st = MH_EnableHook(target);
     if (st != MH_OK) {
         Plugin_Log("[hook] MH_EnableHook(%p) failed: %s", target, MH_StatusToString(st));
         MH_RemoveHook(target);
-        return NULL;
+        return 0;
     }
-    Plugin_Log("[hook] installed at %p, orig=%p", target, orig);
-    return orig;
+    Plugin_Log("[hook] installed at %p, orig=%p", target, *original);
+    return 1;
+}
+
+void* InlineHook_Install(void* target, void* detour)
+{
+    void* original = NULL;
+    if (!InlineHook_InstallInto(target, detour, &original)) return NULL;
+    return original;
 }
 
 int InlineHook_Remove(void* target)

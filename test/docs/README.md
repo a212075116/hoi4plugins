@@ -236,3 +236,7 @@ Array64记录和owner键的独立oracle、完整存储夹具及golden字节见[�
 ## 第十八批源码规范化
 
 三个安装器及单hook适配器的1019场景见[hook三态回归](hook_batch.md)。调用顺序/状态保持，不把best-effort或全局队列包装成原子事务；新DLL未部署。
+
+## 第十九批源码规范化
+
+服务端启动、scheduler所属及原函数预发布见[启动三态夹具](service_scheduler.md)。Create成功后Enable失败才尝试删除，本批不新增重试；新DLL未部署。
