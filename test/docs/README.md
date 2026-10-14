@@ -280,3 +280,5 @@ Array64记录和owner键的独立oracle、完整存储夹具及golden字节见[�
 本次源码整理已收尾，最终状态与保留边界见[交付核对](normalization_closure.md)；历史批次记录保持原始测试范围。
 
 跨版本研究：[官方接口证据复核与RTTI定位原型](native_interface_research.md)；仅静态研究，尚未接入生产插件。
+
+第一步[摄像机只读适配器](camera_read_adapter.md)已交付：自动表/根/getter定位，当前CHI与菜单实测；未接入生产DLL。
