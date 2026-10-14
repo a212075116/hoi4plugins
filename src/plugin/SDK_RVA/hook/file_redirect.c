@@ -21,11 +21,21 @@ static CreateFileWFn      g_origCreateFileW = NULL;
 static CreateFileAFn      g_origCreateFileA = NULL;
 static CreateDirectoryWFn g_origCreateDirW  = NULL;
 static CreateDirectoryAFn g_origCreateDirA  = NULL;
-static int                g_hookInstalled = 0;
+static volatile LONG      g_hookInstalled = 0;
 static int                g_redirectEnabled = 1;
 static char               g_gameRootPath[CRASHPATH_MAX];
 static char               g_redirectSourcePrefix[CRASHPATH_MAX];
 static int                g_redirectHitCount = 0;
+
+typedef struct RedirectIatSlot {
+    void** slot;
+    void* original;
+    DWORD protection;
+    int needsRestore;
+} RedirectIatSlot;
+
+static RedirectIatSlot g_redirectSlots[4];
+static SRWLOCK g_redirectInstallLock = SRWLOCK_INIT;
 
 static unsigned char* FileRedirect_GetModuleBase(void)
 {
@@ -102,6 +112,7 @@ static int RedirectA(const char* name, char* out, int cap, int* didRedirect)
     if (didRedirect != NULL) *didRedirect = 0;
     if (name == NULL) return 0;
     if (g_redirectEnabled == 0) return 0;
+    if (InterlockedCompareExchange(&g_hookInstalled, 0, 0) == 0) return 0;
     if (g_redirectSourcePrefix[0] == 0 || g_gameRootPath[0] == 0) return 0;
 
     strncpy_s(ansi, CRASHPATH_MAX, name, _TRUNCATE);
@@ -228,36 +239,62 @@ static void** FindIatSlot(const char* moduleName, const char* funcName)
     return NULL;
 }
 
-static int PatchSlot(void** slot, void* fn)
+static int PatchSlot(RedirectIatSlot* binding, void* fn)
 {
-    DWORD old = 0;
-    if (slot == NULL) return 0;
-    if (!VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &old)) return 0;
-    *slot = fn;
-    VirtualProtect(slot, sizeof(void*), old, &old);
-    return 1;
+    DWORD ignored;
+    int exchanged;
+    if (!VirtualProtect(binding->slot, sizeof(void*), PAGE_READWRITE, &binding->protection)) return 0;
+    binding->needsRestore = 1;
+    exchanged = InterlockedCompareExchangePointer((PVOID volatile*)binding->slot, fn, binding->original) == binding->original;
+    if (VirtualProtect(binding->slot, sizeof(void*), binding->protection, &ignored)) binding->needsRestore = 0;
+    else Plugin_Log("[redir] slot protection restore failed slot=%p error=%lu", binding->slot, GetLastError());
+    return exchanged && !binding->needsRestore;
 }
 
-int FileRedirect_Install(void)
+static int EnsureRedirectSlot(RedirectIatSlot* binding, void** slot, void* fn, void** original)
+{
+    void* current;
+    DWORD ignored;
+    if (slot == NULL) return 1;
+    current = *(void* volatile*)slot;
+    if (binding->slot == NULL) {
+        if (current == NULL || current == fn) return 0;
+        binding->slot = slot;
+        binding->original = current;
+        *original = current;
+    }
+    if (binding->slot != slot || (current != binding->original && current != fn)) {
+        Plugin_Log("[redir] slot ownership changed slot=%p; not overwritten", slot);
+        return 0;
+    }
+    if (binding->needsRestore) {
+        if (!VirtualProtect(slot, sizeof(void*), binding->protection, &ignored)) return 0;
+        binding->needsRestore = 0;
+    }
+    if (current == fn) return 1;
+    return PatchSlot(binding, fn);
+}
+
+static int InstallRedirectSlots(void)
 {
     void** s1;
     void** s2;
     void** s3;
     void** s4;
-    if (g_hookInstalled) return 1;
+    if (g_gameRootPath[0] == 0 || g_redirectSourcePrefix[0] == 0) {
+        GetModuleFileNameA(NULL, g_gameRootPath, CRASHPATH_MAX);
+        {
+            char* p = g_gameRootPath + strlen(g_gameRootPath);
+            while (p > g_gameRootPath && *p != '\\' && *p != '/') --p;
+            *p = 0;
+        }
+        NormalizeSlashes(g_gameRootPath);
+        TrimSlash(g_gameRootPath);
 
-    GetModuleFileNameA(NULL, g_gameRootPath, CRASHPATH_MAX);
-    {
-        char* p = g_gameRootPath + strlen(g_gameRootPath);
-        while (p > g_gameRootPath && *p != '\\' && *p != '/') --p;
-        *p = 0;
+        BuildSourcePrefix();
+        Plugin_Log("[redir] gameRoot=[%s]", g_gameRootPath);
+        Plugin_Log("[redir] sourcePrefix=[%s]", g_redirectSourcePrefix);
     }
-    NormalizeSlashes(g_gameRootPath);
-    TrimSlash(g_gameRootPath);
-
-    BuildSourcePrefix();
-    Plugin_Log("[redir] gameRoot=[%s]", g_gameRootPath);
-    Plugin_Log("[redir] sourcePrefix=[%s]", g_redirectSourcePrefix);
     if (g_redirectSourcePrefix[0] == 0) {
         Plugin_Log("[redir] cannot build source prefix, abort");
         return 0;
@@ -272,23 +309,30 @@ int FileRedirect_Install(void)
         return 0;
     }
 
-    g_origCreateFileW = (CreateFileWFn)(*s1);
-    g_origCreateDirW  = (CreateDirectoryWFn)(*s3);
-    if (s2 != NULL) g_origCreateFileA = (CreateFileAFn)(*s2);
-    if (s4 != NULL) g_origCreateDirA  = (CreateDirectoryAFn)(*s4);
+    if (!EnsureRedirectSlot(&g_redirectSlots[0], s1, (void*)Hook_CreateFileW, (void**)&g_origCreateFileW)
+        || !EnsureRedirectSlot(&g_redirectSlots[2], s3, (void*)Hook_CreateDirectoryW, (void**)&g_origCreateDirW)
+        || !EnsureRedirectSlot(&g_redirectSlots[1], s2, (void*)Hook_CreateFileA, (void**)&g_origCreateFileA)
+        || !EnsureRedirectSlot(&g_redirectSlots[3], s4, (void*)Hook_CreateDirectoryA, (void**)&g_origCreateDirA)) {
+        Plugin_Log("[redir] installation incomplete; owned slots retained for safe retry");
+        return 0;
+    }
 
-    PatchSlot(s1, (void*)Hook_CreateFileW);
-    PatchSlot(s3, (void*)Hook_CreateDirectoryW);
-    if (s2 != NULL) PatchSlot(s2, (void*)Hook_CreateFileA);
-    if (s4 != NULL) PatchSlot(s4, (void*)Hook_CreateDirectoryA);
-
-    g_hookInstalled = 1;
     Plugin_Log("[redir] installed  W=%p A=%p DW=%p DA=%p",
                (void*)s1, (void*)s2, (void*)s3, (void*)s4);
     return 1;
 }
 
-int FileRedirect_Installed(void) { return g_hookInstalled; }
+int FileRedirect_Install(void)
+{
+    int result;
+    AcquireSRWLockExclusive(&g_redirectInstallLock);
+    result = InstallRedirectSlots();
+    InterlockedExchange(&g_hookInstalled, result);
+    ReleaseSRWLockExclusive(&g_redirectInstallLock);
+    return result;
+}
+
+int FileRedirect_Installed(void) { return (int)InterlockedCompareExchange(&g_hookInstalled, 0, 0); }
 const char* FileRedirect_GameRoot(void) { return g_gameRootPath; }
 const char* FileRedirect_SourcePrefix(void) { return g_redirectSourcePrefix; }
 void FileRedirect_SetEnabled(int on) { g_redirectEnabled = on ? 1 : 0; }

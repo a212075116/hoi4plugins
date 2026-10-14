@@ -75,9 +75,9 @@ findings = [
     dict(id="F1", status="needs_ownership_verification", site=site("src/plugin/SDK_RVA/effect/effect_reg.c", "void* Effect_BuildTooltip("),
          observed="Local packed/fin are produced by native PackKey/Format; no matching release in this function, while Trigger tooltip releases native temporary strings.",
          not_claimed="No real leak size/root cause asserted; native output ownership must be verified before adding free."),
-    dict(id="F2", status="source_failure_reporting_gap", site=site("src/plugin/SDK_RVA/hook/file_redirect.c", "int FileRedirect_Install("),
-         observed="All PatchSlot boolean results ignored; g_hookInstalled assigned1 even if a required write fails.",
-         next="Fault fixture for required/optional IAT writes and partial installation before changing rollback/ownership."),
+    dict(id="F2", status="resolved_for_verified_install_contract", site=site("src/plugin/SDK_RVA/hook/file_redirect.c", "int FileRedirect_Install("),
+         observed="Per-slot saved originals,owned-slot retry,protection recovery,CAS foreign guard andcomplete-install path gate; required/presentoptional failures are reported.",
+         evidence="test/reports/20261014_iat_install/final_verification.json;4100faultcases,realreadonlysharedpage32threads andlive module-range snapshots;not continuousforeignmonitor/hotunload"),
     dict(id="F3", status="source_completion_aggregation_gap", site=site("src/plugin/plugin_main.c", "ok = (EffectCameras_Register() > 0);"),
          observed="Camera success controls the effect bootstrap loop; date/variable64/Array64 results are logged but do not determine this completion flag.",
          next="Actual bootstrap fixture with failed group and retry ownership; do not infer real current game missing features."),
@@ -86,7 +86,7 @@ if '#include "effect_reg.h"' in header and not re.search(r"\b(?:Effect[A-Z]\w*|E
     findings.append(dict(id="F4", status="unnecessary_public_header_dependency",
                          site=site("src/plugin/SDK_RVA/variable64/variable64.h", '#include "effect_reg.h"'),
                          observed="Public declarations use no Effect types; both current consumers already explicitly include effect_reg.h."))
-reviewed_source_hashes = {'F1': '099cd8071fb079bb1f490abdd61b94e14a39ac7bd0f22f1cec0a4892bd654df7', 'F2': '0806f070cf8249ec3fe4f6b88732680a61ba9c9d256adc0efe0a38aed6a64d64', 'F3': '9efbb8fcc35cdf1fb5b6f1a5c35f5e45f1aee4feade7dc531a65f19686039088'}
+reviewed_source_hashes = {'F1': '099cd8071fb079bb1f490abdd61b94e14a39ac7bd0f22f1cec0a4892bd654df7', 'F2': 'f172c7a8e438c0092ed9025666d4fd635e428da100a3700052e8ab1af2b3ead4', 'F3': '9efbb8fcc35cdf1fb5b6f1a5c35f5e45f1aee4feade7dc531a65f19686039088'}
 for finding in findings:
     expected = reviewed_source_hashes.get(finding["id"])
     if expected and finding["site"]["source_sha256"] != expected:
