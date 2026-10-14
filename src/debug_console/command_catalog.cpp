@@ -3,27 +3,38 @@
 #include <tlhelp32.h>
 #include <cstring>
 #include <utility>
+#include <memory>
+
+namespace {
+struct KernelHandleCloser {
+    void operator()(HANDLE handle) const noexcept {
+        if (handle && handle != INVALID_HANDLE_VALUE) CloseHandle(handle);
+    }
+};
+using OwnedHandle = std::unique_ptr<void, KernelHandleCloser>;
+}
 
 std::vector<std::string> CommandCatalog::Query(DWORD pid, const std::string& prefix, std::string& error) {
     if (!prefix.empty() && prefix[0] == '/') {
         return Completion::Matching({"/help", "/filter", "/clear", "/reconnect", "/quit"}, prefix);
     }
-    HANDLE process = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    OwnedHandle process(OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid));
     if (!process) { error = "Cannot read this game's command catalog."; return {}; }
-    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pid);
-    MODULEENTRY32W module = {}; module.dwSize = sizeof(module);
     uintptr_t base = 0;
-    if (snapshot != INVALID_HANDLE_VALUE) {
-        if (Module32FirstW(snapshot, &module)) do { if (!_wcsicmp(module.szModule, L"hoi4.exe")) { base = (uintptr_t)module.modBaseAddr; break; } } while (Module32NextW(snapshot, &module));
-        CloseHandle(snapshot);
+    {
+        OwnedHandle snapshot(CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pid));
+        MODULEENTRY32W module = {}; module.dwSize = sizeof(module);
+        if (snapshot.get() != INVALID_HANDLE_VALUE) {
+            if (Module32FirstW(snapshot.get(), &module)) do { if (!_wcsicmp(module.szModule, L"hoi4.exe")) { base = (uintptr_t)module.modBaseAddr; break; } } while (Module32NextW(snapshot.get(), &module));
+        }
     }
     auto read = [&](uintptr_t address, void* out, size_t size) {
-        SIZE_T got = 0; return address && ReadProcessMemory(process, (const void*)address, out, size, &got) && got == size;
+        SIZE_T got = 0; return address && ReadProcessMemory(process.get(), (const void*)address, out, size, &got) && got == size;
     };
     IMAGE_DOS_HEADER dos = {}; IMAGE_NT_HEADERS64 nt = {};
     if (!read(base, &dos, sizeof(dos)) || dos.e_magic != IMAGE_DOS_SIGNATURE || dos.e_lfanew <= 0 || dos.e_lfanew > 4096 ||
         !read(base + dos.e_lfanew, &nt, sizeof(nt)) || nt.Signature != IMAGE_NT_SIGNATURE || nt.FileHeader.TimeDateStamp != 0x6AA123BB || nt.OptionalHeader.SizeOfImage != 0x37EC000) {
-        CloseHandle(process); error = "Unsupported game version; command catalog not read."; return {};
+        error = "Unsupported game version; command catalog not read."; return {};
     }
     struct Table { uintptr_t data; int capacity, count; };
     struct RemoteString { unsigned char data[16]; uint64_t size, capacity; };
@@ -60,7 +71,7 @@ std::vector<std::string> CommandCatalog::Query(DWORD pid, const std::string& pre
         uintptr_t currentManager = 0;
         stable = valid && read(base + 0x35E1A80, &currentManager, sizeof(currentManager)) && currentManager == manager && read(manager, &after, sizeof(after)) && memcmp(&before, &after, sizeof(before)) == 0;
     }
-    CloseHandle(process);
+    process.reset();
     if (!stable) { error = "Command catalog not ready or changed during snapshot; try Tab again."; return {}; }
     return Completion::Matching(std::move(names), prefix);
 }

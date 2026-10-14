@@ -224,3 +224,7 @@ scalar64、typed Trigger、Array64正式接口/历史检查点及原生夹具统
 ## 第十五批源码规范化
 
 Array64记录和owner键的独立oracle、完整存储夹具及golden字节见[记录/键三态回归](array64_helpers.md)。格式、校验与恢复不变，新构建未部署。
+
+## 第十六批源码规范化
+
+命令目录查询的32普通场景与3异常所有权检查见[句柄三态回归](catalog_handles.md)。真实Query、受控WinAPI与分配失败；客户端归档未部署。
