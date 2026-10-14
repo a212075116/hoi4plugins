@@ -129,12 +129,12 @@ void Var64_InstallLanguageBridge(void)
         Plugin_Log("[v64lang] handler address unreadable");
         return;
     }
-    orig = InlineHook_Install(img + RVA_VARTEXT_HANDLER, (void*)Var64_VarTextBridgeDetour);
-    if (orig == NULL) {
+    orig = (void*)g_var64OrigVarTextHandler;
+    if (!InlineHook_InstallInto(img + RVA_VARTEXT_HANDLER, (void*)Var64_VarTextBridgeDetour, (void**)&g_var64OrigVarTextHandler)) {
+        g_var64OrigVarTextHandler = (Var64VarTextHandlerFn)orig;
         Plugin_Log("[v64lang] var text hook install failed");
         return;
     }
-    g_var64OrigVarTextHandler = (Var64VarTextHandlerFn)orig;
-    Plugin_Log("[v64lang] var text hook installed, orig=%p", orig);
+    Plugin_Log("[v64lang] var text hook installed, orig=%p", (void*)g_var64OrigVarTextHandler);
 }
 

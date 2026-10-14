@@ -33,5 +33,5 @@ host module地址只获取一次供Create/Enable使用，不保留原来冗余�
 旧单hook适配器及三个批量安装器1019场景仍三态完全一致；成就31/16/12、console/log17及Debug/Release通过。
 源码/DLL副本回滚与完整包重建通过，未部署或运行真实服务/游戏。
 
-其余返回值形式的UI/process/variable64原函数保存点仍需单独审查，不能把本批当作所有并发或trampoline生命周期已解决。
+其余UI/process/variable64共享原函数保存点已由[第二十批](../03_插件/原函数预发布与数值Hook绑定.md)单独迁移并检查，不能把本批当作所有并发或trampoline生命周期已解决。
 实际运行时指令与GUI集成仍在全项目验收范围；见[启动夹具记录](../../test/docs/service_scheduler.md)。

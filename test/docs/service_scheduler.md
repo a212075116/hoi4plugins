@@ -37,5 +37,5 @@ foreign AlreadyCreated目标保持，不启用、不删除；原g_started失败�
 复用 `test/reports/20261012_variable64_transaction/`四角色：
 `MODIFIED_FILE.zip`、`DIFF_FILE.patch`、`VERIFICATION.txt`、`ROLLBACK.sh`。
 回滚脚本对 `*.service-scheduler.zip`或 `*.service-scheduler.dll`恢复本批基线，完整包另验证binary patch和最初基线回滚。
-没有部署、调用真实token/pipe/thread/Steam或进入游戏；其他callback原函数发布点和完整运行生命周期仍需复核。
+没有部署、调用真实token/pipe/thread/Steam或进入游戏；其他共享callback发布点已由[第二十批](original_publication.md)复核，完整运行生命周期仍未由局部夹具证明。
 设计见[Scheduler安装与原函数发布](../../ai_docs/05_工具链/服务端Scheduler安装与原函数发布.md)。

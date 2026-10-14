@@ -240,3 +240,7 @@ Array64记录和owner键的独立oracle、完整存储夹具及golden字节见[�
 ## 第十九批源码规范化
 
 服务端启动、scheduler所属及原函数预发布见[启动三态夹具](service_scheduler.md)。Create成功后Enable失败才尝试删除，本批不新增重试；新DLL未部署。
+
+## 第二十批源码规范化
+
+日期/process/scalar/语言桥十一个original槽位和六项算术绑定见[预发布三态回归](original_publication.md)。Enable期间校验，失败/ready规则保留；新DLL未部署。

@@ -155,10 +155,12 @@ int ProcBlock_Install(void)
     }
 
     if (t1 != NULL) {
-        g_originalCreateProcessA = (CreateProcessAFn)InlineHook_Install(t1, (void*)Hook_CreateProcessA);
+        if (!InlineHook_InstallInto(t1, (void*)Hook_CreateProcessA, (void**)&g_originalCreateProcessA))
+            g_originalCreateProcessA = NULL;
     }
     if (t2 != NULL) {
-        g_originalCreateProcessW = (CreateProcessWFn)InlineHook_Install(t2, (void*)Hook_CreateProcessW);
+        if (!InlineHook_InstallInto(t2, (void*)Hook_CreateProcessW, (void**)&g_originalCreateProcessW))
+            g_originalCreateProcessW = NULL;
     }
     if (g_originalCreateProcessA == NULL && g_originalCreateProcessW == NULL) {
         Plugin_Log("[pblock] install failed");

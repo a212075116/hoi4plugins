@@ -35,8 +35,8 @@ int GameDateUi_Init(void)
     img = (unsigned char*)GetModuleHandleA(NULL);
     if (img == NULL) return 0;
     target = (void*)(img + RVA_GD_UI_DATE_UPDATE);
-    g_origUiDate = (UiDateUpdateFn)InlineHook_Install(target, (void*)Hook_UiDateUpdate);
-    if (g_origUiDate == NULL) {
+    if (!InlineHook_InstallInto(target, (void*)Hook_UiDateUpdate, (void**)&g_origUiDate)) {
+        g_origUiDate = NULL;
         Plugin_Log("[gamedate] ui hook failed");
         return 0;
     }

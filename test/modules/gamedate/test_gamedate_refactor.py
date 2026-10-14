@@ -44,6 +44,7 @@ void* InlineHook_Install(void* target,void* detour){
  ++installCalls;if(target!=image+RVA_GD_UI_DATE_UPDATE||detour!=(void*)Hook_UiDateUpdate)return NULL;
  return installFail?NULL:(void*)OriginalUi;
 }
+int InlineHook_InstallInto(void* target,void* detour,void** original){void* value=InlineHook_Install(target,detour);if(!value)return 0;*original=value;return 1;}
 void ConsoleCmd_InitResult(CmdResult* out){memset(out,0,sizeof(*out));}
 void ConsoleCmd_SetMessage(CmdResult* out,const char* text){(void)out;(void)text;}
 int ConsoleCmd_GetArg(CmdArgs* args,int i,char* dst,size_t n){(void)args;(void)i;(void)dst;(void)n;return 0;}

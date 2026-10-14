@@ -1070,14 +1070,14 @@ static void Var64_InstallGameSyntaxHook(void)
     if (g_var64GameSyntaxHookReady) return;
     if (img == NULL) return;
     if (!ConsoleCmd_IsReadable(img + RVA_GAME_SET_EXEC, 16)) return;
-    orig = InlineHook_Install(img + RVA_GAME_SET_EXEC, (void*)Var64_GameSyntaxDetour);
-    if (orig == NULL) {
+    orig = (void*)g_var64OrigGameSetExec;
+    if (!InlineHook_InstallInto(img + RVA_GAME_SET_EXEC, (void*)Var64_GameSyntaxDetour, (void**)&g_var64OrigGameSetExec)) {
+        g_var64OrigGameSetExec = (Var64GameSetExecFn)orig;
         Plugin_Log("[var64] gamesyntax hook install failed");
         return;
     }
-    g_var64OrigGameSetExec = (Var64GameSetExecFn)orig;
     g_var64GameSyntaxHookReady = 1;
-    Plugin_Log("[var64] gamesyntax hook installed, orig=%p", orig);
+    Plugin_Log("[var64] gamesyntax hook installed, orig=%p", (void*)g_var64OrigGameSetExec);
 }
 
 static void __fastcall ExecVar64GameSyntax(void* self, void* scope)
@@ -1249,30 +1249,26 @@ static const Var64EffectBinding g_var64EffectBindings[] = {
 static void Var64_InstallArithmeticHooks(void)
 {
     unsigned char* img = Var64_Image();
+    static const struct {
+        unsigned int rva;
+        void* detour;
+        Var64GameSetExecFn* original;
+    } bindings[] = {
+        { RVA_VAR_ADD_EXEC, (void*)Var64_AddDetour, &g_var64OrigAddExec },
+        { RVA_VAR_SUB_EXEC, (void*)Var64_SubDetour, &g_var64OrigSubExec },
+        { RVA_VAR_MUL_EXEC, (void*)Var64_MulDetour, &g_var64OrigMulExec },
+        { RVA_VAR_DIV_EXEC, (void*)Var64_DivDetour, &g_var64OrigDivExec },
+        { RVA_VARCLAMP_EXEC, (void*)Var64_ClampDetour, &g_var64OrigClampExec },
+        { RVA_VAR_CLEAR_EXEC, (void*)Var64_ClearDetour, &g_var64OrigClearExec }
+    };
+    int i;
 
     if (img == NULL) return;
-    if (ConsoleCmd_IsReadable(img + RVA_VAR_ADD_EXEC, 16)) {
-        g_var64OrigAddExec = (Var64GameSetExecFn)InlineHook_Install(img + RVA_VAR_ADD_EXEC,
-                                                                   (void*)Var64_AddDetour);
-    }
-    if (ConsoleCmd_IsReadable(img + RVA_VAR_SUB_EXEC, 16)) {
-        g_var64OrigSubExec = (Var64GameSetExecFn)InlineHook_Install(img + RVA_VAR_SUB_EXEC,
-                                                                   (void*)Var64_SubDetour);
-    }
-    if (ConsoleCmd_IsReadable(img + RVA_VAR_MUL_EXEC, 16)) {
-        g_var64OrigMulExec = (Var64GameSetExecFn)InlineHook_Install(img + RVA_VAR_MUL_EXEC,
-                                                                   (void*)Var64_MulDetour);
-    }
-    if (ConsoleCmd_IsReadable(img + RVA_VAR_DIV_EXEC, 16)) {
-        g_var64OrigDivExec = (Var64GameSetExecFn)InlineHook_Install(img + RVA_VAR_DIV_EXEC,
-                                                                   (void*)Var64_DivDetour);
-    }
-    if (ConsoleCmd_IsReadable(img + RVA_VARCLAMP_EXEC, 16)) {
-        g_var64OrigClampExec = (Var64GameSetExecFn)InlineHook_Install(img + RVA_VARCLAMP_EXEC,
-                                                                     (void*)Var64_ClampDetour);
-    }
-    if (ConsoleCmd_IsReadable(img + RVA_VAR_CLEAR_EXEC, 16)) {
-        g_var64OrigClearExec = (Var64GameSetExecFn)InlineHook_Install(img + RVA_VAR_CLEAR_EXEC, (void*)Var64_ClearDetour);
+    for (i = 0; i < (int)(sizeof(bindings) / sizeof(bindings[0])); ++i) {
+        if (ConsoleCmd_IsReadable(img + bindings[i].rva, 16)) {
+            if (!InlineHook_InstallInto(img + bindings[i].rva, bindings[i].detour, (void**)bindings[i].original))
+                *bindings[i].original = NULL;
+        }
     }
     Plugin_Log("[var64] clear hook: %p", (void*)g_var64OrigClearExec);
     Plugin_Log("[var64] arith hook: add=%p sub=%p mul=%p div=%p clamp=%p (round/modulo disabled: wrong name field)",
