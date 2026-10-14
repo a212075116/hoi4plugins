@@ -1,5 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include "../../adapter/native_adapter.h"
 #include <sddl.h>
 #include <shellapi.h>
 #include <stdio.h>
@@ -400,13 +401,22 @@ void DebugConsole_RegisterCommands(void) {
     if (ConsoleCmd_RegisterAll(&def, 1) > 0) InterlockedExchange(&g_commandsReady, 1);
 }
 
+static DWORD WINAPI StartDebugServiceReported(LPVOID p) {
+    DWORD result = StartDebugService(p);
+    char reason[96];
+    _snprintf_s(reason, sizeof(reason), _TRUNCATE, "SERVICE_INIT_EXIT_%lu", result);
+    NativeAdapter_Report("console.commands", result == 0 && g_started == 2, reason);
+    return result;
+}
+
 void DebugConsole_Start(void) {
     HANDLE t;
     if (InterlockedCompareExchange(&g_started, 1, 0)) return;
-    t = CreateThread(NULL, 0, StartDebugService, NULL, 0, NULL);
+    t = CreateThread(NULL, 0, StartDebugServiceReported, NULL, 0, NULL);
     if (t) CloseHandle(t);
     else {
         InterlockedExchange(&g_started, -1);
         Plugin_Log("[debugconsole] service thread creation failed error=%lu", GetLastError());
+        NativeAdapter_Report("console.commands", 0, "SERVICE_THREAD_CREATION_FAILED");
     }
 }

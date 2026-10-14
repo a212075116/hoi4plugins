@@ -174,6 +174,7 @@ int ProcBlock_Install(void)
 }
 
 int ProcBlock_Installed(void) { return g_hookInstalled; }
+int ProcBlock_Complete(void) { return g_hookInstalled && g_originalCreateProcessA != NULL && g_originalCreateProcessW != NULL; }
 int ProcBlock_BlockedCount(void) { return g_blockedProcessCount; }
 void ProcBlock_SetEnabled(int on) { g_blockingEnabled = on ? 1 : 0; }
 int ProcBlock_Enabled(void) { return g_blockingEnabled; }

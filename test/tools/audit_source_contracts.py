@@ -80,14 +80,14 @@ findings = [
          evidence="test/reports/20261014_iat_install/final_verification.json;4100faultcases,realreadonlysharedpage32threads andlive module-range snapshots;not continuousforeignmonitor/hotunload"),
     dict(id="F3", status="resolved_for_verified_group_bootstrap", site=site("src/plugin/plugin_main.c", "static void RegisterPluginGroups("),
          observed="Shared per-group poller requires exact counts andscalar/language readiness,skips completedgroups,preserves per-phasebounded waits andreports incomplete groups; arithmetic retry skips successful originals.",
-         evidence="test/reports/20261014_bootstrap/final_verification.json;521actualstartup scenarios and4096actualhookretry combinations pluslive8group completion; external registrarscontrolled,not allallocator transfer faults"),
+         evidence="test/reports/20261014_bootstrap/final_verification.json;521actualstartup scenarios and4096actualhookretry combinations;native_camera adds early identity gate,disabledcamera exclusion andstatus reports withactualPluginThread four-mode tests/live; external registrarscontrolled,not allallocator transfer faults"),
 
 ]
 if '#include "effect_reg.h"' in header and not re.search(r"\b(?:Effect[A-Z]\w*|EFF_\w*|RVA_\w*)\b", header):
     findings.append(dict(id="F4", status="unnecessary_public_header_dependency",
                          site=site("src/plugin/SDK_RVA/variable64/variable64.h", '#include "effect_reg.h"'),
                          observed="Public declarations use no Effect types; both current consumers already explicitly include effect_reg.h."))
-reviewed_source_hashes = {'F1': '099cd8071fb079bb1f490abdd61b94e14a39ac7bd0f22f1cec0a4892bd654df7', 'F2': 'f172c7a8e438c0092ed9025666d4fd635e428da100a3700052e8ab1af2b3ead4', 'F3': '459d3d3af49763be614493b99e5ad8d11b9cdacdf4c42f63f724298f4a3ffced'}
+reviewed_source_hashes = {'F1': '099cd8071fb079bb1f490abdd61b94e14a39ac7bd0f22f1cec0a4892bd654df7', 'F2': 'f172c7a8e438c0092ed9025666d4fd635e428da100a3700052e8ab1af2b3ead4', 'F3': '1ad6db67e259fcf731770537f14d109bc5539f5c641453bd86243b23a216b0ee'}
 for finding in findings:
     expected = reviewed_source_hashes.get(finding["id"])
     if expected and finding["site"]["source_sha256"] != expected:

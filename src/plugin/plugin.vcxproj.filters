@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <Filter Include="adapter"><UniqueIdentifier>{A1B2C3D4-1111-4E5F-9A8B-000000000014}</UniqueIdentifier></Filter>
     <Filter Include="SDK_RVA\variable64"><UniqueIdentifier>{A1B2C3D4-1111-4E5F-9A8B-000000000013}</UniqueIdentifier></Filter>
     <Filter Include="SDK_RVA\common"><UniqueIdentifier>{A1B2C3D4-1111-4E5F-9A8B-000000000012}</UniqueIdentifier></Filter>
     <Filter Include="SDK_RVA">
@@ -39,6 +40,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="plugin_main.c" />
+    <ClCompile Include="adapter\native_adapter.cpp"><Filter>adapter</Filter></ClCompile>
     <ClCompile Include="SDK_RVA\common\log.c"><Filter>SDK_RVA\common</Filter></ClCompile>
     <ClCompile Include="SDK_RVA\common\native_memory.c"><Filter>SDK_RVA\common</Filter></ClCompile>
     <ClCompile Include="SDK_RVA\console\console_cmd.c">

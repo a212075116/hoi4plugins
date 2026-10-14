@@ -282,3 +282,5 @@ Array64记录和owner键的独立oracle、完整存储夹具及golden字节见[�
 跨版本研究：[官方接口证据复核与RTTI定位原型](native_interface_research.md)；仅静态研究，尚未接入生产插件。
 
 第一步[摄像机只读适配器](camera_read_adapter.md)已交付：自动表/根/getter定位，当前CHI与菜单实测；未接入生产DLL。
+
+生产闭环见[原生摄像机适配测试](native_camera_adapter.md)，包含101原生检查、启动门、实机及回滚，不再仅外部原型。

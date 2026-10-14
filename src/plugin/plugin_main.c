@@ -21,6 +21,7 @@
 #include "SDK_RVA/variable64/variable64.h"
 #include "SDK_RVA/variable64/array64_api.h"
 #include "plugin_registration.h"
+#include "adapter/native_adapter.h"
 
 #include "file_redirect.h"
 #include "process_block.h"
@@ -158,8 +159,12 @@ static void RegisterPluginGroups(const char* kind, int (*ready)(void), PluginReg
         if (!complete) Sleep(10);
     }
     for (i = 0; i < count; ++i) {
+        char capability[128];
         Plugin_Log("[plugin] %s group=%s result=%d/%d complete=%d poll=%d",
             kind, steps[i].name, steps[i].last, steps[i].expected, steps[i].complete, round);
+        _snprintf_s(capability, sizeof(capability), _TRUNCATE, "registration.%s.%s", kind, steps[i].name);
+        NativeAdapter_Report(capability, steps[i].complete && steps[i].expected > 0,
+            steps[i].expected == 0 ? "CAMERA_WRITE_CONTRACT_NOT_APPROVED" : steps[i].complete ? "EXACT_COUNT_AND_DEPENDENCIES_READY" : "REGISTRATION_INCOMPLETE");
     }
     if (!complete) Plugin_Log("[plugin] %s registration incomplete after %d polls", kind, round);
 }
@@ -167,30 +172,60 @@ static void RegisterPluginGroups(const char* kind, int (*ready)(void), PluginReg
 static DWORD WINAPI PluginThread(LPVOID p)
 {
     int i;
+    int source, compat, ui;
+    static const char* capabilities[] = {
+        "achievement.source", "achievement.compatibility", "achievement.ui", "redirect.files", "redirect.process", "console.commands",
+        "registration.effects.camera", "registration.effects.date", "registration.effects.variable64", "registration.effects.array64", "registration.effects.loadgame", "registration.effects.language",
+        "registration.triggers.demo", "registration.triggers.array64", "commands.camera", "commands.camera.read", "commands.clock", "commands.crash", "commands.achievement", "ui.date"
+    };
     (void)p;
     Plugin_Log("[plugin] thread start, pid=%lu", (unsigned long)GetCurrentProcessId());
     Plugin_Log("[plugin] hoi4 base=%p", (void*)GetModuleHandleA(NULL));
-    Plugin_Log("[plugin] AchievementSource_Install -> %d", AchievementSource_Install());
-    Plugin_Log("[plugin] AchievementCompat_Install -> %d", AchievementCompat_Install());
-    Plugin_Log("[plugin] AchievementUi_Install -> %d", AchievementUi_Install());
+    NativeAdapter_Initialize();
+    Plugin_Log("[adapter] legacy=%d reason=%s", NativeAdapter_LegacyAllowed(), NativeAdapter_Diagnostic());
+    for (i = 0; i < (int)(sizeof(capabilities) / sizeof(capabilities[0])); ++i)
+        NativeAdapter_Report(capabilities[i], 0, NativeAdapter_LegacyAllowed() ? "INITIALIZING" : "LEGACY_BUILD_UNREVIEWED");
+    NativeAdapter_StartMonitor();
+    if (!NativeAdapter_LegacyAllowed()) {
+        NativeAdapter_OpenLogConsole();
+        Plugin_Log("[adapter] legacy initialization blocked before any business hook or registry access");
+        return 0;
+    }
+    source = AchievementSource_Install(); compat = AchievementCompat_Install(); ui = AchievementUi_Install();
+    Plugin_Log("[plugin] AchievementSource_Install -> %d", source);
+    Plugin_Log("[plugin] AchievementCompat_Install -> %d", compat);
+    Plugin_Log("[plugin] AchievementUi_Install -> %d", ui);
+    NativeAdapter_Report("achievement.source", source, source ? "INSTALLED" : "INSTALL_FAILED");
+    NativeAdapter_Report("achievement.compatibility", compat, compat ? "INSTALLED" : "INSTALL_FAILED");
+    NativeAdapter_Report("achievement.ui", ui, ui ? "INSTALLED" : "INSTALL_FAILED");
 
     {
         int ok = FileRedirect_Install();
+        NativeAdapter_Report("redirect.files", ok, ok ? "INSTALLED" : "INSTALL_FAILED");
         Plugin_Log("[plugin] FileRedirect_Install -> %d (gameRoot=%s)",
                    ok, FileRedirect_GameRoot());
     }
 
     {
         int ok = ProcBlock_Install();
+        if (!ProcBlock_Complete()) ProcBlock_SetEnabled(0);
+        NativeAdapter_Report("redirect.process", ProcBlock_Complete(), ProcBlock_Complete() ? "A_AND_W_INSTALLED" : ok ? "PARTIAL_INSTALL" : "INSTALL_FAILED");
         Plugin_Log("[plugin] ProcBlock_Install -> %d", ok);
     }
 
     DebugConsole_Start();
 
+    if (!NativeAdapter_CameraWriteAllowed()) {
+        g_effectSteps[0].run = NULL;
+        g_effectSteps[0].expected = 0;
+        g_effectSteps[0].complete = 1;
+    }
+
     RegisterPluginGroups("effects", Effect_RegistryReady, g_effectSteps,
         (int)(sizeof(g_effectSteps) / sizeof(g_effectSteps[0])));
     RegisterPluginGroups("triggers", Trigger_RegistryReady, g_triggerSteps,
         (int)(sizeof(g_triggerSteps) / sizeof(g_triggerSteps[0])));
+    NativeAdapter_CameraRegistered(0, g_effectSteps[0].expected > 0 && g_effectSteps[0].complete ? g_effectSteps[0].last : 0);
 
     for (i = 0; i < 300; ++i) {
         void* cur = NULL;
@@ -212,28 +247,40 @@ static DWORD WINAPI PluginThread(LPVOID p)
     }
 
     {
-        int n = Camera_RegisterCommands();
+        int n = NativeAdapter_CameraWriteAllowed() ? Camera_RegisterCommands() : 0;
         Plugin_Log("[plugin] Camera_RegisterCommands -> %d", n);
+        NativeAdapter_CameraRegistered(n, g_effectSteps[0].expected > 0 && g_effectSteps[0].complete ? g_effectSteps[0].last : 0);
+        NativeAdapter_Report("commands.camera", n == 3, n == 3 ? "THREE_COMMANDS_REGISTERED" : "WRITE_CONTRACT_OR_REGISTRATION_FAILED");
+        {
+            int readCommand = Camera_RegisterReadCommand();
+            Plugin_Log("[plugin] Camera_RegisterReadCommand -> %d", readCommand);
+            NativeAdapter_Report("commands.camera.read", readCommand == 1, readCommand == 1 ? "REGISTERED" : "REGISTRATION_FAILED");
+        }
     }
 
     {
         int n = GameDate_RegisterCommands();
         Plugin_Log("[plugin] GameDate_RegisterCommands -> %d", n);
+        NativeAdapter_Report("commands.clock", n == 5, n == 5 ? "FIVE_COMMANDS_REGISTERED" : "REGISTRATION_INCOMPLETE");
     }
 
     {
         int r = GameDateUi_Init();
         Plugin_Log("[plugin] GameDateUi_Init -> %d", r);
+        NativeAdapter_Report("ui.date", r > 0, r > 0 ? "READY" : "INIT_FAILED");
     }
 
     {
         int n = CrashTest_RegisterCommands();
         Plugin_Log("[plugin] CrashTest_RegisterCommands -> %d", n);
+        NativeAdapter_Report("commands.crash", n == 2, n == 2 ? "TWO_COMMANDS_REGISTERED" : "REGISTRATION_INCOMPLETE");
     }
 
-    Plugin_Log("[plugin] AchievementProbe_RegisterCommands -> %d", AchievementProbe_RegisterCommands());
-    Plugin_Log("[plugin] AchievementCompat_RegisterCommands -> %d", AchievementCompat_RegisterCommands());
-    Plugin_Log("[plugin] AchievementUi_RegisterCommands -> %d", AchievementUi_RegisterCommands());
+    source = AchievementProbe_RegisterCommands(); compat = AchievementCompat_RegisterCommands(); ui = AchievementUi_RegisterCommands();
+    Plugin_Log("[plugin] AchievementProbe_RegisterCommands -> %d", source);
+    Plugin_Log("[plugin] AchievementCompat_RegisterCommands -> %d", compat);
+    Plugin_Log("[plugin] AchievementUi_RegisterCommands -> %d", ui);
+    NativeAdapter_Report("commands.achievement", source == 2 && compat == 1 && ui == 1, source == 2 && compat == 1 && ui == 1 ? "ALL_FOUR_COMMANDS_REGISTERED" : "REGISTRATION_INCOMPLETE");
     DebugConsole_RegisterCommands();
 
     {

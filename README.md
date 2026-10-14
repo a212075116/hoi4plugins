@@ -47,3 +47,5 @@ msbuild hoi4plugins.sln /p:Configuration=Release /p:Platform=x64
 - `test/` 不参与生产构建，测试报告在 `test/reports/`；报告与二进制不纳入 Git。
 
 本次源码规范化已收尾，生产版本为第二十八批；实现、复用、模块边界和同步文档见[交付总结](ai_docs/01_工程与构建/源码规范化交付总结.md)。这不是全函数无缺陷认证；F1原生tooltip所有权未知，保留原实现并作为独立调查记录。维护入口见[模块边界与所有权](ai_docs/01_工程与构建/模块边界与所有权.md)。
+
+摄像机生产适配现采用自动RTTI/根/getter定位，部署还需对应的 `hoi4plugins/bindings/<SHA>.profile`；仅启动读取。未知构建阻断未迁移业务。见[适配与功能状态](ai_docs/07_逆向能力/原生摄像机适配与功能状态.md)。

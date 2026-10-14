@@ -1,0 +1,8 @@
+schema=1
+image_sha256=7dc947be34970da1e1c787bcddbe7f62b610ff258aebf8f06aa8b348f3a031d5
+read_contract=leaf_rtti_v1
+camera_pointer=0x750
+height=0x69c
+minimum=0x6d0
+maximum=0x6d4
+runtime_read=1

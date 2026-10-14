@@ -29,6 +29,7 @@ static HANDLE g_in, g_out;
 static DWORD g_oldMode;
 static bool g_console;
 static bool g_interactiveLane;
+static bool g_readOnly;
 static HANDLE g_cancel;
 static std::wstring g_logDirectory;
 static int g_wheelRemainder;
@@ -104,7 +105,11 @@ static WORD LineAttributes(const std::wstring& line, WORD normal) {
     std::wstring tags = line;
     for (auto& c : tags) if (c >= L'A' && c <= L'Z') c += L'a' - L'A';
     WORD foreground;
-    if (tags.find(L"[error]") != std::wstring::npos || tags.find(L"[fatal]") != std::wstring::npos)
+    if (tags.find(L"[function:unavailable]") != std::wstring::npos)
+        foreground = FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY;
+    else if (tags.find(L"[function:available]") != std::wstring::npos)
+        foreground = FOREGROUND_GREEN | FOREGROUND_INTENSITY;
+    else if (tags.find(L"[error]") != std::wstring::npos || tags.find(L"[fatal]") != std::wstring::npos)
         foreground = FOREGROUND_RED | FOREGROUND_INTENSITY;
     else if (tags.find(L"[warning]") != std::wstring::npos || tags.find(L"[waring]") != std::wstring::npos || tags.find(L"[warn]") != std::wstring::npos)
         foreground = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY;
@@ -139,6 +144,20 @@ static void Print(const std::wstring& line) {
     }
     if (g_console) Prompt();
     if (history) SetConsoleWindowInfo(g_out, TRUE, &before.srWindow);
+}
+
+static int StatusColorSelfTest() {
+    int count=0,failed=0;
+    auto check=[&](const wchar_t* line,WORD color) {++count;if(LineAttributes(line,0x70)!=(0x70|color))++failed;};
+    check(L"[function:available] camera.read : READY",10);
+    check(L"[function:unavailable] camera.write : BLOCKED",13);
+    check(L"[FUNCTION:UNAVAILABLE] camera.write : BLOCKED",13);
+    check(L"[error] failure",12);
+    check(L"[warning] warning",14);
+    check(L"[waring] warning",14);
+    check(L"[info] info",11);
+    printf("status-color checks=%d failed=%d green=10 purple=13 background-preserved=1\n",count,failed);
+    return failed?1:0;
 }
 
 struct Tail {
@@ -248,7 +267,10 @@ static bool Send(const std::string& line, DcResponse& result, std::string& outpu
 static void CompleteWorker() {
     std::string prefix;
     { std::lock_guard<std::mutex> lock(g_display); prefix = g_completion.prefix; }
-    std::string error; auto names = CommandCatalog::Query(g_pid, prefix, error);
+    std::string error;
+    std::vector<std::string> names;
+    if (g_readOnly) error = "Game commands and completion are disabled for this build.";
+    else names = CommandCatalog::Query(g_pid, prefix, error);
     { std::lock_guard<std::mutex> lock(g_display); g_completion.names = std::move(names); g_completion.error = error; g_completion.ready = true; }
 }
 static void PrintCompletionCandidates(const std::vector<std::string>& names) {
@@ -330,12 +352,13 @@ static void Logs(std::wstring root) {
         tails.push_back({std::wstring(docs) + L"\\Paradox Interactive\\Hearts of Iron IV\\logs\\error.log"});
     } else { tails.push_back({L""}); tails.push_back({L""}); }
     tails.push_back({root + L"\\reports\\mod_loader_tbb.log"});
+    tails.push_back({root + L"\\hoi4plugin_function_log.log"});
     if (!g_logDirectory.empty()) {
         tails.clear();
-        for (auto name : {L"game.log", L"error.log", L"plugin.log"}) tails.push_back({g_logDirectory + L"\\" + name});
+        for (auto name : {L"game.log", L"error.log", L"plugin.log", L"hoi4plugin_function_log.log"}) tails.push_back({g_logDirectory + L"\\" + name});
     }
     ULONGLONG warned = 0;
-    const wchar_t* labels[] = {L"GAME", L"ERROR", L"PLUGIN"};
+    const wchar_t* labels[] = {L"GAME", L"ERROR", L"PLUGIN", L"FUNCTION"};
     while (!g_stop && WaitForSingleObject(g_game, 0) == WAIT_TIMEOUT) {
         for (size_t i = 0; i < tails.size(); ++i) {
             for (const auto& line : tails[i].Poll()) {
@@ -391,6 +414,7 @@ public:
     ~CommandQueue() { Stop(); }
 };
 static void ExecuteLine(const std::string& line) {
+    if (g_readOnly) { Print(L"[function:unavailable] console.commands : UNREVIEWED_BUILD_READ_ONLY_VIEWER"); return; }
     if (line == "/reconnect") {
         if (g_pipe != INVALID_HANDLE_VALUE) CloseHandle(g_pipe);
         g_pipe = INVALID_HANDLE_VALUE;
@@ -442,10 +466,12 @@ int wmain(int argc, wchar_t** argv) {
     std::wstring command;
     DWORD logsMs = 0; bool sessionStdio = false, completionOnly = false;
     for (int i = 1; i < argc; ++i) {
+        if (!wcscmp(argv[i], L"--status-color-self-test")) return StatusColorSelfTest();
         if (!wcscmp(argv[i], L"--self-test")) return SelfTest();
         if (!wcscmp(argv[i], L"--completion-self-test")) return CompletionSelfTest();
         if (!wcscmp(argv[i], L"--pid") && i + 1 < argc) g_pid = wcstoul(argv[++i], NULL, 10);
         else if (!wcscmp(argv[i], L"--session-stdio")) { sessionStdio = true; g_interactiveLane = true; }
+        else if (!wcscmp(argv[i], L"--read-only")) g_readOnly = true;
         else if (!wcscmp(argv[i], L"--log-dir") && i + 1 < argc) g_logDirectory = argv[++i];
         else if (!wcscmp(argv[i], L"--interactive-command") && i + 1 < argc) { command = argv[++i]; g_interactiveLane = true; }
         else if (!wcscmp(argv[i], L"--command") && i + 1 < argc) command = argv[++i];
@@ -456,6 +482,7 @@ int wmain(int argc, wchar_t** argv) {
         }
         else { fwprintf(stderr, L"Usage: hoi4_debug_console.exe [--pid GAME_PID] [--command \"game command\" | --complete PREFIX | --logs-ms 1000] | --self-test | --completion-self-test\n"); return 2; }
     }
+    if (g_readOnly && (completionOnly || !command.empty())) { fprintf(stderr, "Read-only viewer does not accept game commands or completion.\n"); return 2; }
     if (!g_pid) {
         HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0); PROCESSENTRY32W e = {sizeof(e)};
         if (Process32FirstW(snap, &e)) do {
@@ -550,13 +577,13 @@ int wmain(int argc, wchar_t** argv) {
             if (line.empty()) continue;
             if (history.empty() || history.back() != line) { history.push_back(line); if (history.size() > 128) history.pop_front(); } hist = history.size();
             if (line == L"/quit") quit = true;
-            else if (line == L"/help") Print(L"[CONSOLE] /filter all|game|error|plugin, /clear, /reconnect, /quit; Tab lists/completes command names; Up/Down history; Left/Right/Home/End/Delete edit. No OS shell.");
+            else if (line == L"/help") Print(L"[CONSOLE] /filter all|game|error|plugin|function, /clear, /reconnect, /quit; Tab lists/completes command names; Up/Down history; Left/Right/Home/End/Delete edit. No OS shell.");
             else if (line == L"/reconnect") { if (!commands.Submit("/reconnect")) Print(L"[CONSOLE] Queue busy; reconnect not accepted."); }
             else if (line == L"/clear") {
                 std::lock_guard<std::mutex> lock(g_display); CONSOLE_SCREEN_BUFFER_INFO info; GetConsoleScreenBufferInfo(g_out, &info); DWORD w; COORD zero = {0,0};
                 FillConsoleOutputCharacterW(g_out, L' ', info.dwSize.X * info.dwSize.Y, zero, &w); SetConsoleCursorPosition(g_out, zero); Prompt();
             } else if (line.rfind(L"/filter ", 0) == 0) {
-                std::wstring f = line.substr(8); int filter = f == L"all" ? 0 : f == L"game" ? 1 : f == L"error" ? 2 : f == L"plugin" ? 3 : -1;
+                std::wstring f = line.substr(8); int filter = f == L"all" ? 0 : f == L"game" ? 1 : f == L"error" ? 2 : f == L"plugin" ? 3 : f == L"function" ? 4 : -1;
                 if (filter < 0) Print(L"[CONSOLE] Unknown filter."); else { g_filter = filter; Print(L"[CONSOLE] Filter=" + f); }
             } else if (line[0] == L'/') Print(L"[CONSOLE] Unknown local action; /help.");
             else {

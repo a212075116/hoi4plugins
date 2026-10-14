@@ -6,6 +6,7 @@
 #include "carrier.h"
 #include "console_cmd.h"
 #include "camera_height.h"
+#include "../../adapter/native_adapter.h"
 
 #include "../common/plugin_log.h"
 
@@ -200,21 +201,31 @@ int Camera_SetUpperLimitSmooth(void* cam, int hi)
 
 unsigned char* Camera_GetObject(void)
 {
-    HMODULE base = GetModuleHandleA(NULL);
-    unsigned char* img;
-    unsigned char* obj;
-    unsigned char* cam;
+    return (unsigned char*)NativeAdapter_CameraObject();
+}
 
-    if (base == NULL) return NULL;
-    img = (unsigned char*)base;
-    if (!ConsoleCmd_IsReadable(img + RVA_CAM_SLOT, sizeof(void*))) return NULL;
-    obj = (unsigned char*)(*(void**)(img + RVA_CAM_SLOT));
-    if (obj == NULL) return NULL;
-    if (!ConsoleCmd_IsReadable(obj + OFF_CAM_OBJ2CAM, sizeof(void*))) return NULL;
-    cam = (unsigned char*)(*(void**)(obj + OFF_CAM_OBJ2CAM));
-    if (cam == NULL) return NULL;
-    if (!ConsoleCmd_IsReadable(cam + OFF_CAM_HEIGHT, 8)) return NULL;
-    return cam;
+static long long __fastcall Handler_ReadCamera(CmdResult* out, CmdArgs* args)
+{
+    NativeCameraSnapshot snapshot = {sizeof(snapshot), 1};
+    char message[256];
+    (void)args;
+    if (out == NULL) return 0;
+    ConsoleCmd_InitResult(out);
+    if (Hoi4Plugin_ReadCameraV1(&snapshot)) {
+        _snprintf_s(message, sizeof(message), _TRUNCATE, "READY_READ_ONLY height=%.6g minimum=%d maximum=%d", snapshot.height, snapshot.minimum, snapshot.maximum);
+        ConsoleCmd_SetMessage(out, message);
+        out->ok = 1;
+    } else {
+        ConsoleCmd_SetMessage(out, snapshot.status);
+        out->ok = 0;
+    }
+    return (long long)out;
+}
+
+int Camera_RegisterReadCommand(void)
+{
+    const CmdDef def = {"plugin_camera_read", "Read camera through validated bindings", NULL, 0, {0}, Handler_ReadCamera};
+    return ConsoleCmd_RegisterAll(&def, 1);
 }
 
 static int Camera_ParseFloatText(const char* s, float* out)

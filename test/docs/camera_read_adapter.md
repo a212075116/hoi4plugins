@@ -1,5 +1,7 @@
 # 摄像机只读适配器测试
 
+> 本篇为外部原型阶段记录；当前生产状态见[原生闭环测试](native_camera_adapter.md)，不能把历史“原插件不变”当作当前实现。
+
 2026-10-14，Windows x64、Python + pefile。不需 Frida、IDA 或重编译 DLL；原插件函数不变。
 
 ## 使用

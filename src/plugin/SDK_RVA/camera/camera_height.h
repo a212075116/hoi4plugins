@@ -24,6 +24,7 @@ typedef struct {
 
 unsigned char* Camera_GetObject(void);
 int            Camera_RegisterCommands(void);
+int            Camera_RegisterReadCommand(void);
 int            Camera_SetHeight(void* cam, float want);
 int            Camera_GetLimits(void* cam, int* lo, int* hi);
 int            Camera_SetLowerLimit(void* cam, int lo);
