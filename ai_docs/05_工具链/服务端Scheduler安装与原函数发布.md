@@ -2,6 +2,8 @@
 
 2026-10-14，第十九批，复用单hook适配器并保持Frame原函数发布顺序。
 
+本篇为第十九批历史证据，不是当前全部启动状态合同；现用夹具已扩展，Peer故障和启动提交见[第二十四批](Peer线程启动门闩.md)。
+
 ## 共享机制
 
 新增模块接口 `InlineHook_InstallInto(target, detour, original)`。

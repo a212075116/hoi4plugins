@@ -26,6 +26,7 @@ static HANDLE g_pipes[DC_PEERS + 1];
 static DWORD g_thread;
 static ULONGLONG g_serial;
 static volatile LONG g_started, g_failed, g_commandsReady;
+static volatile LONG g_peerState;
 static long long (__fastcall *g_frame)(long long, char);
 static HANDLE g_helper;
 static SRWLOCK g_helperLock = SRWLOCK_INIT;
@@ -303,6 +304,33 @@ static void CloseStartupHandles(int pipeCount, int eventCount) {
     while (pipeCount) CloseHandle(g_pipes[--pipeCount]);
 }
 
+static DWORD WINAPI PeerStart(LPVOID value) {
+    LONG state;
+    while (!(state = InterlockedCompareExchange(&g_peerState, 0, 0))) Sleep(1);
+    return state > 0 ? Peer(value) : 0;
+}
+
+static int StartPeerThreads(void) {
+    HANDLE threads[DC_PEERS + 1];
+    int i, count = 0;
+    for (i = 0; i <= DC_PEERS; ++i) {
+        threads[count] = CreateThread(NULL, 0, PeerStart, g_pipes[i], 0, NULL);
+        if (!threads[count]) {
+            Plugin_Log("[debugconsole] peer thread creation failed index=%d error=%lu", i, GetLastError());
+            InterlockedExchange(&g_peerState, -1);
+            while (count) {
+                --count;
+                WaitForSingleObject(threads[count], INFINITE);
+                CloseHandle(threads[count]);
+            }
+            return 0;
+        }
+        ++count;
+    }
+    while (count) CloseHandle(threads[--count]);
+    return 1;
+}
+
 static DWORD WINAPI StartDebugService(LPVOID unused) {
     HANDLE token; DWORD bytes = 0; TOKEN_USER* user; LPWSTR sid = NULL;
     wchar_t sddl[512], name[128]; PSECURITY_DESCRIPTOR sd = NULL;
@@ -351,8 +379,14 @@ static DWORD WINAPI StartDebugService(LPVOID unused) {
         CloseStartupHandles(DC_PEERS + 1, DC_QUEUE_MAX);
         return 5;
     }
-    for (i = 0; i <= DC_PEERS; ++i) { HANDLE t = CreateThread(NULL, 0, Peer, g_pipes[i], 0, NULL); if (t) CloseHandle(t); }
+    if (!StartPeerThreads()) {
+        InterlockedExchange(&g_failed, 1);
+        InterlockedExchange(&g_started, -1);
+        CloseStartupHandles(DC_PEERS + 1, DC_QUEUE_MAX);
+        return 8;
+    }
     InterlockedExchange(&g_started, 2);
+    InterlockedExchange(&g_peerState, 1);
     Plugin_Log("[debugconsole] service ready pid=%lu game_thread=%lu protocol=1 peers=4 interactive=1 queue=32", GetCurrentProcessId(), g_thread);
     argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     for (i = 1; argv && i < argc; ++i) if (!_wcsicmp(argv[i], L"-debug") || !_wcsicmp(argv[i], L"-plugin-console")) autoOpen = 1;
@@ -372,4 +406,8 @@ void DebugConsole_Start(void) {
     if (InterlockedCompareExchange(&g_started, 1, 0)) return;
     t = CreateThread(NULL, 0, StartDebugService, NULL, 0, NULL);
     if (t) CloseHandle(t);
+    else {
+        InterlockedExchange(&g_started, -1);
+        Plugin_Log("[debugconsole] service thread creation failed error=%lu", GetLastError());
+    }
 }
