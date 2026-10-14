@@ -7,6 +7,7 @@
 #include <string.h>
 #include "../console/console_cmd.h"
 #include "../hook/inline_hook.h"
+#include "../hook/inline_hook_batch.h"
 #include "MinHook.h"
 
 #define ACH_UI_NAME "enabled_achievement_icons"
@@ -72,7 +73,7 @@ static unsigned char __fastcall FrontTooltip(void* view, void* widget, CmdString
 int AchievementUi_Install(void) {
     IMAGE_DOS_HEADER* dos;
     IMAGE_NT_HEADERS64* nt;
-    void* first; void* second;
+    void* first; void* second; void* targets[2];
     int created = 0;
     if (g_uiInstalled) return 1;
     if (!AchievementCompat_Installed()) return 0;
@@ -85,12 +86,12 @@ int AchievementUi_Install(void) {
     created = 1;
     if (MH_CreateHook(second, FrontTooltip, (void**)&g_frontTooltip) != MH_OK) goto fail;
     created = 2;
-    if (MH_QueueEnableHook(first) != MH_OK || MH_QueueEnableHook(second) != MH_OK || MH_ApplyQueued() != MH_OK) goto fail;
+    targets[0] = first; targets[1] = second;
+    if (!InlineHook_EnableQueuedBatch(targets, 2)) goto fail;
     g_uiInstalled = 1; return 1;
 fail:
-    MH_QueueDisableHook(first); MH_DisableHook(first);
-    if (created == 2) { MH_QueueDisableHook(second); MH_DisableHook(second); }
-    MH_ApplyQueued(); MH_RemoveHook(first); if (created == 2) MH_RemoveHook(second); return 0;
+    targets[0] = first; targets[1] = second;
+    InlineHook_CleanupCreatedBatch(targets, created); return 0;
 }
 
 static long long __fastcall Status(CmdResult* out, CmdArgs* args) {

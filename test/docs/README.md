@@ -232,3 +232,7 @@ Array64记录和owner键的独立oracle、完整存储夹具及golden字节见[�
 ## 第十七批源码规范化
 
 共享owned kernel handle与日志Tail的读取/轮转/分段/异常检查见[tail三态回归](tail_handles.md)。目录回归及客户端自测保持，新客户端未部署。
+
+## 第十八批源码规范化
+
+三个安装器及单hook适配器的1019场景见[hook三态回归](hook_batch.md)。调用顺序/状态保持，不把best-effort或全局队列包装成原子事务；新DLL未部署。

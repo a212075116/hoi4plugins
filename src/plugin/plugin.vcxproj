@@ -133,6 +133,7 @@
     <ClInclude Include="SDK_RVA\crash_test\crash_test.h" />
     <ClInclude Include="SDK_RVA\effect\effect_gamedate.h" />
     <ClInclude Include="SDK_RVA\hook\inline_hook.h" />
+    <ClInclude Include="SDK_RVA\hook\inline_hook_batch.h" />
     <ClInclude Include="SDK_RVA\minihook\include\MinHook.h" />
   </ItemGroup>
 

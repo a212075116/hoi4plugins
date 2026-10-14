@@ -5,6 +5,7 @@
 #include "achievement_compat.h"
 #include "../console/console_cmd.h"
 #include "../hook/inline_hook.h"
+#include "../hook/inline_hook_batch.h"
 #include "MinHook.h"
 #include "achievement_source.h"
 
@@ -105,7 +106,7 @@ static __int64 __fastcall SourceLoad(__int64 manager, __int64 arg) {
 int AchievementSource_Install(void) {
     unsigned char* base = (unsigned char*)GetModuleHandleW(NULL);
     void* targets[3];
-    int created = 0, i;
+    int created = 0;
     if (g_sourceInstalled) return 1;
     if (!SourceHostSupported(base)) return 0;
     g_mountMemory = (void*)GetProcAddress((HMODULE)base, "?PHYSFS_mountMemory@@YAHPEBX_KP6AXPEAX@ZPEBD4H@Z");
@@ -119,14 +120,11 @@ int AchievementSource_Install(void) {
     ++created;
     if (MH_CreateHook(targets[2], SourceLoad, (void**)&g_loadDefinitions) != MH_OK) goto fail;
     ++created;
-    for (i = 0; i < 3; ++i) if (MH_QueueEnableHook(targets[i]) != MH_OK) goto fail;
-    if (MH_ApplyQueued() != MH_OK) goto fail;
+    if (!InlineHook_EnableQueuedBatch(targets, 3)) goto fail;
     g_sourceInstalled = 1;
     return 1;
 fail:
-    for (i = 0; i < created; ++i) { MH_QueueDisableHook(targets[i]); MH_DisableHook(targets[i]); }
-    MH_ApplyQueued();
-    for (i = 0; i < created; ++i) MH_RemoveHook(targets[i]);
+    InlineHook_CleanupCreatedBatch(targets, created);
     return 0;
 }
 

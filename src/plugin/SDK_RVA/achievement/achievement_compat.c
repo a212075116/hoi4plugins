@@ -4,6 +4,7 @@
 #include "achievement_compat.h"
 #include "../console/console_cmd.h"
 #include "../hook/inline_hook.h"
+#include "../hook/inline_hook_batch.h"
 #include "MinHook.h"
 
 #include "../common/plugin_log.h"
@@ -154,7 +155,7 @@ int AchievementCompat_Installed(void) { return g_installed != 0; }
 int AchievementCompat_Install(void) {
     IMAGE_DOS_HEADER* dos;
     IMAGE_NT_HEADERS64* nt;
-    void* targets[5]; int created = 0, i;
+    void* targets[5]; int created = 0;
     if (g_installed) return 1;
     g_base = (unsigned char*)GetModuleHandleW(NULL); dos = (IMAGE_DOS_HEADER*)g_base;
     if (!g_base || dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew <= 0 || dos->e_lfanew > 4096) return 0;
@@ -166,12 +167,10 @@ int AchievementCompat_Install(void) {
     if (MH_CreateHook(targets[2], Rebuild, (void**)&g_rebuild) != MH_OK) goto fail; ++created;
     if (MH_CreateHook(targets[3], Restore, (void**)&g_restore) != MH_OK) goto fail; ++created;
     if (MH_CreateHook(targets[4], Update, (void**)&g_update) != MH_OK) goto fail; ++created;
-    for (i = 0; i < 5; ++i) if (MH_QueueEnableHook(targets[i]) != MH_OK) goto fail;
-    if (MH_ApplyQueued() != MH_OK) goto fail;
+    if (!InlineHook_EnableQueuedBatch(targets, 5)) goto fail;
     InterlockedExchange(&g_installed, 1); return 1;
 fail:
-    for (i = 0; i < created; ++i) { MH_QueueDisableHook(targets[i]); MH_DisableHook(targets[i]); }
-    MH_ApplyQueued(); for (i = 0; i < created; ++i) MH_RemoveHook(targets[i]); return 0;
+    InlineHook_CleanupCreatedBatch(targets, created); return 0;
 }
 
 static long long __fastcall Status(CmdResult* out, CmdArgs* args) {
