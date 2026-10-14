@@ -2,7 +2,7 @@
 
 2026-10-14，第二十六批；本轮是跨模块审计和一项已证明多余依赖的修正，不是全目标完成声明。
 
-历史范围：本篇保留发现缺口时的旧状态；F2已由[第二十七批](iat_install.md)、F3由[第二十八批](bootstrap_registration.md)收口所列合同，F1仍未完成。
+历史范围：本篇保留发现缺口时的旧状态；F2已由[第二十七批](iat_install.md)、F3由[第二十八批](bootstrap_registration.md)收口所列合同；F1原生所有权仍未知，现按[收尾核对](normalization_closure.md)保留原实现及独立调查，不冒充已修复。
 
 ## 可执行检查
 

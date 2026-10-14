@@ -276,3 +276,5 @@ Array64记录和owner键的独立oracle、完整存储夹具及golden字节见[�
 ## 第二十八批注册组启动
 
 [F3完成汇总与重试](bootstrap_registration.md)：521启动场景，新版39942检查；4096算术hook重试组合/32768检查，两个恢复输出重现旧错误；实机八组目标/complete逐项核对。
+
+本次源码整理已收尾，最终状态与保留边界见[交付核对](normalization_closure.md)；历史批次记录保持原始测试范围。

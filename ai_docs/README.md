@@ -69,3 +69,5 @@ Array64已正式接入10个effect与1个trigger，使用[Array64单人交付说�
 | https://github.com/MyresMkG/HOI4-Mod-Injector | CRT 探测与时序策略的参考实现 |
 | https://github.com/Joey0x646576/nativeaot-function-calling-example | NativeAOT 注入原生进程（本项目评估后未采用） |
 | https://learn.microsoft.com/en-us/windows/win32/dlls/dllmain | DllMain 的 Windows 限制 |
+
+本次源码整理已收尾，最终状态与保留边界见[交付核对](01_工程与构建/源码规范化交付总结.md)；历史批次记录保持原始测试范围。
