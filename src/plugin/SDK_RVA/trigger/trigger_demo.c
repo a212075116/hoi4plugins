@@ -62,8 +62,9 @@ int TriggerDemo_Register(void)
     TriggerDef collision;
     int result;
     demo_true_fill(); demo_false_fill(); demo_scope_fill();
-    result = Trigger_RegistryRegisterAll(defs, 3);
-    if (result == 3) {
+    typedef char trigger_demo_count_valid[(sizeof(defs)/sizeof(defs[0])==TRIGGER_DEMO_COUNT)?1:-1];
+    result = Trigger_RegistryRegisterAll(defs, TRIGGER_DEMO_COUNT);
+    if (result == TRIGGER_DEMO_COUNT) {
         int before = Trigger_RegistryRegisteredCount();
         int repeat = Trigger_RegistryRegisterAll(defs, 3);
         int rejected;

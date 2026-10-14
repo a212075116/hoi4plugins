@@ -123,7 +123,7 @@ static EffectDef* g_dateEffectDefs[] = {
     &addhours_def
 };
 
-#define EFF_DATE_COUNT (int)(sizeof(g_dateEffectDefs) / sizeof(g_dateEffectDefs[0]))
+typedef char date_effect_count_valid[(sizeof(g_dateEffectDefs) / sizeof(g_dateEffectDefs[0]) == EFF_DATE_COUNT) ? 1 : -1];
 
 int EffectGameDate_Register(void)
 {

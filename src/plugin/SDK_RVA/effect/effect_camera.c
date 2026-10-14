@@ -159,7 +159,7 @@ static EffectDef* g_cameraEffectDefs[] = {
     &setcamupper_def
 };
 
-#define EFF_CAMERA_COUNT (int)(sizeof(g_cameraEffectDefs) / sizeof(g_cameraEffectDefs[0]))
+typedef char camera_effect_count_valid[(sizeof(g_cameraEffectDefs) / sizeof(g_cameraEffectDefs[0]) == EFF_CAMERA_COUNT) ? 1 : -1];
 
 int EffectCameras_Register(void)
 {

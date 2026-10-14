@@ -1206,6 +1206,19 @@ int Var64_RegisterLoadGameCommand(void)
 
 #include "variable64_language.inc"
 
+int Var64_LanguageBridgeReady(void)
+{
+    return g_var64OrigVarTextHandler != NULL;
+}
+
+int Var64_SyntaxHooksReady(void)
+{
+    return g_var64GameSyntaxHookReady && g_var64OrigGameSetExec != NULL
+        && g_var64OrigAddExec != NULL && g_var64OrigSubExec != NULL
+        && g_var64OrigMulExec != NULL && g_var64OrigDivExec != NULL
+        && g_var64OrigClampExec != NULL && g_var64OrigClearExec != NULL;
+}
+
 EFF_DEF(gamesetvar64, "set_variable64",
         "Sets a 64-bit script variable. Same syntax as set_variable.",
         "EFFECT_SET_VARIABLE64", &ExecVar64GameSyntax)
@@ -1250,7 +1263,7 @@ static const Var64EffectBinding g_var64EffectBindings[] = {
     { &gameclhvar64_def, gameclhvar64_fill, Var64_ClampHighVariable64Factory }
 };
 
-#define VAR64_EFFECT_COUNT (int)(sizeof(g_var64EffectBindings) / sizeof(g_var64EffectBindings[0]))
+typedef char var64_effect_count_valid[(sizeof(g_var64EffectBindings) / sizeof(g_var64EffectBindings[0]) == VAR64_EFFECT_COUNT) ? 1 : -1];
 
 static void Var64_InstallArithmeticHooks(void)
 {
@@ -1271,7 +1284,7 @@ static void Var64_InstallArithmeticHooks(void)
 
     if (img == NULL) return;
     for (i = 0; i < (int)(sizeof(bindings) / sizeof(bindings[0])); ++i) {
-        if (ConsoleCmd_IsReadable(img + bindings[i].rva, 16)) {
+        if (*bindings[i].original == NULL && ConsoleCmd_IsReadable(img + bindings[i].rva, 16)) {
             if (!InlineHook_InstallInto(img + bindings[i].rva, bindings[i].detour, (void**)bindings[i].original))
                 *bindings[i].original = NULL;
         }

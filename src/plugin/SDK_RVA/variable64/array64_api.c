@@ -174,9 +174,10 @@ done:
     a64_status(c,opname,name,status);free(record);free(journal);free(work);
 }
 
-static void* g_a64vt[10][26];
-static EffectDef g_a64defs[10];
+static void* g_a64vt[ARRAY64_EFFECT_COUNT][26];
+static EffectDef g_a64defs[ARRAY64_EFFECT_COUNT];
 static const char* g_a64names[]={"create_array64","append_array64","insert_array64","erase_array64","clear_array64","resize_array64","set_array_element64","set_array_element_native","recover_array64","log_array64"};
+typedef char array_effect_count_valid[(sizeof(g_a64names)/sizeof(g_a64names[0])==ARRAY64_EFFECT_COUNT)?1:-1];
 static void* a64_factory(int i){void* instance=((A64Factory)(a64_image()+0x341F60u))();if(instance)*(void**)instance=g_a64vt[i]+1;return instance;}
 static void* a64_tip(void* self,void* out,void* ctx,int i)
 {
@@ -201,7 +202,7 @@ int Array64_RegisterEffects(void)
     EffectExecFn executes[]={a64_exec0,a64_exec1,a64_exec2,a64_exec3,a64_exec4,a64_exec5,a64_exec6,a64_exec7,a64_exec8,a64_exec9};
     void* (*tips[])(void*,void*,void*)={a64_tip0,a64_tip1,a64_tip2,a64_tip3,a64_tip4,a64_tip5,a64_tip6,a64_tip7,a64_tip8,a64_tip9};
     int count=0;unsigned char* image=a64_image();if(!image||!Effect_RegistryReady())return 0;
-    for(int i=0;i<10;++i){
+    for(int i=0;i<ARRAY64_EFFECT_COUNT;++i){
         EffectDef* def=&g_a64defs[i];if(def->state==EFF_STATE_OK){++count;continue;}
         g_a64vt[i][0]=*(void**)(image+0x2775698u-8);
         for(int k=0;k<25;++k)g_a64vt[i][k+1]=*(void**)(image+0x2775698u+8*k);

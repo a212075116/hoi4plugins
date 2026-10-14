@@ -20,6 +20,7 @@
 #include "SDK_RVA/trigger/trigger_demo.h"
 #include "SDK_RVA/variable64/variable64.h"
 #include "SDK_RVA/variable64/array64_api.h"
+#include "plugin_registration.h"
 
 #include "file_redirect.h"
 #include "process_block.h"
@@ -129,6 +130,40 @@ static int ScanKnownArrays(void)
     return total;
 }
 
+static int RegisterLanguageStep(void)
+{
+    Var64_InstallLanguageBridge();
+    return Var64_LanguageBridgeReady();
+}
+
+static PluginRegistrationStep g_effectSteps[] = {
+    {"camera", EffectCameras_Register, EFF_CAMERA_COUNT, NULL, 0, 0},
+    {"date", EffectGameDate_Register, EFF_DATE_COUNT, NULL, 0, 0},
+    {"variable64", Var64_RegisterEffects, VAR64_EFFECT_COUNT, Var64_SyntaxHooksReady, 0, 0},
+    {"array64", Array64_RegisterEffects, ARRAY64_EFFECT_COUNT, NULL, 0, 0},
+    {"loadgame", Var64_RegisterLoadGameCommand, 1, NULL, 0, 0},
+    {"language", RegisterLanguageStep, 1, NULL, 0, 0}
+};
+
+static PluginRegistrationStep g_triggerSteps[] = {
+    {"demo", TriggerDemo_Register, TRIGGER_DEMO_COUNT, NULL, 0, 0},
+    {"array64", Array64_RegisterTriggers, ARRAY64_TRIGGER_COUNT, NULL, 0, 0}
+};
+
+static void RegisterPluginGroups(const char* kind, int (*ready)(void), PluginRegistrationStep* steps, int count)
+{
+    int round, i, complete = 0;
+    for (round = 0; round < 3000 && !complete; ++round) {
+        if (ready()) complete = PluginRegistration_Poll(steps, count);
+        if (!complete) Sleep(10);
+    }
+    for (i = 0; i < count; ++i) {
+        Plugin_Log("[plugin] %s group=%s result=%d/%d complete=%d poll=%d",
+            kind, steps[i].name, steps[i].last, steps[i].expected, steps[i].complete, round);
+    }
+    if (!complete) Plugin_Log("[plugin] %s registration incomplete after %d polls", kind, round);
+}
+
 static DWORD WINAPI PluginThread(LPVOID p)
 {
     int i;
@@ -152,53 +187,10 @@ static DWORD WINAPI PluginThread(LPVOID p)
 
     DebugConsole_Start();
 
-    {
-        int round;
-        int ok = 0;
-        int readyAt = -1;
-        for (round = 0; round < 3000 && !ok; ++round) {
-            if (Effect_RegistryReady()) {
-                if (readyAt < 0) {
-                    readyAt = round;
-                    Plugin_Log("[plugin] lexer ready at poll %d", round);
-                }
-                ok = (EffectCameras_Register() > 0);
-                if (ok) {
-                    Plugin_Log("[plugin] effects registered at poll %d, count=%d",
-                               round, Effect_RegistryRegisteredCount());
-                }
-                if (ok) {
-                    int nd = EffectGameDate_Register();
-                    Plugin_Log("[plugin] date effects registered: %d", nd);
-                }
-                if (ok) {
-                    int nv = Var64_RegisterEffects();
-                    Plugin_Log("[plugin] var64 effects registered: %d", nv);
-                    Plugin_Log("[plugin] array64 effects registered: %d", Array64_RegisterEffects());
-                }
-                if (ok) {
-                    int nl = Var64_RegisterLoadGameCommand();
-                    Plugin_Log("[plugin] loadgame command registered: %d", nl);
-                }
-                if (ok) {
-                    Var64_InstallLanguageBridge();
-                }
-            }
-            if (!ok) Sleep(10);
-        }
-        if (!ok) Plugin_Log("[plugin] gave up waiting for lexer (polls=%d)", round);
-    }
-
-    {
-        int round;
-        int registered = 0;
-        for (round = 0; round < 3000 && registered == 0; ++round) {
-            if (Trigger_RegistryReady()) registered = TriggerDemo_Register();
-            if (registered == 0) Sleep(10);
-        }
-        Plugin_Log("[plugin] triggers registered: %d/3 (poll=%d)", registered, round);
-        Plugin_Log("[plugin] array64 triggers registered: %d", Array64_RegisterTriggers());
-    }
+    RegisterPluginGroups("effects", Effect_RegistryReady, g_effectSteps,
+        (int)(sizeof(g_effectSteps) / sizeof(g_effectSteps[0])));
+    RegisterPluginGroups("triggers", Trigger_RegistryReady, g_triggerSteps,
+        (int)(sizeof(g_triggerSteps) / sizeof(g_triggerSteps[0])));
 
     for (i = 0; i < 300; ++i) {
         void* cur = NULL;

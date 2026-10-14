@@ -63,7 +63,7 @@ int main(void){int beforeStates;EffectDef* definitions[]={&gamesetvar64_def,&gam
  return 0;
 }
 '''.replace('EFFECT_HEADER',header.as_posix()).replace('REGISTRY',registry).replace('DEFINITIONS',definitions).replace('REGISTER',register)
-    fixture=fixture.replace('#include <stdio.h>','#include <stdio.h>\n#include <stdlib.h>')
+    fixture=fixture.replace('#include <stdio.h>','#include <stdio.h>\n#include <stdlib.h>\n#include "'+(source.parent/"variable64.h").as_posix()+'"')
     (output/'fixture.c').write_text(fixture,encoding='ascii')
     command=f'"{VCVARS}" >nul && cl /nologo /W3 /TC /O2 fixture.c /Fe:fixture.exe'
     build_process,build=execute('cmd /d /s /c "'+command+'"',output)
