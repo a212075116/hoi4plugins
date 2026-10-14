@@ -82,5 +82,6 @@
     <ClInclude Include="protocol.h" />
     <ClInclude Include="completion.h" />
     <ClInclude Include="command_catalog.h" />
+    <ClInclude Include="owned_kernel_handle.h" />
   </ItemGroup>
 </Project>

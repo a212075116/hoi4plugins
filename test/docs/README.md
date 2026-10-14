@@ -228,3 +228,7 @@ Array64记录和owner键的独立oracle、完整存储夹具及golden字节见[�
 ## 第十六批源码规范化
 
 命令目录查询的32普通场景与3异常所有权检查见[句柄三态回归](catalog_handles.md)。真实Query、受控WinAPI与分配失败；客户端归档未部署。
+
+## 第十七批源码规范化
+
+共享owned kernel handle与日志Tail的读取/轮转/分段/异常检查见[tail三态回归](tail_handles.md)。目录回归及客户端自测保持，新客户端未部署。

@@ -3,15 +3,10 @@
 #include <tlhelp32.h>
 #include <cstring>
 #include <utility>
-#include <memory>
+#include "owned_kernel_handle.h"
 
 namespace {
-struct KernelHandleCloser {
-    void operator()(HANDLE handle) const noexcept {
-        if (handle && handle != INVALID_HANDLE_VALUE) CloseHandle(handle);
-    }
-};
-using OwnedHandle = std::unique_ptr<void, KernelHandleCloser>;
+using ClientResource::OwnedHandle;
 }
 
 std::vector<std::string> CommandCatalog::Query(DWORD pid, const std::string& prefix, std::string& error) {

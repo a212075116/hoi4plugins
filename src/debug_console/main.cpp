@@ -1,6 +1,7 @@
 #include "protocol.h"
 #include "completion.h"
 #include "command_catalog.h"
+#include "owned_kernel_handle.h"
 #include <tlhelp32.h>
 #include <shlobj.h>
 #include <stdio.h>
@@ -155,16 +156,16 @@ struct Tail {
     }
     std::vector<std::string> Poll() {
         std::vector<std::string> rows;
-        HANDLE h = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-            NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-        if (h == INVALID_HANDLE_VALUE) return rows;
+        ClientResource::OwnedHandle h(CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL));
+        if (h.get() == INVALID_HANDLE_VALUE) return rows;
         BY_HANDLE_FILE_INFORMATION info; LARGE_INTEGER size;
-        if (!GetFileInformationByHandle(h, &info) || !GetFileSizeEx(h, &size)) { CloseHandle(h); return rows; }
+        if (!GetFileInformationByHandle(h.get(), &info) || !GetFileSizeEx(h.get(), &size)) { return rows; }
         uint64_t id = ((uint64_t)info.nFileIndexHigh << 32) | info.nFileIndexLow;
         bool changed = id != identity || info.dwVolumeSerialNumber != volume || (uint64_t)size.QuadPart < offset;
         if (!changed && !sentinel.empty()) {
             LARGE_INTEGER pos; pos.QuadPart = offset - sentinel.size(); char previous[32]; DWORD n;
-            changed = !SetFilePointerEx(h, pos, NULL, FILE_BEGIN) || !ReadFile(h, previous, (DWORD)sentinel.size(), &n, NULL) ||
+            changed = !SetFilePointerEx(h.get(), pos, NULL, FILE_BEGIN) || !ReadFile(h.get(), previous, (DWORD)sentinel.size(), &n, NULL) ||
                 n != sentinel.size() || memcmp(previous, sentinel.data(), n) != 0;
         }
         if (changed) {
@@ -172,9 +173,9 @@ struct Tail {
             identity = id; volume = info.dwVolumeSerialNumber; offset = 0; partial.clear(); sentinel.clear(); dropping = false;
         }
         LARGE_INTEGER pos; pos.QuadPart = offset;
-        if (!SetFilePointerEx(h, pos, NULL, FILE_BEGIN)) { CloseHandle(h); return rows; }
+        if (!SetFilePointerEx(h.get(), pos, NULL, FILE_BEGIN)) { return rows; }
         char buffer[65536]; DWORD n = 0;
-        if (ReadFile(h, buffer, sizeof(buffer), &n, NULL)) {
+        if (ReadFile(h.get(), buffer, sizeof(buffer), &n, NULL)) {
             DWORD consumed = 0;
             for (DWORD i = 0; i < n; ++i) {
                 char c = buffer[i]; consumed = i + 1;
@@ -200,7 +201,7 @@ struct Tail {
             sentinel.append(buffer, consumed);
             if (sentinel.size() > 32) sentinel.erase(0, sentinel.size() - 32);
         }
-        CloseHandle(h); return rows;
+        h.reset(); return rows;
     }
 };
 
