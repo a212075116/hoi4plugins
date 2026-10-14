@@ -38,6 +38,7 @@ console17回归三态、Release/Debug构建通过。
 初次函数提取器只支持static，公共FileRedirect_Install触发ValueError exit1；只在夹具提取文本补static，生产签名未改。
 初版将InterlockedCompareExchangePointer用于只读IAT快照，夹具11153断言失败、exit1；改为volatile读，CAS只在成功RW保护后执行。错误版本没有部署。
 原测试PID在候选部署前已结束，旧正常关闭驱动报exit1；句柄Wait返回终态后才继续新开独立CHI，不推测退出原因，不转入已暂缓调查。
+恢复版关闭请求返回False后，同一进程句柄已终态，故只续做最后重应用步骤。一次最终快照之后进程也结束，模块查询空输出触发JSONDecodeError exit1；再次确认终态后用无Frida的独立启动核对当前部署，已有快照/语义结果不重计为新测试。
 callback主体和PE遍历没有由故障夹具直接执行；实际源码保持字节不变，模块范围只读实测另列。
 部分安装不是卸载；不保证协调所有foreign模块保护竞争，也不保证cached状态检测检查后任意改写。
 F3和F1仍为下一批工作，F1不能未证明所有权就free。
