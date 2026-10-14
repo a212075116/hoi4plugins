@@ -18,6 +18,8 @@ new = 'RegisterPluginGroups("effects"' in text
 if new:
     support = text[text.index("static int RegisterLanguageStep("):text.index("static DWORD WINAPI PluginThread(")]
     begin = text.index('    RegisterPluginGroups("effects"', text.index("static DWORD WINAPI PluginThread("))
+    guard = text.rfind('    if (NativeAdapter_RegistryReady()) {', text.index("static DWORD WINAPI PluginThread("), begin)
+    if guard >= 0: begin = guard
 else:
     support = ""
     begin = text.index("    {\n        int round;\n        int ok = 0;", text.index("static DWORD WINAPI PluginThread("))
@@ -36,11 +38,13 @@ fixture = r'''
 #include <string.h>
 HEADERS
 static int calls[8],done[8],delay[8],expected[8]={4,5,7,10,1,1,3,1},ticks,readyDelay,hookDelay,syntaxReady,languageReady;
-static int checks,failed,duplicates,caseId,failuresLogged;
+static int checks,failed,duplicates,caseId,failuresLogged,i;
 #define CHECK(x) do{++checks;if(!(x)){++failed;printf("FAIL case=%d line=%d\n",caseId,__LINE__);}}while(0)
 void Plugin_Log(const char* fmt,...){if(strstr(fmt,"incomplete"))++failuresLogged;}
 void NativeAdapter_Report(const char* name,int available,const char* reason){}
 void NativeAdapter_CameraRegistered(int commands,int effects){}
+int NativeAdapter_RegistryReady(void){return 1;}
+const char* NativeAdapter_RegistryDiagnostic(void){return "fixture";}
 static int Effect_RegistryReady(void){return ticks>=readyDelay;}static int Trigger_RegistryReady(void){return ticks>=readyDelay;}
 static void Pause(DWORD n){CHECK(n==10);++ticks;}
 #define Sleep Pause

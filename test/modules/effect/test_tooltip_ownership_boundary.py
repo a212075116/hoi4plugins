@@ -25,8 +25,12 @@ for name, rva, mock in [('GetParamFn', 'GETPARAM', 'GetParam'), ('ParamCtorFn', 
                         ('ParamDtorFn', 'PARAM_DTOR', 'Dtor'), ('PackKeyFn', 'PACKKEY', 'Pack'),
                         ('FormatFn', 'FORMAT', 'Format'), ('StrAppendFn', 'STR_APPEND', 'Append')]:
     old = f'(({name})(img + RVA_EFF_{rva}))'
+    if 'NativeAdapter_RegistryRva(' in body:
+        symbols={'GETPARAM':'NS_PARAM_GET','PARAM_CTOR':'NS_PARAM_CTOR','PARAM_DTOR':'NS_PARAM_DTOR','PACKKEY':'NS_TEXT_PACK','FORMAT':'NS_TEXT_FORMAT','STR_APPEND':'NS_TEXT_APPEND'}
+        old=f'(({name})(img + NativeAdapter_RegistryRva({symbols[rva]})))'
     assert body.count(old) == 1, old
     body = body.replace(old, mock)
+body=re.sub(r'NativeAdapter_RegistryRva\(NS_[A-Z_]+\)','0',body)
 fixture = r'''
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,6 +42,7 @@ fixture = r'''
 #define RVA_EFF_PARAM_TAG 0
 static unsigned char image[16];
 static unsigned char* Effect_GetModuleBase(void){return image;}
+static int NativeAdapter_RegistryReady(void){return 1;}
 static int NativeMemory_IsReadable(const void* p,size_t n){return p!=NULL;(void)n;}
 static int g_hasPendingTooltip;
 static char g_pendingTooltipText[192];

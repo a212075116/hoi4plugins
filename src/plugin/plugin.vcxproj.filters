@@ -41,6 +41,7 @@
   <ItemGroup>
     <ClCompile Include="plugin_main.c" />
     <ClCompile Include="adapter\native_adapter.cpp"><Filter>adapter</Filter></ClCompile>
+    <ClCompile Include="adapter\script_command.c"><Filter>adapter</Filter></ClCompile>
     <ClCompile Include="SDK_RVA\common\log.c"><Filter>SDK_RVA\common</Filter></ClCompile>
     <ClCompile Include="SDK_RVA\common\native_memory.c"><Filter>SDK_RVA\common</Filter></ClCompile>
     <ClCompile Include="SDK_RVA\console\console_cmd.c">

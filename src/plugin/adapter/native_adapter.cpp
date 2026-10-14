@@ -152,7 +152,7 @@ bool ParseProfile(const std::vector<BYTE>& bytes,const std::string& sha,Profile&
     return p.camera>=8 && p.camera<0x10000 && p.camera%8==0 && p.height>=4 && p.height<0x10000 && p.minimum>=4 && p.minimum<0x10000 && p.maximum>=4 && p.maximum<0x10000 &&
            p.height%4==0 && p.minimum%4==0 && p.maximum%4==0 && p.height!=p.minimum && p.height!=p.maximum && p.minimum!=p.maximum;
 }
-bool FindTable(const char* name,ULONGLONG preferred,DWORD& table) {
+bool FindTable(const char* name,ULONGLONG preferred,DWORD& table,unsigned minimumSlots=4) {
     std::string decorated=std::string(".?AV")+name+"@@";decorated.push_back(0);
     std::set<DWORD> descriptors,locators,tables;
     for (const auto& s:g_sections) for(size_t i=16;i+decorated.size()<=s.bytes;++i)
@@ -166,11 +166,11 @@ bool FindTable(const char* name,ULONGLONG preferred,DWORD& table) {
     }
     for (const auto& s:g_sections) {
         if (s.flags&(IMAGE_SCN_MEM_WRITE|IMAGE_SCN_MEM_EXECUTE)) continue;
-        for(size_t i=0;i+40<=s.bytes;i+=8) {
+        for(size_t i=0;i+8+minimumSlots*8<=s.bytes;i+=8) {
             ULONGLONG col=0;memcpy(&col,g_file.data()+s.raw+i,8);
             if (col<preferred || col-preferred>MAXDWORD || !locators.count((DWORD)(col-preferred))) continue;
             bool ok=true;
-            for(int j=0;j<4;++j) {ULONGLONG fn;memcpy(&fn,g_file.data()+s.raw+i+8+j*8,8);if(fn<preferred || fn-preferred>MAXDWORD || !Execute((DWORD)(fn-preferred)))ok=false;}
+            for(unsigned j=0;j<minimumSlots;++j) {ULONGLONG fn;memcpy(&fn,g_file.data()+s.raw+i+8+j*8,8);if(fn<preferred || fn-preferred>MAXDWORD || !Execute((DWORD)(fn-preferred)))ok=false;}
             if(ok) tables.insert(s.rva+(DWORD)i+8);
         }
     }
@@ -222,6 +222,7 @@ bool LoadedTable(DWORD table) {
     const BYTE* col=FileAt((DWORD)(disk-g_preferred),24);BYTE actual[24];
     return col && Read((void*)loaded,actual,24) && !memcmp(col,actual,24);
 }
+#include "script_bindings.inc"
 bool Capture(NativeCameraSnapshot& out,bool full,bool validateValues=true) {
     if(!g_bound) {strcpy_s(out.status,g_reason.c_str());return false;}
     if(full || g_roots.empty()) if(!ScanRoots()) {strcpy_s(out.status,g_reason.c_str());return false;}
@@ -258,7 +259,7 @@ DWORD WINAPI Monitor(void*) {
         if(lastRead!=s.status) {char why[256];sprintf_s(why,"%s height=%.6g limits=[%d,%d]",s.status,s.height,s.minimum,s.maximum);NativeAdapter_Report("camera.read",ok,why);lastRead=s.status;}
         bool recoverable=!strcmp(s.status,"INVALID_VALUES") && NativeAdapter_CameraObject()!=nullptr;
         bool writing=(ok || recoverable) && NativeAdapter_CameraWriteAllowed() && g_commands==3 && g_effects==4;
-        std::string reason=writing?"CURRENT_BUILD_CONTRACT_AND_REGISTRATION_READY":(!NativeAdapter_CameraWriteAllowed()?"WRITE_CONTRACT_NOT_APPROVED":(!ok?s.status:"REGISTRATION_PENDING_OR_FAILED"));
+        std::string reason=writing?"CURRENT_BUILD_CONTRACT_AND_REGISTRATION_READY":(!NativeAdapter_CameraWriteAllowed()?"WRITE_CONTRACT_NOT_APPROVED":(!g_scriptReady?"SCRIPT_BINDINGS_UNAVAILABLE":(!ok?s.status:"REGISTRATION_PENDING_OR_FAILED")));
         if(lastWrite!=reason) {NativeAdapter_Report("camera.write",writing,reason.c_str());lastWrite=reason;}
         Sleep(1000);
     }
@@ -294,10 +295,22 @@ int NativeAdapter_Initialize(void) {
         NativeAdapter_Report("camera.binding",g_bound,g_reason.c_str());
         char summary[160];sprintf_s(summary,"ingame=0x%X frontend=0x%X getter=0x%X slot=%u",g_binding.ingame,g_binding.frontend,g_binding.getter,g_binding.slot);
         if(g_bound)NativeAdapter_Report("camera.binding.details",1,summary);
+        std::string cameraReason=g_reason;
+        InitializeScriptBindings();
+        g_reason=cameraReason;
+        NativeAdapter_Report("script.bindings",g_scriptReady,g_scriptReason.c_str());
     } catch(...) {g_bound=false;g_reason="ADAPTER_INITIALIZATION_EXCEPTION";NativeAdapter_Report("camera.binding",0,g_reason.c_str());}
     return g_legacy?1:0;
 }
 int NativeAdapter_LegacyAllowed(void) {return g_legacy?1:0;}
+int NativeAdapter_RegistryReady(void) {return InterlockedCompareExchange(&g_prepared,0,0) && g_scriptReady;}
+unsigned int NativeAdapter_RegistryRva(unsigned int symbol) {return NativeAdapter_RegistryReady() && symbol<NS_SYMBOL_COUNT?g_scriptValues[symbol]:0;}
+unsigned int NativeAdapter_StaticTokenCount(void) {return NativeAdapter_RegistryReady()?g_staticTokenCount:0;}
+int NativeAdapter_ScriptTemplate(int kind,NativeScriptTemplate* out) {
+    if(!out || kind<0 || kind>3 || !NativeAdapter_RegistryReady())return 0;
+    *out=g_scriptTemplates[kind];return 1;
+}
+const char* NativeAdapter_RegistryDiagnostic(void) {return g_scriptReason.c_str();}
 int NativeAdapter_CameraWriteAllowed(void) {return g_legacy && g_bound && g_profile.camera==0x750 && g_profile.height==0x69c && g_profile.minimum==0x6d0 && g_profile.maximum==0x6d4;}
 const char* NativeAdapter_Diagnostic(void) {return g_reason.c_str();}
 void NativeAdapter_Report(const char* name,int available,const char* reason) {

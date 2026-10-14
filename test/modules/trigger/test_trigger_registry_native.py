@@ -65,10 +65,11 @@ int main(void){
  expect("empty_batch",!Trigger_RegistryRegisterAll(NULL,3)&&!Trigger_RegistryRegisterAll(NULL,0));
  instance[88]=1;Trigger_BuildTooltip(instance,text,(void*)1,0,"UNIT_TRIGGER_TEXT");expect("tooltip_yes",strcmp(stringText(text),"UNIT_TRIGGER_TEXT = yes\n")==0);if(*(size_t*)(text+24)>15)free(*(void**)text);
  Trigger_BuildTooltip(instance,text,(void*)1,1,"UNIT_TRIGGER_TEXT");expect("tooltip_inversion",strcmp(stringText(text),"UNIT_TRIGGER_TEXT = no\n")==0);if(*(size_t*)(text+24)>15)free(*(void**)text);
+ g_scriptFixtureReady=0;expect("binding_ready_gate",!Trigger_RegistryReady());expect("binding_factory_gate",Trigger_NewInstance(image)==NULL);g_scriptFixtureReady=1;
  printf("checks=%d passed=%d failed=%d\n",checks,checks-failures,failures);return failures?1:0;
 }
 '''
-(out/'fixture.c').write_text(prefix+'\n#include "'+source.as_posix()+'"\n'+body,encoding='ascii')
+(out/'fixture.c').write_text(prefix+'\n#include \"'+(ROOT/'test/lib/native_script_bindings_fixture.h').as_posix()+'\"\n#define RVA_DYNAMIC_COUNT 0x035E1ACCu\n#define RVA_DYNAMIC_TOKENS 0x035E1AC0u\n'+'\n#include "'+source.as_posix()+'"\n'+body,encoding='ascii')
 vc=r'C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat'
 include=(ROOT/'src/plugin/SDK_RVA/console').as_posix()
 (out/'compile.cmd').write_text('@echo off\r\ncall "'+vc+'" >nul\r\ncl /nologo /W3 /TC /I"'+include+'" fixture.c /Fe:fixture.exe >compile.stdout.txt 2>compile.stderr.txt\r\nexit /b %errorlevel%\r\n',encoding='ascii')

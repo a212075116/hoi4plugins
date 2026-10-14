@@ -50,11 +50,12 @@ int main(void){
  v[104]=0;expect("unset_scalar_parameter",!val_eval(v,ctx));memset(v,0,sizeof(v));*(int*)(v+504)=14581;expect("empty_block",!Trigger_EvaluateVariable(v,ctx));
  {int tokens[]={467,468,14578,14579,14580,14581};long long values[]={(-9223372036854775807LL-1),-1,0,1,9223372036854775807LL};int ok=1;
   for(int i=0;i<5;i++)for(int j=0;j<5;j++)for(int k=0;k<6;k++){long long l=values[i],r=values[j];int want=k==0?l>r:k==1?l<r:k==2?l!=r:k==3?l<=r:k==4?l==r:l>=r;if(Trigger_CompareRaw(l,r,tokens[k])!=want)ok=0;}expect("150_extreme_comparisons",ok);}
+ g_scriptFixtureReady=0;expect("binding_scope_gate",!Trigger_ScopeView(ctx,&view));expect("binding_typed_factory_gate",Trigger_NewTypedInstance(&val_def)==NULL);g_scriptFixtureReady=1;
  printf("checks=%d passed=%d failed=%d\n",checks,checks-failures,failures);return failures?1:0;
 }
 '''
 src=(pathlib.Path(sys.argv[2]).resolve() if len(sys.argv)>2 else ROOT/'src/plugin/SDK_RVA/trigger/trigger_reg.c').as_posix()
-(out/'fixture.c').write_text(parts['prefix']+'\n#include "'+src+'"\n'+body+extra,encoding='ascii')
+(out/'fixture.c').write_text(parts['prefix']+'\n#include \"'+(ROOT/'test/lib/native_script_bindings_fixture.h').as_posix()+'\"\n#define RVA_DYNAMIC_COUNT 0x035E1ACCu\n#define RVA_DYNAMIC_TOKENS 0x035E1AC0u\n'+'\n#include "'+src+'"\n'+body+extra,encoding='ascii')
 vc=r'C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat';inc=(ROOT/'src/plugin/SDK_RVA/console').as_posix()
 (out/'compile.cmd').write_text('@echo off\r\ncall "'+vc+'" >nul\r\ncl /nologo /W3 /TC /I"'+inc+'" fixture.c /Fe:fixture.exe >compile.stdout.txt 2>compile.stderr.txt\r\nexit /b %errorlevel%\r\n',encoding='ascii')
 p=subprocess.run(['cmd.exe','/c',str(out/'compile.cmd')],cwd=out,capture_output=True)

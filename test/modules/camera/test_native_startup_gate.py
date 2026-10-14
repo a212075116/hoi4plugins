@@ -15,7 +15,7 @@ prefix=r'''
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
-static int legacy,known,initialized,viewer,monitor,noCamera,cameraCalls,partialProcess,processDisabled;
+static int legacy,known,initialized,viewer,monitor,noCamera,cameraCalls,partialProcess,processDisabled,noScript;
 typedef struct {const char* name;int(*run)(void);int expected;int(*ready)(void);int complete;int last;} PluginRegistrationStep;
 static PluginRegistrationStep g_effectSteps[6]={{"camera",NULL,4,NULL,0,0}},g_triggerSteps[2];
 #define RVA_GS_GLOBAL 0
@@ -27,6 +27,9 @@ static void Plugin_Log(const char* fmt,...){}
 static int NativeAdapter_Initialize(void){++initialized;return known;}
 static int NativeAdapter_LegacyAllowed(void){return known;}
 static int NativeAdapter_CameraWriteAllowed(void){return known&&!noCamera;}
+static int NativeAdapter_RegistryReady(void){return known&&!noScript;}
+static const char* NativeAdapter_RegistryDiagnostic(void){return "REGISTRY_FIXTURE_UNAVAILABLE";}
+static int NativeAdapter_RegisterScriptDiagnostic(void){return 1;}
 static const char* NativeAdapter_Diagnostic(void){return "fixture";}
 static void NativeAdapter_Report(const char* n,int ok,const char* r){}
 static void NativeAdapter_StartMonitor(void){++monitor;}
@@ -47,13 +50,13 @@ for name in ['AchievementSource_Install','AchievementCompat_Install','Achievemen
     prefix+='static int '+name+'(void){++legacy;return '+('3' if name=='Camera_RegisterCommands' else '1')+';}\n'
 prefix+='static int Camera_RegisterCommands(void){++legacy;++cameraCalls;return 3;}\n'
 main=r'''
-int main(int argc,char** argv){known=argc>1;noCamera=known&&!strcmp(argv[1],"known-no-camera");partialProcess=known&&!strcmp(argv[1],"known-partial-process");PluginThread(NULL);printf("known=%d legacy_calls=%d initialized=%d viewer=%d monitor=%d camera_commands=%d camera_expected=%d process_disabled=%d\n",known,legacy,initialized,viewer,monitor,cameraCalls,g_effectSteps[0].expected,processDisabled);return !known&&legacy?1:0;}
+int main(int argc,char** argv){known=argc>1;noCamera=known&&!strcmp(argv[1],"known-no-camera");noScript=known&&!strcmp(argv[1],"known-no-script");partialProcess=known&&!strcmp(argv[1],"known-partial-process");PluginThread(NULL);printf("known=%d legacy_calls=%d initialized=%d viewer=%d monitor=%d camera_commands=%d camera_expected=%d process_disabled=%d\n",known,legacy,initialized,viewer,monitor,cameraCalls,g_effectSteps[0].expected,processDisabled);return !known&&legacy?1:0;}
 '''
 (out/'gate.c').write_text(prefix+body+main,encoding='ascii')
 vc='C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Auxiliary/Build/vcvars64.bat'
 compile=f'"{vc}" >nul && cl /nologo /W3 /TC /O2 gate.c /Fe:gate.exe'
 records=[]
-for command,shell in [(compile,True),([str(out/'gate.exe')],False),([str(out/'gate.exe'),'known'],False),([str(out/'gate.exe'),'known-no-camera'],False),([str(out/'gate.exe'),'known-partial-process'],False)]:
+for command,shell in [(compile,True),([str(out/'gate.exe')],False),([str(out/'gate.exe'),'known'],False),([str(out/'gate.exe'),'known-no-camera'],False),([str(out/'gate.exe'),'known-partial-process'],False),([str(out/'gate.exe'),'known-no-script'],False)]:
     p=subprocess.run(command,shell=shell,cwd=out,capture_output=True)
     records.append(dict(command=command,stdout=p.stdout.decode('utf-8',errors='replace'),stderr=p.stderr.decode('utf-8',errors='replace'),exit=p.returncode))
     if command==compile and p.returncode:break

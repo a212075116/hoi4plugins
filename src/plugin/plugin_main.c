@@ -221,10 +221,23 @@ static DWORD WINAPI PluginThread(LPVOID p)
         g_effectSteps[0].complete = 1;
     }
 
+    if (NativeAdapter_RegistryReady()) {
     RegisterPluginGroups("effects", Effect_RegistryReady, g_effectSteps,
         (int)(sizeof(g_effectSteps) / sizeof(g_effectSteps[0])));
     RegisterPluginGroups("triggers", Trigger_RegistryReady, g_triggerSteps,
         (int)(sizeof(g_triggerSteps) / sizeof(g_triggerSteps[0])));
+    } else {
+        for (i = 0; i < 6; ++i) {
+            char capability[128];
+            _snprintf_s(capability, sizeof(capability), _TRUNCATE, "registration.effects.%s", g_effectSteps[i].name);
+            NativeAdapter_Report(capability, 0, NativeAdapter_RegistryDiagnostic());
+        }
+        for (i = 0; i < 2; ++i) {
+            char capability[128];
+            _snprintf_s(capability, sizeof(capability), _TRUNCATE, "registration.triggers.%s", g_triggerSteps[i].name);
+            NativeAdapter_Report(capability, 0, NativeAdapter_RegistryDiagnostic());
+        }
+    }
     NativeAdapter_CameraRegistered(0, g_effectSteps[0].expected > 0 && g_effectSteps[0].complete ? g_effectSteps[0].last : 0);
 
     for (i = 0; i < 300; ++i) {
@@ -282,6 +295,7 @@ static DWORD WINAPI PluginThread(LPVOID p)
     Plugin_Log("[plugin] AchievementUi_RegisterCommands -> %d", ui);
     NativeAdapter_Report("commands.achievement", source == 2 && compat == 1 && ui == 1, source == 2 && compat == 1 && ui == 1 ? "ALL_FOUR_COMMANDS_REGISTERED" : "REGISTRATION_INCOMPLETE");
     DebugConsole_RegisterCommands();
+    Plugin_Log("[plugin] NativeAdapter_RegisterScriptDiagnostic -> %d", NativeAdapter_RegisterScriptDiagnostic());
 
     {
         int round;

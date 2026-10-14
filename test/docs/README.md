@@ -284,3 +284,5 @@ Array64记录和owner键的独立oracle、完整存储夹具及golden字节见[�
 第一步[摄像机只读适配器](camera_read_adapter.md)已交付：自动表/根/getter定位，当前CHI与菜单实测；未接入生产DLL。
 
 生产闭环见[原生摄像机适配测试](native_camera_adapter.md)，包含101原生检查、启动门、实机及回滚，不再仅外部原型。
+
+第二轮[脚本注册基础绑定](script_bindings.md)已迁移模板/工厂及相关地址管理；不同映像的迁移候选默认禁用，其他业务仍需适配。

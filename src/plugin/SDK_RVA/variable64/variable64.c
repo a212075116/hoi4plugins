@@ -215,8 +215,8 @@ static int Var64_ResolveGameVariableEx(void* self, void* ctx, long long* outValu
 
     if (outValue != NULL) {
         *outValue = 0;
-        if (ConsoleCmd_IsReadable(img + RVA_EFF_GETPARAM, 16)) {
-            ((Var64GetParamFn)(img + RVA_EFF_GETPARAM))((void*)(p + 296), outValue, ctx, 0,
+        if (NativeAdapter_RegistryReady() && ConsoleCmd_IsReadable(img + NativeAdapter_RegistryRva(NS_PARAM_GET), 16)) {
+            ((Var64GetParamFn)(img + NativeAdapter_RegistryRva(NS_PARAM_GET)))((void*)(p + 296), outValue, ctx, 0,
                                                            (void*)(long long)keepFraction);
         }
     }
@@ -997,8 +997,8 @@ static int Var64_ReadParamValue(void* self, void* ctx, unsigned int valueOff,
     *out = 0;
     if (!ConsoleCmd_IsReadable(p + flagOff, 1)) return 0;
     if (*(unsigned char*)(p + flagOff) == 0) return 0;
-    if (!ConsoleCmd_IsReadable(img + RVA_EFF_GETPARAM, 16)) return 0;
-    ((Var64GetParamFn)(img + RVA_EFF_GETPARAM))((void*)(p + valueOff), out, ctx, 0, (void*)0);
+    if (!NativeAdapter_RegistryReady() || !ConsoleCmd_IsReadable(img + NativeAdapter_RegistryRva(NS_PARAM_GET), 16)) return 0;
+    ((Var64GetParamFn)(img + NativeAdapter_RegistryRva(NS_PARAM_GET)))((void*)(p + valueOff), out, ctx, 0, (void*)0);
     return 1;
 }
 

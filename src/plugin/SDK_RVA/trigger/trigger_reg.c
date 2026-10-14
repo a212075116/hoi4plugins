@@ -7,31 +7,31 @@
 #include "../common/native_string.h"
 #include "trigger_reg.h"
 
-#define RVA_TRIGGER_MAP 0x03330050u
-#define RVA_REGISTER_TRIGGER 0x00550970u
-#define RVA_ALWAYS_VT 0x0278A3A0u
-#define RVA_ALWAYS_ENTRY_VT 0x027A14D8u
-#define RVA_ALWAYS_FACTORY 0x003E32B0u
-#define RVA_ALWAYS_PARSE 0x013A2430u
-#define RVA_ALWAYS_EVAL 0x003CFD80u
-#define RVA_GAME_ALLOC 0x021C9AF0u
-#define RVA_GAME_FREE 0x021C9B00u
-#define RVA_ADD_TOKEN 0x024BB460u
-#define RVA_LEXER_INIT 0x035E1AB0u
-#define RVA_LEXER_SYNC 0x035E1AB1u
-#define RVA_STATIC_TOKENS 0x0338D170u
-#define STATIC_TOKEN_COUNT 10765
-#define RVA_DYNAMIC_TOKENS 0x035E1AC0u
-#define RVA_DYNAMIC_COUNT 0x035E1ACCu
-#define RVA_PACK_KEY 0x02245E60u
-#define RVA_FORMAT_TEXT 0x010E48A0u
-#define RVA_APPEND_TEXT 0x00129C10u
-#define RVA_VALUE_VT 0x027915A0u
-#define RVA_VALUE_ENTRY_VT 0x027A0BC0u
-#define RVA_VALUE_FACTORY 0x003E6A70u
-#define RVA_VARIABLE_VT 0x02799320u
-#define RVA_VARIABLE_ENTRY_VT 0x0279FF90u
-#define RVA_VARIABLE_FACTORY 0x003E3E10u
+#include "../../adapter/native_adapter.h"
+
+#define RVA_TRIGGER_MAP NativeAdapter_RegistryRva(NS_TRIGGER_MAP)
+#define RVA_REGISTER_TRIGGER NativeAdapter_RegistryRva(NS_TRIGGER_REGISTER)
+#define RVA_GAME_ALLOC NativeAdapter_RegistryRva(NS_GAME_ALLOC)
+#define RVA_GAME_FREE NativeAdapter_RegistryRva(NS_GAME_FREE)
+#define RVA_ADD_TOKEN NativeAdapter_RegistryRva(NS_ADD_TOKEN)
+#define RVA_LEXER_INIT NativeAdapter_RegistryRva(NS_LEXER_INIT)
+#define RVA_LEXER_SYNC NativeAdapter_RegistryRva(NS_LEXER_SYNC)
+#define RVA_STATIC_TOKENS NativeAdapter_RegistryRva(NS_STATIC_TOKENS)
+#define STATIC_TOKEN_COUNT NativeAdapter_StaticTokenCount()
+#define RVA_PACK_KEY NativeAdapter_RegistryRva(NS_TEXT_PACK)
+#define RVA_FORMAT_TEXT NativeAdapter_RegistryRva(NS_TEXT_FORMAT)
+#define RVA_APPEND_TEXT NativeAdapter_RegistryRva(NS_TEXT_APPEND)
+#define RVA_ALWAYS_VT Trigger_TemplateField(0, 0)
+#define RVA_ALWAYS_ENTRY_VT Trigger_TemplateField(0, 1)
+#define RVA_ALWAYS_FACTORY Trigger_TemplateField(0, 2)
+#define RVA_ALWAYS_PARSE Trigger_TemplateField(0, 3)
+#define RVA_ALWAYS_EVAL Trigger_TemplateField(0, 4)
+#define RVA_VALUE_VT Trigger_TemplateField(1, 0)
+#define RVA_VALUE_ENTRY_VT Trigger_TemplateField(1, 1)
+#define RVA_VALUE_FACTORY Trigger_TemplateField(1, 2)
+#define RVA_VARIABLE_VT Trigger_TemplateField(2, 0)
+#define RVA_VARIABLE_ENTRY_VT Trigger_TemplateField(2, 1)
+#define RVA_VARIABLE_FACTORY Trigger_TemplateField(2, 2)
 
 #include "../common/plugin_log.h"
 extern int Var64_ReadStoredContainerRaw(void* container, const char* name, long long* out);
@@ -53,15 +53,26 @@ typedef struct TriggerTemplate {
     int slots;
 } TriggerTemplate;
 
+static unsigned int Trigger_TemplateField(int kind, int field)
+{
+    NativeScriptTemplate t;
+    if (kind < 0 || kind > 2 || !NativeAdapter_ScriptTemplate(kind + 1, &t)) return 0;
+    switch (field) {
+        case 0: return t.vt;
+        case 1: return t.entryVt;
+        case 2: return t.factory;
+        case 3: return t.parse;
+        case 4: return t.eval;
+        default: return 0;
+    }
+}
+
 static int Trigger_Template(int kind, TriggerTemplate* out)
 {
-    static const TriggerTemplate templates[] = {
-        {RVA_ALWAYS_VT, RVA_ALWAYS_ENTRY_VT, RVA_ALWAYS_FACTORY, RVA_ALWAYS_PARSE, RVA_ALWAYS_EVAL, 23},
-        {RVA_VALUE_VT, RVA_VALUE_ENTRY_VT, RVA_VALUE_FACTORY, 0x013A2690u, 0x013A2180u, 26},
-        {RVA_VARIABLE_VT, RVA_VARIABLE_ENTRY_VT, RVA_VARIABLE_FACTORY, 0x0054AE70u, 0x003D0BB0u, 23}
-    };
-    if (out == NULL || kind < 0 || kind > TRG_TEMPLATE_VARIABLE) return 0;
-    *out = templates[kind];
+    NativeScriptTemplate t;
+    if (out == NULL || kind < 0 || kind > TRG_TEMPLATE_VARIABLE || !NativeAdapter_ScriptTemplate(kind + 1, &t)) return 0;
+    out->vt=t.vt; out->entryVt=t.entryVt; out->factory=t.factory;
+    out->parse=t.parse; out->eval=t.eval; out->slots=(int)t.slots;
     return 1;
 }
 
@@ -85,6 +96,7 @@ int Trigger_ValidName(const char* name)
 
 int Trigger_RegistryReady(void)
 {
+    if (!NativeAdapter_RegistryReady()) return 0;
     unsigned char* img = Trigger_Image();
     unsigned char* map;
     void* head;
@@ -131,6 +143,7 @@ static int Trigger_StaticTokenId(int id)
 
 void* Trigger_NewInstance(void* vt)
 {
+    if (!NativeAdapter_RegistryReady()) return NULL;
     unsigned char* img = Trigger_Image();
     void* instance;
     if (img == NULL || vt == NULL || !NativeMemory_IsReadable(img + RVA_ALWAYS_FACTORY, 16)) return NULL;
@@ -153,14 +166,15 @@ void* Trigger_NewTypedInstance(TriggerDef* def)
 
 int Trigger_ScopeView(void* context, TriggerScopeView* out)
 {
+    if (!NativeAdapter_RegistryReady()) return 0;
     unsigned char* img = Trigger_Image();
     typedef unsigned int (__fastcall *ScopeMaskFn)(void*);
     if (out == NULL) return 0;
     out->nativeContext = NULL; out->mask = 0;
     if (img == NULL || !NativeMemory_IsReadable(context, 176)
-        || !NativeMemory_IsReadable(img + 0x00537D90u, 16)) return 0;
+        || !NativeMemory_IsReadable(img + NativeAdapter_RegistryRva(NS_SCOPE_MASK), 16)) return 0;
     out->nativeContext = context;
-    out->mask = ((ScopeMaskFn)(img + 0x00537D90u))(context);
+    out->mask = ((ScopeMaskFn)(img + NativeAdapter_RegistryRva(NS_SCOPE_MASK)))(context);
     return 1;
 }
 
@@ -176,12 +190,12 @@ static int Trigger_HasTemporaryOperand(unsigned char* descriptor, void* context)
     typedef unsigned char (__fastcall *ContainsFn)(void*, void*);
     if (descriptor[14]) return 1;
     if (*(int*)(descriptor + 100) != 0) return 0;
-    temporary = ((TemporaryFn)(img + 0x0054F730u))();
+    temporary = ((TemporaryFn)(img + NativeAdapter_RegistryRva(NS_TEMPORARY)))();
     if (temporary == NULL) return 0;
-    ((NameFn)(img + 0x005454A0u))(descriptor, name, context, *(void**)(descriptor + 160));
+    ((NameFn)(img + NativeAdapter_RegistryRva(NS_PARAM_NAME)))(descriptor, name, context, *(void**)(descriptor + 160));
     view.data = NativeString_Data((const NativeString*)name);
     view.size = *(unsigned long long*)(name + 16);
-    found = ((ContainsFn)(img + 0x00BC8D20u))(temporary, &view) != 0;
+    found = ((ContainsFn)(img + NativeAdapter_RegistryRva(NS_CONTAINS)))(temporary, &view) != 0;
     Trigger_FreeString(name, img);
     return found;
 }
@@ -224,6 +238,7 @@ static int Trigger_HasDynamicBinding(void* container, const char* name, size_t l
 
 int Trigger_ReadRawParameter(void* self, const TriggerScopeView* scope, unsigned int offset, long long* out)
 {
+    if (!NativeAdapter_RegistryReady()) return 0;
     unsigned char* img = Trigger_Image();
     unsigned char* descriptor;
     typedef long long* (__fastcall *ParamFn)(void*, long long*, void*, void*, unsigned char);
@@ -243,14 +258,14 @@ int Trigger_ReadRawParameter(void* self, const TriggerScopeView* scope, unsigned
             && name[size] == 0 && memchr(name, 0, (size_t)size) == NULL) {
             int a = 0, b = 0;
             void* extra[6] = {0};
-            void* container = ((ContainerFn)(img + 0x00542500u))(descriptor, scope->nativeContext,
+            void* container = ((ContainerFn)(img + NativeAdapter_RegistryRva(NS_CONTAINER)))(descriptor, scope->nativeContext,
                 &a, &b, &extra[0], &extra[1], &extra[2], &extra[3], &extra[4], &extra[5]);
             if (!Trigger_HasDynamicBinding(container, name, (size_t)size)
                 && Var64_ReadStoredContainerRaw(container, name, out)) return 1;
         }
     }
     *out = 0;
-    ((ParamFn)(img + 0x00544C90u))(descriptor, out, scope->nativeContext, NULL, 0);
+    ((ParamFn)(img + NativeAdapter_RegistryRva(NS_PARAM_GET)))(descriptor, out, scope->nativeContext, NULL, 0);
     return 1;
 }
 
@@ -291,6 +306,7 @@ unsigned char __fastcall Trigger_EvaluateVariable(void* self, void* scope)
 
 void* Trigger_TypedTooltip(TriggerDef* def, void* self, void* out, void* ctx, unsigned char invert, int indent)
 {
+    if (!NativeAdapter_RegistryReady()) return out;
     unsigned char* img = Trigger_Image();
     TriggerScopeView view;
     long long left = 0, right = 0;
@@ -347,13 +363,13 @@ void* Trigger_TypedTooltip(TriggerDef* def, void* self, void* out, void* ctx, un
     texts[0] = lhs; texts[1] = op; texts[2] = rhs;
     texts[3] = NativeString_Data((const NativeString*)resultText);
     for (i = 0; i < 4; ++i) {
-        ((ParamLifeFn)(img + 0x0029DAD0u))(params[i]);
+        ((ParamLifeFn)(img + NativeAdapter_RegistryRva(NS_PARAM_CTOR)))(params[i]);
         *(int*)params[i] = 1;
         *(const char**)(params[i] + 8) = names[i];
-        ((StringCtorFn)(img + 0x0011D970u))(params[i] + 48, texts[i], strlen(texts[i]));
+        ((StringCtorFn)(img + NativeAdapter_RegistryRva(NS_STRING_CTOR)))(params[i] + 48, texts[i], strlen(texts[i]));
     }
     ((PackFn)(img + RVA_PACK_KEY))(packed, def->locKey, params, 4);
-    for (i = 0; i < 4; ++i) ((ParamLifeFn)(img + 0x0029DFE0u))(params[i]);
+    for (i = 0; i < 4; ++i) ((ParamLifeFn)(img + NativeAdapter_RegistryRva(NS_PARAM_DTOR)))(params[i]);
     ((FormatFn)(img + RVA_FORMAT_TEXT))(out, ctx, packed);
     ((AppendFn)(img + RVA_APPEND_TEXT))(out, "\n", 1);
     Trigger_FreeString(packed, img);
@@ -391,6 +407,7 @@ unsigned char Trigger_EvaluateBool(void* self, void* scope, TriggerPredicateFn p
 
 static void Trigger_FreeString(unsigned char* value, unsigned char* img)
 {
+    if (!NativeAdapter_RegistryReady()) return;
     unsigned long long cap = *(unsigned long long*)(value + 24);
     unsigned char* p;
     if (cap <= 15) return;
@@ -409,6 +426,7 @@ static void Trigger_FreeString(unsigned char* value, unsigned char* img)
 void* Trigger_BuildTooltip(void* self, void* out, void* ctx,
                           unsigned char inverted, const char* locKey)
 {
+    if (!NativeAdapter_RegistryReady()) return out;
     unsigned char* img = Trigger_Image();
     unsigned char packed[32];
     const char* suffix;

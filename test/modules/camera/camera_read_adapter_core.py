@@ -56,7 +56,7 @@ class ImageBindings:
         s = self.section(rva)
         return bool(s and s[2] & 0x20000000)
 
-    def find_primary(self, name):
+    def find_primary(self, name, minimum_slots=4):
         decorated = ('.?AV' + name + '@@\0').encode('ascii')
         descriptors, locators, tables = set(), set(), set()
         for start, raw, flags, virtual_size in self.sections:
@@ -81,8 +81,8 @@ class ImageBindings:
                 pointer = struct.pack('<Q', self.base + locator)
                 offset = raw.find(pointer)
                 while offset >= 0:
-                    if offset % 8 == 0 and offset + 40 <= len(raw):
-                        functions = struct.unpack_from('<4Q', raw, offset + 8)
+                    if offset % 8 == 0 and offset + 8 + minimum_slots*8 <= len(raw):
+                        functions = struct.unpack_from('<'+str(minimum_slots)+'Q', raw, offset + 8)
                         if all(self.executable(f-self.base) for f in functions):
                             tables.add(start + offset + 8)
                     offset = raw.find(pointer, offset + 1)
