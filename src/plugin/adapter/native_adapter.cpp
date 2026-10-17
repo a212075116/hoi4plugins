@@ -16,7 +16,6 @@
 #include "native_adapter.h"
 
 namespace {
-const char kLegacySha[] = "7dc947be34970da1e1c787bcddbe7f62b610ff258aebf8f06aa8b348f3a031d5";
 struct Section { DWORD rva, bytes, mapped, flags, raw; };
 struct Profile { unsigned camera=0, height=0, minimum=0, maximum=0; bool read=false; };
 struct Binding { DWORD ingame=0, frontend=0, getter=0; unsigned slot=0; BYTE code[8]={}; };
@@ -30,7 +29,7 @@ std::wstring g_root, g_log;
 std::string g_sha, g_reason="NOT_INITIALIZED";
 Profile g_profile;
 Binding g_binding;
-bool g_legacy=false, g_bound=false;
+bool g_bound=false;
 SRWLOCK g_cameraLock=SRWLOCK_INIT, g_logLock=SRWLOCK_INIT;
 std::vector<DWORD> g_roots;
 std::map<std::string,Status> g_status;
@@ -223,6 +222,7 @@ bool LoadedTable(DWORD table) {
     return col && Read((void*)loaded,actual,24) && !memcmp(col,actual,24);
 }
 #include "script_bindings.inc"
+#include "native_symbols.inc"
 bool Capture(NativeCameraSnapshot& out,bool full,bool validateValues=true) {
     if(!g_bound) {strcpy_s(out.status,g_reason.c_str());return false;}
     if(full || g_roots.empty()) if(!ScanRoots()) {strcpy_s(out.status,g_reason.c_str());return false;}
@@ -279,7 +279,6 @@ int NativeAdapter_Initialize(void) {
     try {
         g_reason="INVALID_IMAGE";
         if(!LoadImage(image)) {NativeAdapter_Report("adapter.identity",0,g_reason.c_str());return 0;}
-        g_legacy=g_sha==kLegacySha;
         NativeAdapter_Report("adapter.identity",1,g_sha.c_str());
         std::vector<BYTE> bytes;
         std::wstring sha(g_sha.begin(),g_sha.end());
@@ -299,10 +298,18 @@ int NativeAdapter_Initialize(void) {
         InitializeScriptBindings();
         g_reason=cameraReason;
         NativeAdapter_Report("script.bindings",g_scriptReady,g_scriptReason.c_str());
-    } catch(...) {g_bound=false;g_reason="ADAPTER_INITIALIZATION_EXCEPTION";NativeAdapter_Report("camera.binding",0,g_reason.c_str());}
-    return g_legacy?1:0;
+        InitializeNativeSymbols();
+    } catch(...) {
+        g_bound=false;g_scriptReady=false;memset(g_symbolValues,0,sizeof(g_symbolValues));
+        for(int i=0;i<NG_COUNT;++i) {g_groupReady[i]=false;g_groupReason[i]="ADAPTER_INITIALIZATION_EXCEPTION";}
+        g_reason="ADAPTER_INITIALIZATION_EXCEPTION";NativeAdapter_Report("camera.binding",0,g_reason.c_str());
+    }
+    for(const auto& g:kGroupSpecs)NativeAdapter_Report((std::string("symbols.")+g.name).c_str(),g_groupReady[g.id],g_groupReason[g.id].c_str());
+    return g_groupReady[NG_CORE]?1:0;
 }
-int NativeAdapter_LegacyAllowed(void) {return g_legacy?1:0;}
+int NativeAdapter_GroupReady(int group) {return InterlockedCompareExchange(&g_prepared,0,0) && group>=0 && group<NG_COUNT && g_groupReady[group]?1:0;}
+unsigned int NativeAdapter_Symbol(int symbol) {return symbol>=0 && symbol<NSY_COUNT && NativeAdapter_GroupReady(kSymbolSpecs[symbol].group)?g_symbolValues[symbol]:0;}
+const char* NativeAdapter_GroupDiagnostic(int group) {return group>=0 && group<NG_COUNT?(g_groupReason[group].empty()?"SYMBOLS_NOT_INITIALIZED":g_groupReason[group].c_str()):"GROUP_UNKNOWN";}
 int NativeAdapter_RegistryReady(void) {return InterlockedCompareExchange(&g_prepared,0,0) && g_scriptReady;}
 unsigned int NativeAdapter_RegistryRva(unsigned int symbol) {return NativeAdapter_RegistryReady() && symbol<NS_SYMBOL_COUNT?g_scriptValues[symbol]:0;}
 unsigned int NativeAdapter_StaticTokenCount(void) {return NativeAdapter_RegistryReady()?g_staticTokenCount:0;}
@@ -311,7 +318,7 @@ int NativeAdapter_ScriptTemplate(int kind,NativeScriptTemplate* out) {
     *out=g_scriptTemplates[kind];return 1;
 }
 const char* NativeAdapter_RegistryDiagnostic(void) {return g_scriptReason.c_str();}
-int NativeAdapter_CameraWriteAllowed(void) {return g_legacy && g_bound && g_profile.camera==0x750 && g_profile.height==0x69c && g_profile.minimum==0x6d0 && g_profile.maximum==0x6d4;}
+int NativeAdapter_CameraWriteAllowed(void) {return g_groupReady[NG_CAMERA_WRITE] && g_bound && g_profile.camera==0x750 && g_profile.height==0x69c && g_profile.minimum==0x6d0 && g_profile.maximum==0x6d4;}
 const char* NativeAdapter_Diagnostic(void) {return g_reason.c_str();}
 void NativeAdapter_Report(const char* name,int available,const char* reason) {
     if(!name || !reason || g_log.empty())return;

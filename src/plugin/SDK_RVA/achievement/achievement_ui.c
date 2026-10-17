@@ -9,6 +9,8 @@
 #include "../hook/inline_hook.h"
 #include "../hook/inline_hook_batch.h"
 #include "MinHook.h"
+#include "../../adapter/native_adapter.h"
+#define ACH_RVA(symbol) NativeAdapter_Symbol(symbol)
 
 #define ACH_UI_NAME "enabled_achievement_icons"
 #define ACH_UI_TEXT "[hoi4plugins]\xEF\xBC\x9A\xE6\x88\x90\xE5\xB0\xB1\xE5\x85\x81\xE8\xAE\xB8\xE8\xA7\xA3\xE9\x94\x81\xEF\xBC\x81"
@@ -65,7 +67,7 @@ static __int64 __fastcall FrontUpdate(void* view) {
 static unsigned char __fastcall FrontTooltip(void* view, void* widget, CmdString* out) {
     typedef void* (__fastcall *Assign)(void*, const char*, size_t);
     if (!IsIcon(widget) || !out) return g_frontTooltip(view, widget, out);
-    ((Assign)(g_uiBase + 0x129CA0))(out, ACH_UI_TEXT, sizeof(ACH_UI_TEXT) - 1);
+    ((Assign)(g_uiBase + ACH_RVA(NSY_STRING_ASSIGN)))(out, ACH_UI_TEXT, sizeof(ACH_UI_TEXT) - 1);
     InterlockedIncrement(&g_uiTooltips);
     return 1;
 }
@@ -80,8 +82,8 @@ int AchievementUi_Install(void) {
     g_uiBase = (unsigned char*)GetModuleHandleW(NULL); dos = (IMAGE_DOS_HEADER*)g_uiBase;
     if (!g_uiBase || dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew <= 0 || dos->e_lfanew > 4096) return 0;
     nt = (IMAGE_NT_HEADERS64*)(g_uiBase + dos->e_lfanew);
-    if (nt->Signature != IMAGE_NT_SIGNATURE || nt->FileHeader.TimeDateStamp != 0x6AA123BB || nt->OptionalHeader.SizeOfImage != 0x37EC000 || !InlineHook_Init()) return 0;
-    first = g_uiBase + 0x1CDA120; second = g_uiBase + 0x1CD4570;
+    if (nt->Signature != IMAGE_NT_SIGNATURE || !NativeAdapter_GroupReady(NG_ACHIEVEMENT) || !InlineHook_Init()) return 0;
+    first = g_uiBase + ACH_RVA(NSY_ACH_FRONT_UPDATE); second = g_uiBase + ACH_RVA(NSY_ACH_FRONT_TOOLTIP);
     if (MH_CreateHook(first, FrontUpdate, (void**)&g_frontUpdate) != MH_OK) return 0;
     created = 1;
     if (MH_CreateHook(second, FrontTooltip, (void**)&g_frontTooltip) != MH_OK) goto fail;

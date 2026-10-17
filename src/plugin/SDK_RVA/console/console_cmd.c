@@ -8,10 +8,12 @@
 #include "carrier.h"
 #include "../common/log.h"
 #include "../common/native_memory.h"
+#include "../../adapter/native_adapter.h"
 
-#define RVA_CMD_MANAGER   0x35E1A80u
-#define RVA_CMDTBL_MERGE  0x24B4920u
-#define RVA_CMDMGR_INIT   0x24B4C40u
+#define RVA_CMD_MANAGER   NativeAdapter_Symbol(NSY_CMD_MANAGER)
+#define RVA_CMDTBL_MERGE  NativeAdapter_Symbol(NSY_CMD_MERGE)
+#define RVA_CMDMGR_INIT   NativeAdapter_Symbol(NSY_CMD_INIT)
+#define NATIVE_STRING_ASSIGN_RVA NativeAdapter_Symbol(NSY_STRING_ASSIGN)
 
 typedef char assert_cmdstring[(sizeof(CmdString) == 32) ? 1 : -1];
 typedef char assert_cmdentry [(sizeof(CmdEntry)  == 456) ? 1 : -1];
@@ -58,7 +60,7 @@ static void ConsoleCmd_WriteString(CmdString* s, const char* str) {
     if (n <= CMD_SSO_MAX) { ConsoleCmd_WriteShortString(s, str); return; }
 
     base = GetModuleHandleA(NULL);
-    if (base == NULL) { ConsoleCmd_WriteShortString(s, str); return; }
+    if (base == NULL || NATIVE_STRING_ASSIGN_RVA == 0) { ConsoleCmd_WriteShortString(s, str); return; }
     assign = (NativeStringAssignFn)((unsigned char*)base + NATIVE_STRING_ASSIGN_RVA);
     assign((void**)s, str, n);
 }
@@ -176,6 +178,7 @@ int ConsoleCmd_RegisterAll(const CmdDef* defs, int n) {
         return 0;
     }
 
+    if (!NativeAdapter_GroupReady(NG_CONSOLE)) { g_CmdLog("[cmdreg] console symbols unavailable: %s", NativeAdapter_GroupDiagnostic(NG_CONSOLE)); return 0; }
     base = GetModuleHandleA(NULL);
     if (base == NULL) { g_CmdLog("[cmdreg] no main module base"); return 0; }
     img = (unsigned char*)base;

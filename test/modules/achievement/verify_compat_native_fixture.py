@@ -9,6 +9,7 @@ source = r'''
 #include <windows.h>
 #include <stdio.h>
 #include <string.h>
+SYMBOL_FIXTURE
 #include "SOURCE"
 static unsigned char manager[168], console[224], network[16], items[3][96], ironNode[96];
 static unsigned char backend[96], steamContext[280], statsInterface[16];
@@ -106,6 +107,7 @@ int main(void) {
     VirtualFree(g_base,0,MEM_RELEASE);return passed==total?0:1;
 }
 '''.replace("SOURCE", (ROOT / "src/plugin/SDK_RVA/achievement/achievement_compat.c").as_posix())
+source = source.replace("SYMBOL_FIXTURE", '#include "' + (ROOT / "test/lib/native_symbols_fixture.h").as_posix() + '"' if "NativeAdapter_GroupReady" in (ROOT / "src/plugin/SDK_RVA/achievement/achievement_compat.c").read_text(encoding="utf-8") else "")
 cpp = D / "compat_fixture.c"
 cpp.write_text(source, encoding="utf8")
 exe = D / "compat_fixture.exe"

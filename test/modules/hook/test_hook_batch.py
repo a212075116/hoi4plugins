@@ -56,6 +56,8 @@ static int SourceHostSupported(unsigned char* p){return p!=NULL;}
 header = sdk / "hook/inline_hook_batch.h"
 if header.exists():
     prefix += f'#include "{header.as_posix()}"\n'
+if "ACH_RVA" in (sdk / "achievement/achievement_compat.c").read_text(encoding="utf-8"):
+    prefix += f'#include "{(root / "test/lib/native_symbols_fixture.h").as_posix()}"\n#define ACH_RVA(symbol) NativeAdapter_Symbol(symbol)\n'
 for file, name in [("achievement_compat.c", "AchievementCompat_Install"), ("achievement_probe.c", "AchievementSource_Install"), ("achievement_ui.c", "AchievementUi_Install")]:
     prefix += function((sdk / "achievement" / file).read_text(encoding="utf-8"), name)
 main = r'''

@@ -1,7 +1,7 @@
 #pragma once
+#include "../../adapter/native_adapter.h"
 
-#define RVA_GD_GS_GLOBAL   0x332F260u
-#define RVA_GD_DATE_PARSE  0x00533D60u
+#define RVA_GD_GS_GLOBAL   NativeAdapter_Symbol(NSY_GAMESTATE)
 #define OFF_GD_CGAMEDATE   0x460u
 #define OFF_GD_RAW         0x468u
 #define OFF_GD_YEAR        0x478u
@@ -10,7 +10,7 @@
 #define OFF_GD_MONTHDAYS   0x47Cu
 #define OFF_GD_DOY         0x484u
 #define OFF_GD_DIRTY       0x4C0u
-#define RVA_GD_UI_DATE_UPDATE 0x18A1EE0u
+#define RVA_GD_UI_DATE_UPDATE NativeAdapter_Symbol(NSY_DATE_UI_UPDATE)
 #define OFF_GD_PARAMSTR    0x108u
 #define GD_TEXT_MAX        48
 

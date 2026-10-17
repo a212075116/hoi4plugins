@@ -13,18 +13,21 @@
 #include "variable64_math.h"
 
 #include "../common/plugin_log.h"
+#include "../../adapter/native_adapter.h"
+
+#define NATIVE_STRING_ASSIGN_RVA NativeAdapter_Symbol(NSY_STRING_ASSIGN)
 
 typedef void (__fastcall *Var64GetParamFn)(void* a1, void* out, void* ctx, void* a4, void* a5);
 typedef void* (__fastcall *Var64FactoryFn)(void);
 typedef void* (__fastcall *Var64LookupFn)(void* scopedVar, void* ctx, void* a3);
 
-#define RVA_VARSET_FACTORY 0x341F60u
-#define RVA_VAR_LOOKUP     0x542280u
-#define RVA_VARSET_ENTRYVT 0x277C418u
-#define RVA_GAME_SET_EXEC  0x364C60u
+#define RVA_VARSET_FACTORY NativeAdapter_Symbol(NSY_VAR_FACTORY)
+#define RVA_VAR_LOOKUP     NativeAdapter_Symbol(NSY_VAR_LOOKUP)
+#define RVA_VARSET_ENTRYVT NativeAdapter_Symbol(NSY_VAR_ENTRY_VT)
+#define RVA_GAME_SET_EXEC  NativeAdapter_Symbol(NSY_VAR_SET_EXEC)
 #define VAR64_MARK_OFF     505u
 #define VAR64_SSO_LIMIT    15u
-#define RVA_VAR_CONTAINER 0x542500u
+#define RVA_VAR_CONTAINER NativeAdapter_RegistryRva(NS_CONTAINER)
 #define VAR64_MARK_SET     0x53343656u
 #define VAR64_MARK_ADD     0x53343641u
 #define VAR64_MARK_LOG     0x5334364Cu
@@ -34,11 +37,11 @@ typedef void* (__fastcall *Var64LookupFn)(void* scopedVar, void* ctx, void* a3);
 #define VAR64_MARK_CLH     0x53343648u
 #define VAR64_NAME_OFF     200u
 #define VAR64_SUBOBJ_OFF   88u
-#define RVA_GAMESTATE_GLOBAL   0x332F260u
-#define RVA_APP_GLOBAL         0x332F698u
-#define RVA_SAVEINFO_INIT      0x0BC0880u
-#define RVA_LOAD_SAVEFILE      0x0DA04F0u
-#define RVA_STRING_APPEND      0x0129C10u
+#define RVA_GAMESTATE_GLOBAL   NativeAdapter_Symbol(NSY_GAMESTATE)
+#define RVA_APP_GLOBAL         NativeAdapter_Symbol(NSY_APP)
+#define RVA_SAVEINFO_INIT      NativeAdapter_Symbol(NSY_SAVEINFO_INIT)
+#define RVA_LOAD_SAVEFILE      NativeAdapter_Symbol(NSY_LOAD_SAVEFILE)
+#define RVA_STRING_APPEND      NativeAdapter_RegistryRva(NS_TEXT_APPEND)
 #define VAR64_SAVEINFO_BYTES   256u
 #define VAR64_SAVEINFO_NAME_AT 32u
 #define VAR64_APP_LOADER_SLOT  880u
@@ -135,7 +138,7 @@ static int Var64_LookupInScope(void* scope, const char* name, long long* out)
 
 static unsigned char* Var64_Image(void)
 {
-    return (unsigned char*)GetModuleHandleA(NULL);
+    return NativeAdapter_GroupReady(NG_VAR64) ? (unsigned char*)GetModuleHandleA(NULL) : NULL;
 }
 
 static void* __fastcall Var64_PureGameFactory(void)
@@ -311,13 +314,12 @@ static unsigned char* Var64_ResolveAddressByName(void* self, void* ctx, const ch
     return addr;
 }
 
-#define RVA_VARCLAMP_ENTRYVT 0x277C680u
-#define RVA_VARCLAMP_EXEC    0x0034F750u
-#define RVA_VAR_CLEAR_EXEC   0x00350240u
-#define RVA_VAR_ADD_EXEC     0x0034C760u
-#define RVA_VAR_SUB_EXEC     0x00366BC0u
-#define RVA_VAR_MUL_EXEC     0x0035B9E0u
-#define RVA_VAR_DIV_EXEC     0x00355C70u
+#define RVA_VARCLAMP_EXEC    NativeAdapter_Symbol(NSY_VAR_CLAMP_EXEC)
+#define RVA_VAR_CLEAR_EXEC   NativeAdapter_Symbol(NSY_VAR_CLEAR_EXEC)
+#define RVA_VAR_ADD_EXEC     NativeAdapter_Symbol(NSY_VAR_ADD_EXEC)
+#define RVA_VAR_SUB_EXEC     NativeAdapter_Symbol(NSY_VAR_SUB_EXEC)
+#define RVA_VAR_MUL_EXEC     NativeAdapter_Symbol(NSY_VAR_MUL_EXEC)
+#define RVA_VAR_DIV_EXEC     NativeAdapter_Symbol(NSY_VAR_DIV_EXEC)
 
 static int Var64_IsStored64(void* self, void* ctx, const char* name);
 static void Var64_ResetDebtForSet(void* self, void* ctx, const char* name);
@@ -1268,7 +1270,7 @@ typedef char var64_effect_count_valid[(sizeof(g_var64EffectBindings) / sizeof(g_
 static void Var64_InstallArithmeticHooks(void)
 {
     unsigned char* img = Var64_Image();
-    static const struct {
+    const struct {
         unsigned int rva;
         void* detour;
         Var64GameSetExecFn* original;

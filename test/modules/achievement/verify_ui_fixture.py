@@ -10,6 +10,7 @@ source = r'''
 #include <windows.h>
 #include <stdio.h>
 #include <string.h>
+SYMBOL_FIXTURE
 #include "SOURCE"
 typedef struct {void** table;CmdString name;int visible;int frame;} Widget;
 static Widget icon,other,bottom,window;
@@ -63,6 +64,7 @@ int main(void){
  VirtualFree(g_uiBase,0,MEM_RELEASE);return passed==total?0:1;
 }
 '''.replace("SOURCE", (R / "src/plugin/SDK_RVA/achievement/achievement_ui.c").as_posix())
+source = source.replace("SYMBOL_FIXTURE", '#include "' + (R / "test/lib/native_symbols_fixture.h").as_posix() + '"' if "NativeAdapter_GroupReady" in (R / "src/plugin/SDK_RVA/achievement/achievement_ui.c").read_text(encoding="utf-8") else "")
 source = source.replace("UPDATE(", "FrontUpdate(" if phase == "MODIFIED" else "OriginalUpdate(").replace("TOOLTIP(", "FrontTooltip(" if phase == "MODIFIED" else "OriginalTooltip(")
 p = D / (phase + "_ui_fixture.c")
 p.write_text(source, encoding="utf8")

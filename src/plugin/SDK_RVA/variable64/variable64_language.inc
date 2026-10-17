@@ -1,4 +1,4 @@
-#define RVA_VARTEXT_HANDLER     0x12CF2B0u
+#define RVA_VARTEXT_HANDLER     NativeAdapter_Symbol(NSY_VARTEXT_HANDLER)
 #define VAR64_LANG_NAME_MAX     160u
 
 typedef void* (__fastcall *Var64VarTextHandlerFn)(void* ctx, const char* text,

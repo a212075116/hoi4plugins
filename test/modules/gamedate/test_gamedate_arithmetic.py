@@ -114,6 +114,8 @@ probe = r'''
 fixture = fixture.replace(' printf("date=20000', probe + ' printf("date=20000')
 for token, path in [("CONSOLE_HEADER", sdk / "console/console_cmd.h"), ("UI_SOURCE", sdk / "gamedate/gamedate_ui.c"), ("DATE_SOURCE", sdk / "gamedate/gamedate.c")]:
     fixture = fixture.replace(token, path.as_posix())
+if "NativeAdapter_Symbol" in (sdk / "gamedate/gamedate.h").read_text(encoding="utf-8"):
+    fixture = fixture.replace('#include <string.h>\n', '#include <string.h>\n#include "' + (root / "test/lib/native_symbols_fixture.h").as_posix() + '"\n', 1)
 (output / "fixture.c").write_text(fixture, encoding="ascii")
 vc = "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Auxiliary/Build/vcvars64.bat"
 includes = [root / "src/carrier", sdk / "console", sdk / "gamedate", sdk / "hook"]

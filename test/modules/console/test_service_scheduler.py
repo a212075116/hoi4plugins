@@ -21,6 +21,9 @@ while depth:
 pending = text[text.index("typedef struct {"):text.index("static SRWLOCK g_lock")]
 prefix = f'#include "{(root / "src/debug_console/protocol.h").as_posix()}"\n#include <sddl.h>\n#include <shellapi.h>\n#include "{(sdk / "minihook/include/MinHook.h").as_posix()}"\n'
 prefix += "#define HAS_GATE " + str(int("static int StartPeerThreads(" in text)) + "\n"
+symbols = "NativeAdapter_GroupReady" in text
+if symbols:
+    prefix += f'#include "{(root / "test/lib/native_symbols_fixture.h").as_posix()}"\n'
 prefix += r'''
 #include <stdio.h>
 #include <stdlib.h>
@@ -90,7 +93,7 @@ main = r'''
 int main(void){
  host=(unsigned char*)calloc(1,0x37EC000);if(!host)return 2;IMAGE_DOS_HEADER* dos=(IMAGE_DOS_HEADER*)host;dos->e_magic=IMAGE_DOS_SIGNATURE;dos->e_lfanew=256;IMAGE_NT_HEADERS64* nt=(IMAGE_NT_HEADERS64*)(host+256);nt->OptionalHeader.SizeOfImage=0x37EC000;
  for(mode=0;mode<67;++mode){
-  pipeCalls=eventCalls=threadCalls=openHelper=localLive=tokenLive=enabled=removeCalls=foreignRemoved=used=0;trace[0]=0;hook=mode==16?2:0;g_thread=mode==24?77:0;g_frame=NULL;g_started=1;g_failed=g_peerState=0;g_hookInit=0;memset(threads,0,sizeof(threads));memset(pipes,0,sizeof(pipes));memset(events,0,sizeof(events));memset(g_pipes,0,sizeof(g_pipes));memset(g_queue,0,sizeof(g_queue));nt->FileHeader.TimeDateStamp=mode==1?0:0x6AA123BB;
+  pipeCalls=eventCalls=threadCalls=openHelper=localLive=tokenLive=enabled=removeCalls=foreignRemoved=used=0;trace[0]=0;hook=mode==16?2:0;g_thread=mode==24?77:0;g_frame=NULL;g_started=1;g_failed=g_peerState=0;g_hookInit=0;memset(threads,0,sizeof(threads));memset(pipes,0,sizeof(pipes));memset(events,0,sizeof(events));memset(g_pipes,0,sizeof(g_pipes));memset(g_queue,0,sizeof(g_queue));nt->FileHeader.TimeDateStamp=mode==1?0:0x6AA123BB;SYMBOL_GATE
   DWORD result=StartDebugService(NULL);int wanted=mode==1?6:mode==2?1:mode>=3&&mode<=5?2:mode==6?3:mode>=7&&mode<=9?4:mode>=10&&mode<=12?7:mode>=13&&mode<=18||mode==23?5:mode>=25&&mode<30?4:mode>=30&&mode<62?7:mode==21||mode>=62?8:0;
   CHECK(result==wanted);CHECK(!localLive&&!tokenLive&&!foreignRemoved);
   if(wanted){for(int i=0;i<5;++i)CHECK(!pipes[i]);for(int i=0;i<32;++i)CHECK(!events[i]);CHECK(g_started==(wanted==8?-1:1));if(wanted==8){CHECK(g_failed==1);for(int j=0;j<5;++j)CHECK(!threads[j]);}}
@@ -119,6 +122,7 @@ def actual_function(name):
         finish += 1
     return text[found.start():finish] + "\n"
 helper = "".join(actual_function(name) for name in ["CloseStartupHandles", "PeerStart", "StartPeerThreads"])
+main = main.replace("SYMBOL_GATE", "g_symbolFixtureDisabled=mode==1?NG_BRIDGE:-2;" if symbols else "")
 (output / "fixture.c").write_text(prefix + helper + text[match.start():end] + "\n" + main, encoding="ascii")
 vc = "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Auxiliary/Build/vcvars64.bat"
 command = 'cmd /d /s /c "' + f'"{vc}" >nul && cl /nologo /W3 /TC /MT /I"{sdk / "minihook/include"}" /I"{root / "src/carrier"}" fixture.c /Fe:fixture.exe' + '"'

@@ -10,6 +10,20 @@ start=text.index('static DWORD WINAPI PluginThread(');opening=text.index('{',sta
 while depth:
     depth+=(text[end]=='{')-(text[end]=='}');end+=1
 body=text[start:end]
+grouped='NativeAdapter_GroupReady' in body
+helpers=''
+if grouped:
+    helpers=text[text.index('static const char* g_effectDisabled'):text.index('static void RegisterPluginGroups(')]
+    a=text.index('static void ReportSteps(');b=text.index('static DWORD WINAPI PluginThread(')
+    helpers+=text[a:b]
+    catalog=(root/'src/plugin/adapter/symbol_catalog.h').read_text(encoding='ascii')
+    groups=re.findall(r'^NATIVE_GROUP\((\w+),',catalog,re.M)
+    enums='#define NG_NONE (-1)\nenum {'+','.join(groups)+',NG_COUNT};\n'
+    stubs=r'''
+static int NativeAdapter_GroupReady(int g){return known&&g>=0&&g<NG_COUNT;}
+static const char* NativeAdapter_GroupDiagnostic(int g){return known?"READY":"SYMBOLS_PROFILE_MISSING";}
+static void RegisterPluginGroups(const char* name,int(*ready)(void),PluginRegistrationStep* s,const char** disabled,int n){++legacy;for(int i=0;i<n;++i){s[i].complete=1;s[i].last=s[i].expected;}}
+'''
 prefix=r'''
 #include <windows.h>
 #include <stdio.h>
@@ -52,6 +66,10 @@ prefix+='static int Camera_RegisterCommands(void){++legacy;++cameraCalls;return 
 main=r'''
 int main(int argc,char** argv){known=argc>1;noCamera=known&&!strcmp(argv[1],"known-no-camera");noScript=known&&!strcmp(argv[1],"known-no-script");partialProcess=known&&!strcmp(argv[1],"known-partial-process");PluginThread(NULL);printf("known=%d legacy_calls=%d initialized=%d viewer=%d monitor=%d camera_commands=%d camera_expected=%d process_disabled=%d\n",known,legacy,initialized,viewer,monitor,cameraCalls,g_effectSteps[0].expected,processDisabled);return !known&&legacy?1:0;}
 '''
+if grouped:
+    prefix=prefix.replace('static void RegisterPluginGroups(const char* name,int(*ready)(void),PluginRegistrationStep* s,int n){++legacy;for(int i=0;i<n;++i){s[i].complete=1;s[i].last=s[i].expected;}}\n','')
+    prefix=prefix.replace('static int NativeAdapter_LegacyAllowed(void){return known;}\n',enums+stubs)
+    prefix+=helpers
 (out/'gate.c').write_text(prefix+body+main,encoding='ascii')
 vc='C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Auxiliary/Build/vcvars64.bat'
 compile=f'"{vc}" >nul && cl /nologo /W3 /TC /O2 gate.c /Fe:gate.exe'

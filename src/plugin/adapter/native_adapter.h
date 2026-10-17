@@ -21,6 +21,38 @@ enum NativeScriptSymbol {
     NS_GAME_ALLOC, NS_GAME_FREE, NS_STATIC_TOKENS, NS_SCOPE_MASK, NS_TEMPORARY,
     NS_PARAM_NAME, NS_CONTAINS, NS_CONTAINER, NS_STRING_CTOR, NS_SYMBOL_COUNT
 };
+#define NG_NONE (-1)
+enum NativeGroup {
+#define NATIVE_GROUP(id, name, registry, first, second) id,
+#define NATIVE_CODE(id, group, key)
+#define NATIVE_DATA(id, group, key, bytes)
+#define NATIVE_SLOT(id, group, key, type, offset, slot)
+#define NATIVE_TABLE(id, group, key, type, offset, slots)
+#include "symbol_catalog.h"
+#undef NATIVE_GROUP
+#undef NATIVE_CODE
+#undef NATIVE_DATA
+#undef NATIVE_SLOT
+#undef NATIVE_TABLE
+    NG_COUNT
+};
+enum NativeSymbol {
+#define NATIVE_GROUP(id, name, registry, first, second)
+#define NATIVE_CODE(id, group, key) id,
+#define NATIVE_DATA(id, group, key, bytes) id,
+#define NATIVE_SLOT(id, group, key, type, offset, slot) id,
+#define NATIVE_TABLE(id, group, key, type, offset, slots) id,
+#include "symbol_catalog.h"
+#undef NATIVE_GROUP
+#undef NATIVE_CODE
+#undef NATIVE_DATA
+#undef NATIVE_SLOT
+#undef NATIVE_TABLE
+    NSY_COUNT
+};
+int NativeAdapter_GroupReady(int group);
+unsigned int NativeAdapter_Symbol(int symbol);
+const char* NativeAdapter_GroupDiagnostic(int group);
 typedef struct NativeScriptTemplate {
     unsigned int vt, entryVt, factory, parse, eval, slots, allocation;
 } NativeScriptTemplate;
@@ -32,7 +64,6 @@ const char* NativeAdapter_RegistryDiagnostic(void);
 int NativeAdapter_RegisterScriptDiagnostic(void);
 
 int NativeAdapter_Initialize(void);
-int NativeAdapter_LegacyAllowed(void);
 int NativeAdapter_CameraWriteAllowed(void);
 const char* NativeAdapter_Diagnostic(void);
 void NativeAdapter_Report(const char* capability, int available, const char* reason);

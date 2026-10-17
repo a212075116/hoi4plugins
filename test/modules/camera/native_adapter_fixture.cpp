@@ -1,4 +1,5 @@
 #include "../../../src/plugin/adapter/native_adapter.cpp"
+static const char kLegacySha[]="7dc947be34970da1e1c787bcddbe7f62b610ff258aebf8f06aa8b348f3a031d5";
 
 static BYTE* objectPool;
 static int checks,failed;
@@ -21,7 +22,7 @@ static void Synthetic() {
     for(int i=0;i<4;++i)Put64(0x2600+i*8,g_preferred+0x1000);
     const BYTE code[]={0x48,0x8b,0x81,0x50,7,0,0,0xc3};memcpy(g_file.data()+0x1120,code,8);
     Put64(0x2400+37*8,g_preferred+0x1120);Put64(0x2400+38*8,g_preferred+0x1120);
-    g_profile={0x750,0x69c,0x6d0,0x6d4,true};g_binding={};g_roots.clear();g_legacy=true;
+    g_profile={0x750,0x69c,0x6d0,0x6d4,true};g_binding={};g_roots.clear();g_groupReady[NG_CAMERA_WRITE]=true;
     InterlockedExchange(&g_prepared,1);
     Check("synthetic-bind",Bind(g_preferred));g_bound=true;
     memcpy(g_base,g_file.data(),g_file.size());
@@ -76,8 +77,8 @@ int wmain(int argc,wchar_t** argv) {
     Synthetic();g_file[0x1127]=0x90;Check("nonleaf-getter",!Bind(g_preferred)&&g_reason=="GETTER_MISSING");
     Synthetic();memcpy(g_file.data()+0x1140,g_file.data()+0x1120,8);Put64(0x2400+38*8,g_preferred+0x1140);Check("distinct-getters",!Bind(g_preferred)&&g_reason=="GETTER_AMBIGUOUS");
     Synthetic();g_bound=false;g_reason="PROFILE_INVALID";Expect("binding-not-ready","PROFILE_INVALID");
-    Synthetic();g_legacy=false;Check("unknown-write-blocked",!NativeAdapter_CameraWriteAllowed());g_legacy=true;g_profile.height+=4;Check("changed-layout-write-blocked",!NativeAdapter_CameraWriteAllowed());
-    Synthetic();g_legacy=false;NativeCameraSnapshot approved={sizeof(approved),1};Check("approved-read-independent-of-legacy",Hoi4Plugin_ReadCameraV1(&approved)&&!NativeAdapter_CameraObject());
+    Synthetic();g_groupReady[NG_CAMERA_WRITE]=false;Check("unapproved-camera-write-blocked",!NativeAdapter_CameraWriteAllowed());g_groupReady[NG_CAMERA_WRITE]=true;g_profile.height+=4;Check("changed-layout-write-blocked",!NativeAdapter_CameraWriteAllowed());
+    Synthetic();g_groupReady[NG_CAMERA_WRITE]=false;NativeCameraSnapshot approved={sizeof(approved),1};Check("approved-read-independent-of-write-group",Hoi4Plugin_ReadCameraV1(&approved)&&!NativeAdapter_CameraObject());
     InterlockedExchange(&g_prepared,0);Check("initialization-publication",!Hoi4Plugin_ReadCameraV1(&approved)&&!strcmp(approved.status,"INITIALIZING"));InterlockedExchange(&g_prepared,1);
     NativeCameraSnapshot badOut={0,1};Check("abi-size-refused",!Hoi4Plugin_ReadCameraV1(&badOut));
     wchar_t temp[MAX_PATH],file[MAX_PATH];GetTempPathW(MAX_PATH,temp);GetTempFileNameW(temp,L"h4s",0,file);g_log=file;g_status.clear();

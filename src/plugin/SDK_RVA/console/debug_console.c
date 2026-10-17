@@ -58,7 +58,7 @@ static int DispatchExternal(unsigned char* base, void* manager, CmdResult* resul
     memcpy(originalUiState, (char*)manager + 216, sizeof(originalUiState));
     originalPermission = InterlockedExchangePointer((PVOID volatile*)((char*)manager + 80), &permissionObject);
     __try {
-        ((Dispatch)(base + 0x24B4D40))(manager, result, args);
+        ((Dispatch)(base + NativeAdapter_Symbol(NSY_CMD_DISPATCH)))(manager, result, args);
     } __finally {
         InterlockedExchangePointer((PVOID volatile*)((char*)manager + 80), originalPermission);
         memcpy((char*)manager + 216, originalUiState, sizeof(originalUiState));
@@ -76,7 +76,7 @@ static void ReleaseString(CmdString* s) {
             if ((uintptr_t)p - (uintptr_t)raw - 8 > 31) return;
             p = raw;
         }
-        ((void (__cdecl*)(void*))((char*)GetModuleHandleW(NULL) + 0x21C9B00))(p);
+        ((void (__cdecl*)(void*))((char*)GetModuleHandleW(NULL) + NativeAdapter_RegistryRva(NS_GAME_FREE)))(p);
     }
     memset(s, 0, sizeof(*s)); s->cap = 15;
 }
@@ -112,13 +112,13 @@ static void Execute(Pending* p) {
         }
         if (quote) { bad = 1; break; }
         storage[n] = 0;
-        ((Assign)(base + 0x129CA0))((void**)&strings[args.count++], storage, n);
+        ((Assign)(base + NativeAdapter_Symbol(NSY_STRING_ASSIGN)))((void**)&strings[args.count++], storage, n);
     }
     p->response.status = DC_REJECTED;
     if (bad || !args.count || !strings[0].size) {
         strcpy_s(p->output, sizeof(p->output), "Invalid syntax: use command plus at most 8 arguments, balanced double quotes.");
     } else {
-        manager = *(void**)(base + 0x35E1A80);
+        manager = *(void**)(base + NativeAdapter_Symbol(NSY_CMD_MANAGER));
         if (!ConsoleCmd_IsReadable(manager, 224) ||
             !ConsoleCmd_IsReadable(*(void**)((char*)manager + 80), 8) ||
             !ConsoleCmd_IsReadable(*(void**)((char*)manager + 144), 8) ||
@@ -337,13 +337,8 @@ static DWORD WINAPI StartDebugService(LPVOID unused) {
     SECURITY_ATTRIBUTES sa = {sizeof(sa), NULL, FALSE};
     int i, argc = 0, autoOpen = 0; LPWSTR* argv;
     (void)unused;
-    {
-        unsigned char* image = (unsigned char*)GetModuleHandleW(NULL);
-        IMAGE_DOS_HEADER* dos = (IMAGE_DOS_HEADER*)image;
-        IMAGE_NT_HEADERS64* nt = (IMAGE_NT_HEADERS64*)(image + dos->e_lfanew);
-        if (nt->FileHeader.TimeDateStamp != 0x6AA123BB || nt->OptionalHeader.SizeOfImage != 0x37EC000) {
-            Plugin_Log("[debugconsole] unsupported executable fingerprint; bridge not enabled"); return 6;
-        }
+    if (!NativeAdapter_GroupReady(NG_BRIDGE)) {
+        Plugin_Log("[debugconsole] bridge symbols unavailable: %s", NativeAdapter_GroupDiagnostic(NG_BRIDGE)); return 6;
     }
     if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return 1;
     GetTokenInformation(token, TokenUser, NULL, 0, &bytes); user = (TOKEN_USER*)LocalAlloc(LPTR, bytes);
@@ -374,7 +369,7 @@ static DWORD WINAPI StartDebugService(LPVOID unused) {
     }
     for (i = 0; i < 1200 && !g_thread; ++i) { EnumWindows(FindWindowThread, 0); if (!g_thread) Sleep(100); }
     if (!g_thread || !InlineHook_Init() ||
-        !InlineHook_InstallInto((char*)GetModuleHandleW(NULL) + 0xDD3A50, Frame, (void**)&g_frame)) {
+        !InlineHook_InstallInto((char*)GetModuleHandleW(NULL) + NativeAdapter_Symbol(NSY_BRIDGE_FRAME), Frame, (void**)&g_frame)) {
         Plugin_Log("[debugconsole] scheduler unavailable; service not enabled");
         CloseStartupHandles(DC_PEERS + 1, DC_QUEUE_MAX);
         return 5;

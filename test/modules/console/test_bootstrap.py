@@ -18,18 +18,20 @@ new = 'RegisterPluginGroups("effects"' in text
 if new:
     support = text[text.index("static int RegisterLanguageStep("):text.index("static DWORD WINAPI PluginThread(")]
     begin = text.index('    RegisterPluginGroups("effects"', text.index("static DWORD WINAPI PluginThread("))
-    guard = text.rfind('    if (NativeAdapter_RegistryReady()) {', text.index("static DWORD WINAPI PluginThread("), begin)
+    guard = text.rfind('    if (NativeAdapter_RegistryReady()', text.index("static DWORD WINAPI PluginThread("), begin)
     if guard >= 0: begin = guard
 else:
     support = ""
     begin = text.index("    {\n        int round;\n        int ok = 0;", text.index("static DWORD WINAPI PluginThread("))
-end = text.index("    for (i = 0; i < 300;", begin)
+end = text.index("    NativeAdapter_CameraRegistered(0,", begin) if new else text.index("    for (i = 0; i < 300;", begin)
 block = text[begin:end]
 headers = ""
 if new:
     for name in ["plugin_registration.h", "SDK_RVA/effect/effect_camera.h", "SDK_RVA/effect/effect_gamedate.h",
                  "SDK_RVA/variable64/variable64.h", "SDK_RVA/variable64/array64_api.h", "SDK_RVA/trigger/trigger_demo.h"]:
         headers += '#include "' + (root / "src/plugin" / name).as_posix() + '"\n'
+    if 'NativeAdapter_GroupReady' in text:
+        headers += '#include "' + (root / "test/lib/native_symbols_fixture.h").as_posix() + '"\n'
 fixture = r'''
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>

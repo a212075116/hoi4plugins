@@ -34,7 +34,7 @@ int wmain(int argc,wchar_t** argv) {
         std::wstring hash(g_sha.begin(),g_sha.end()),profile=g_root+L"\\hoi4plugins\\bindings\\"+hash+L".registry";
         CopyFileW(argv[2],profile.c_str(),FALSE);Check("full-runtime-bindings",InitializeScriptBindings());InterlockedExchange(&g_prepared,1);
         Check("ready-api",NativeAdapter_RegistryReady() && NativeAdapter_RegistryRva(NS_GAME_ALLOC)==allocation && NativeAdapter_StaticTokenCount()==10765);
-        g_legacy=false;Check("address-contract-not-legacy-bypass",NativeAdapter_RegistryReady() && !NativeAdapter_LegacyAllowed());
+        Check("registry-not-symbol-group-bypass",NativeAdapter_RegistryReady() && !NativeAdapter_GroupReady(NG_CORE) && !NativeAdapter_Symbol(NSY_GAMESTATE));
         std::vector<BYTE> original;ReadFileBytes(profile,original,32768);
         for(const std::string extra:{"schema=1\n","unknown=1\n","heap.free=0x1:00\n"}) {
             std::vector<BYTE> data=original;data.insert(data.end(),extra.begin(),extra.end());std::map<std::string,std::string> fields;Check("strict-profile-keys",!ScriptFields(data,fields));

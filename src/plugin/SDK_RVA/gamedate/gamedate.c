@@ -23,7 +23,7 @@ static const int kGregorianMonthDayCounts[12] = { 31, 28, 31, 30, 31, 30, 31, 31
 unsigned char* GameDate_GameState(void)
 {
     unsigned char* img = Img();
-    if (img == NULL) return NULL;
+    if (img == NULL || RVA_GD_GS_GLOBAL == 0) return NULL;
     if (!ConsoleCmd_IsReadable(img + RVA_GD_GS_GLOBAL, sizeof(void*))) return NULL;
     return *(unsigned char**)(img + RVA_GD_GS_GLOBAL);
 }

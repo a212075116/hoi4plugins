@@ -32,6 +32,9 @@ def main():
 #define EFF_SSO_MAX 15
 #define RVA_STR_ASSIGN 0x129CA0u
 #define RVA_STRING_ASSIGN 0x129CA0u
+#ifndef NATIVE_STRING_ASSIGN_RVA
+#define NATIVE_STRING_ASSIGN_RVA 0x129CA0u
+#endif
 typedef void** (__fastcall *AssignFn)(void**,const void*,size_t);
 typedef void** (__fastcall *Var64StringAssignFn)(void**,const void*,size_t);
 static int flags,moduleCalls,readCalls,assignCalls;static char assigned[576];static size_t assignedLength;

@@ -2,7 +2,6 @@
 #include <stddef.h>
 
 #define NATIVE_STRING_SSO_MAX 15u
-#define NATIVE_STRING_ASSIGN_RVA 0x129CA0u
 
 #pragma pack(push, 8)
 typedef struct {

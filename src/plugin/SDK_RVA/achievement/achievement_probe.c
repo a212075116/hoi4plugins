@@ -7,6 +7,8 @@
 #include "../hook/inline_hook.h"
 #include "../hook/inline_hook_batch.h"
 #include "MinHook.h"
+#include "../../adapter/native_adapter.h"
+#define ACH_RVA(symbol) NativeAdapter_Symbol(symbol)
 #include "achievement_source.h"
 
 #include "../common/plugin_log.h"
@@ -31,7 +33,7 @@ static int SourceHostSupported(unsigned char* base) {
     IMAGE_NT_HEADERS64* nt;
     if (!base || dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew <= 0 || dos->e_lfanew > 4096) return 0;
     nt = (IMAGE_NT_HEADERS64*)(base + dos->e_lfanew);
-    return nt->Signature == IMAGE_NT_SIGNATURE && nt->FileHeader.TimeDateStamp == 0x6AA123BB && nt->OptionalHeader.SizeOfImage == 0x37EC000;
+    return nt->Signature == IMAGE_NT_SIGNATURE && NativeAdapter_GroupReady(NG_ACHIEVEMENT);
 }
 
 static int SourceMount(void) {
@@ -113,7 +115,7 @@ int AchievementSource_Install(void) {
     g_realDir = (void*)GetProcAddress((HMODULE)base, "?PHYSFS_getRealDir@@YAPEBDPEBD@Z");
     if (!g_mountMemory || !g_realDir) return 0;
     if (!InlineHook_Init()) return 0;
-    targets[0] = base + 0x24DC920; targets[1] = base + 0x24BB300; targets[2] = base + 0x6207E0;
+    targets[0] = base + ACH_RVA(NSY_ACH_SOURCE_EXISTS); targets[1] = base + ACH_RVA(NSY_ACH_SOURCE_LEXER); targets[2] = base + ACH_RVA(NSY_ACH_SOURCE_LOAD);
     if (MH_CreateHook(targets[0], SourceExists, (void**)&g_exists) != MH_OK) goto fail;
     ++created;
     if (MH_CreateHook(targets[1], SourceLexer, (void**)&g_lexer) != MH_OK) goto fail;
@@ -136,7 +138,7 @@ static long long __fastcall AchievementSourceStatus(CmdResult* out, CmdArgs* arg
     (void)args;
     ConsoleCmd_InitResult(out);
     if (SourceHostSupported(base)) {
-        manager = *(const unsigned char**)(base + 0x3330460);
+        manager = *(const unsigned char**)(base + ACH_RVA(NSY_ACH_MANAGER));
         if (ConsoleCmd_IsReadable(manager, 168)) definitions = *(const int*)(manager + 28);
     }
     _snprintf_s(text, sizeof(text), _TRUNCATE,
@@ -161,11 +163,11 @@ static long long __fastcall AchievementStatus(CmdResult* out, CmdArgs* args) {
         ConsoleCmd_SetMessage(out, "[error] Achievement probe: invalid host image."); return (long long)out;
     }
     nt = (IMAGE_NT_HEADERS64*)(base + dos->e_lfanew);
-    if (nt->Signature != IMAGE_NT_SIGNATURE || nt->FileHeader.TimeDateStamp != 0x6AA123BB || nt->OptionalHeader.SizeOfImage != 0x37EC000) {
+    if (nt->Signature != IMAGE_NT_SIGNATURE || !NativeAdapter_GroupReady(NG_ACHIEVEMENT)) {
         ConsoleCmd_SetMessage(out, "[error] Achievement probe: unsupported game version; no state read."); return (long long)out;
     }
-    manager = *(const unsigned char**)(base + 0x3330460);
-    state = *(const unsigned char**)(base + 0x332F260);
+    manager = *(const unsigned char**)(base + ACH_RVA(NSY_ACH_MANAGER));
+    state = *(const unsigned char**)(base + ACH_RVA(NSY_GAMESTATE));
     if (!ConsoleCmd_IsReadable(manager, 168) || !ConsoleCmd_IsReadable(state, 193)) {
         ConsoleCmd_SetMessage(out, "[warning] Achievement probe: game context not ready; no state changed."); return (long long)out;
     }
@@ -179,7 +181,7 @@ static long long __fastcall AchievementStatus(CmdResult* out, CmdArgs* args) {
         AchievementCompat_Installed(), state[192] & 1, *(const int*)(manager + 28), *(const int*)(manager + 52),
         *(const int*)(manager + 76), *(const int*)(manager + 100),
         manager[160], manager[161], manager[162], manager[163], manager[164],
-        base[0x34530D4], base[0x332EC69],
+        base[ACH_RVA(NSY_ACH_FLAG_DEBUG)], base[ACH_RVA(NSY_ACH_FLAG_LOG)],
         g_sourceInstalled, g_sourceMounted, g_sourceLoads, g_sourceRedirects, g_sourceFailed);
     ConsoleCmd_SetMessage(out, text); out->ok = 1;
     return (long long)out;

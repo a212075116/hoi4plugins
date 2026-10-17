@@ -27,6 +27,8 @@ names = re.search(r"static const char\* g_a64names\[\]=\{[^;]+;", source).group(
 prefix = f'#include "{(headers / "effect/effect_reg.h").as_posix()}"\n'
 prefix += f'#include "{(headers / "trigger/trigger_reg.h").as_posix()}"\n'
 prefix += f'#include "{(headers / "variable64/array64_api.h").as_posix()}"\n'
+if 'NativeAdapter_Symbol' in source:
+    prefix += f'#include "{(root / "test/lib/native_symbols_fixture.h").as_posix()}"\n'
 prefix += r'''
 #include <stdio.h>
 #include <stdlib.h>

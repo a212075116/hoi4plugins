@@ -32,6 +32,10 @@ int GameDateUi_Init(void)
     void* target;
 
     if (g_uiHooked) return 1;
+    if (!NativeAdapter_GroupReady(NG_GAMEDATE)) {
+        Plugin_Log("[gamedate] ui symbols unavailable: %s", NativeAdapter_GroupDiagnostic(NG_GAMEDATE));
+        return 0;
+    }
     img = (unsigned char*)GetModuleHandleA(NULL);
     if (img == NULL) return 0;
     target = (void*)(img + RVA_GD_UI_DATE_UPDATE);

@@ -6,6 +6,8 @@
 #include "../hook/inline_hook.h"
 #include "../hook/inline_hook_batch.h"
 #include "MinHook.h"
+#include "../../adapter/native_adapter.h"
+#define ACH_RVA(symbol) NativeAdapter_Symbol(symbol)
 
 #include "../common/plugin_log.h"
 typedef unsigned char (__fastcall *Unary)(void*);
@@ -18,7 +20,7 @@ static __declspec(thread) int g_possible;
 static volatile LONG g_installed, g_needRebuild = 1, g_rebuilds, g_ticks, g_nativeCompletions, g_ironOverrides;
 
 static int NativeGate(const unsigned char* manager) {
-    return manager[163] || (manager[161] && manager[162] && !g_base[0x34530D4] && !g_base[0x332EC69]);
+    return manager[163] || (manager[161] && manager[162] && !g_base[ACH_RVA(NSY_ACH_FLAG_DEBUG)] && !g_base[ACH_RVA(NSY_ACH_FLAG_LOG)]);
 }
 
 static int Compatible(unsigned char* manager) {
@@ -34,8 +36,8 @@ static int Compatible(unsigned char* manager) {
     backend = *(unsigned char**)(definitions[0] + 72);
     if (!ConsoleCmd_IsReadable(backend, 96)) return 0;
     context = *(unsigned char**)(backend + 16);
-    if (!ConsoleCmd_IsReadable(context, 280) || *(void**)context != g_base + 0x2B5BE00 || !context[266] || !ConsoleCmd_IsReadable(*(void**)(context + 160), sizeof(void*))) return 0;
-    console = *(unsigned char**)(g_base + 0x35E1A80);
+    if (!ConsoleCmd_IsReadable(context, 280) || *(void**)context != g_base + ACH_RVA(NSY_ACH_CONTEXT_VT) || !context[266] || !ConsoleCmd_IsReadable(*(void**)(context + 160), sizeof(void*))) return 0;
+    console = *(unsigned char**)(g_base + ACH_RVA(NSY_CMD_MANAGER));
     if (!ConsoleCmd_IsReadable(console, 224)) return 0;
     network = *(void**)(console + 144);
     if (!ConsoleCmd_IsReadable(network, sizeof(void*))) return 0;
@@ -67,10 +69,10 @@ static int Possible(unsigned char* achievement, void* scope) {
 
 static void Append(unsigned char* manager, int offset, unsigned char* achievement) {
     typedef void* (__fastcall *Add)(void*, const void*);
-    ((Add)(g_base + 0x1205A0))(manager + offset, &achievement);
+    ((Add)(g_base + ACH_RVA(NSY_ACH_VECTOR_PUSH)))(manager + offset, &achievement);
     if (offset == 40) {
         unsigned short id = *(unsigned short*)(achievement + 80);
-        ((Add)(g_base + 0x61D0D0))(manager + 136, &id);
+        ((Add)(g_base + ACH_RVA(NSY_ACH_ID_PUSH)))(manager + 136, &id);
     }
 }
 
@@ -143,7 +145,7 @@ static void __fastcall Update(unsigned char* manager, void* scope) {
         if (!Completed(achievement) && (!node || ((Eval)(*(void***)node)[3])(node, scope))) {
             typedef __int64 (__fastcall *Complete)(void*, void*);
             Plugin_Log("[achievement] native happened true, invoking original completion id=%u", *(unsigned short*)(achievement + 80));
-            ((Complete)(g_base + 0x61CE50))(manager, achievement);
+            ((Complete)(g_base + ACH_RVA(NSY_ACH_COMPLETE)))(manager, achievement);
             InterlockedIncrement(&g_nativeCompletions);
         }
     }
@@ -160,8 +162,8 @@ int AchievementCompat_Install(void) {
     g_base = (unsigned char*)GetModuleHandleW(NULL); dos = (IMAGE_DOS_HEADER*)g_base;
     if (!g_base || dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew <= 0 || dos->e_lfanew > 4096) return 0;
     nt = (IMAGE_NT_HEADERS64*)(g_base + dos->e_lfanew);
-    if (nt->Signature != IMAGE_NT_SIGNATURE || nt->FileHeader.TimeDateStamp != 0x6AA123BB || nt->OptionalHeader.SizeOfImage != 0x37EC000 || !InlineHook_Init()) return 0;
-    targets[0] = g_base + 0x6201F0; targets[1] = g_base + 0x3DB5C0; targets[2] = g_base + 0x6202C0; targets[3] = g_base + 0x620570; targets[4] = g_base + 0x621040;
+    if (nt->Signature != IMAGE_NT_SIGNATURE || !NativeAdapter_GroupReady(NG_ACHIEVEMENT) || !InlineHook_Init()) return 0;
+    targets[0] = g_base + ACH_RVA(NSY_ACH_ELIGIBLE); targets[1] = g_base + ACH_RVA(NSY_ACH_IRON); targets[2] = g_base + ACH_RVA(NSY_ACH_REBUILD); targets[3] = g_base + ACH_RVA(NSY_ACH_RESTORE); targets[4] = g_base + ACH_RVA(NSY_ACH_UPDATE);
     if (MH_CreateHook(targets[0], Eligible, (void**)&g_eligible) != MH_OK) goto fail; ++created;
     if (MH_CreateHook(targets[1], Iron, (void**)&g_iron) != MH_OK) goto fail; ++created;
     if (MH_CreateHook(targets[2], Rebuild, (void**)&g_rebuild) != MH_OK) goto fail; ++created;
@@ -177,7 +179,7 @@ static long long __fastcall Status(CmdResult* out, CmdArgs* args) {
     unsigned char* manager;
     char text[768]; (void)args; ConsoleCmd_InitResult(out);
     if (!g_installed) { ConsoleCmd_SetMessage(out, "[error] Achievement compatibility installation unavailable; no state read."); return (long long)out; }
-    manager = *(unsigned char**)(g_base + 0x3330460);
+    manager = *(unsigned char**)(g_base + ACH_RVA(NSY_ACH_MANAGER));
     _snprintf_s(text, sizeof(text), _TRUNCATE,
         "[info] Achievement compatibility: installed=%ld active=%d rebuilds=%ld ticks=%ld iron_possible_overrides=%ld native_completions=%ld need_rebuild=%ld. Original happened and platform completion retained; Steam confirmation requires independent verification.",
         g_installed, Compatible(manager), g_rebuilds, g_ticks, g_ironOverrides, g_nativeCompletions, g_needRebuild);

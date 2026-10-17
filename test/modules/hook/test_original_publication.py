@@ -23,6 +23,8 @@ def function(text, name):
         end += 1
     return text[match.start():end] + "\n"
 prefix = f'#include "{(sdk / "minihook/include/MinHook.h").as_posix()}"\n#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n'
+if "NativeAdapter_Symbol" in variable:
+    prefix += f'#include "{(root / "test/lib/native_symbols_fixture.h").as_posix()}"\n'
 prefix += r'''
 static unsigned char* host;static int moduleOn,available,readable,failure,group,foreignRemoved,publishedWrong,callbackFaults,checks,failed,cases;
 static void* targets[11];static void** slots[11];static int hook[11];static char trace[4096];static int used;

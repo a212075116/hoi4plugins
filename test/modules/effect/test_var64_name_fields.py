@@ -32,6 +32,7 @@ def main():
 #include <stdint.h>
 #include <string.h>
 #include <stdarg.h>
+ADAPTER_FIXTURES
 #include "NAME_HEADER"
 #include "FORMAT_HEADER"
 #define VAR64_SUBOBJ_OFF 88u
@@ -131,6 +132,8 @@ int main(int argc,char** argv){char kind;(void)argv;if(argc>1)return sanity();
 '''
     fixture = fixture.replace('NAME_HEADER',(source.parent/'variable64_name.h').as_posix())
     fixture = fixture.replace('FORMAT_HEADER',(source.parent/'variable64_text_format.h').as_posix())
+    lib = source.parents[3].parent/'test/lib'
+    fixture = fixture.replace('ADAPTER_FIXTURES', '#include "'+(lib/'native_script_bindings_fixture.h').as_posix()+'"\n#include "'+(lib/'native_symbols_fixture.h').as_posix()+'"' if (lib/'native_symbols_fixture.h').exists() else '')
     fixture = fixture.replace('READERS',readers).replace('LANGUAGE',language_code)
     (output/'fixture.c').write_text(fixture,encoding='ascii')
     command = f'"{VCVARS}" >nul && cl /nologo /W3 /TC /O2 fixture.c /Fe:fixture.exe'

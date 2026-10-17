@@ -11,13 +11,14 @@
 #include "array64_shape_journal.c"
 
 #include "../common/plugin_log.h"
+#include "../../adapter/native_adapter.h"
 typedef void* (__fastcall *A64Lookup)(void*,void*,long long);
 typedef void (__fastcall *A64Erase)(void*,void*);
 typedef void* (__fastcall *A64Resolve)(void*,void*,int*,int*,void**,void**,void**,void**,void**,void**);
 typedef void* (__fastcall *A64Factory)(void);
 typedef void* (__fastcall *A64Append)(void*,const char*,size_t);
 typedef LONG (WINAPI *A64Random)(void*,unsigned char*,ULONG,ULONG);
-static unsigned char* a64_image(void){return (unsigned char*)GetModuleHandleA(NULL);}
+static unsigned char* a64_image(void){return NativeAdapter_GroupReady(NG_ARRAY64)?(unsigned char*)GetModuleHandleA(NULL):NULL;}
 
 int na_read_memory(const void* source,void* output,NaSize bytes)
 {
@@ -28,14 +29,14 @@ int as_native_put(void* c,const char* key,long long raw)
 {
     struct {const char* data;unsigned long long length;} view;long long* p;unsigned char* image=a64_image();
     if(!image||!c||!key||!ConsoleCmd_IsReadable(c,56))return 0;view.data=key;view.length=strlen(key);
-    __try{p=((A64Lookup)(image+0xBC5C10u))(c,&view,0);if(!ConsoleCmd_IsReadable(p,8))return 0;*p=raw;return 1;}
+    __try{p=((A64Lookup)(image+NativeAdapter_Symbol(NSY_A64_LOOKUP)))(c,&view,0);if(!ConsoleCmd_IsReadable(p,8))return 0;*p=raw;return 1;}
     __except(EXCEPTION_EXECUTE_HANDLER){return 0;}
 }
 int as_native_erase(void* c,const char* key)
 {
     struct {const char* data;unsigned long long length;} view;long long raw;unsigned char* image=a64_image();
     if(!image||na_lookup(c,key,&raw)!=1)return 0;view.data=key;view.length=strlen(key);
-    __try{((A64Erase)(image+0xBC8FC0u))(c,&view);return na_lookup(c,key,&raw)==0;}
+    __try{((A64Erase)(image+NativeAdapter_Symbol(NSY_A64_ERASE)))(c,&view);return na_lookup(c,key,&raw)==0;}
     __except(EXCEPTION_EXECUTE_HANDLER){return 0;}
 }
 int tx_write_existing(void* c,const char* key,long long raw){long long prior;return na_lookup(c,key,&prior)==1&&as_native_put(c,key,raw);}
@@ -66,12 +67,12 @@ static int a64_target(void* self,void* ctx,unsigned int offset,void** container,
 {
     unsigned char* d=(unsigned char*)self+offset;unsigned char* text;unsigned long long len,cap;int a=0,b=0;void* extra[6]={0};
     TriggerScopeView view;long long raw;char roots[6][40];void* selector;
-    if(!self||!ctx||!ConsoleCmd_IsReadable(d,208)||!d[8]||d[9]||d[10]||d[11]||d[14]||
+    if(!a64_image()||!self||!ctx||!ConsoleCmd_IsReadable(d,208)||!d[8]||d[9]||d[10]||d[11]||d[14]||
         *(void**)(d+144)||*(void**)(d+168))return 0;
     len=*(unsigned long long*)(d+128);cap=*(unsigned long long*)(d+136);text=cap<=15?d+112:*(unsigned char**)(d+112);
     if(!len||len>20||len>cap||!ConsoleCmd_IsReadable(text,(size_t)len+1)||text[len]||memchr(text,0,(size_t)len))return 0;
     memcpy(name,text,(size_t)len);name[len]=0;if(!ag_name(name,roots))return 0;
-    *container=((A64Resolve)(a64_image()+0x542500u))(d,ctx,&a,&b,&extra[0],&extra[1],&extra[2],&extra[3],&extra[4],&extra[5]);
+    *container=((A64Resolve)(a64_image()+NativeAdapter_RegistryRva(NS_CONTAINER)))(d,ctx,&a,&b,&extra[0],&extra[1],&extra[2],&extra[3],&extra[4],&extra[5]);
     if(!*container||!ConsoleCmd_IsReadable(*container,56))return 0;
     selector=*(void**)(d+160);*indexed=selector!=NULL;*index=0;*count_index=0;
     if(selector){
@@ -80,7 +81,7 @@ static int a64_target(void* self,void* ctx,unsigned int offset,void** container,
         if(!Trigger_ScopeView(ctx,&view))return 0;
         typedef long long* (__fastcall *ParamFn)(void*,long long*,void*,void*,unsigned char);
         if(*((unsigned char*)selector+11))return 0;
-        ((ParamFn)(a64_image()+0x544C90u))(selector,&raw,ctx,NULL,0);
+        ((ParamFn)(a64_image()+NativeAdapter_RegistryRva(NS_PARAM_GET)))(selector,&raw,ctx,NULL,0);
         if(raw<0||raw%100000||raw/100000>4096)return 0;*index=(int)(raw/100000);
     }
     return 1;
@@ -178,7 +179,7 @@ static void* g_a64vt[ARRAY64_EFFECT_COUNT][26];
 static EffectDef g_a64defs[ARRAY64_EFFECT_COUNT];
 static const char* g_a64names[]={"create_array64","append_array64","insert_array64","erase_array64","clear_array64","resize_array64","set_array_element64","set_array_element_native","recover_array64","log_array64"};
 typedef char array_effect_count_valid[(sizeof(g_a64names)/sizeof(g_a64names[0])==ARRAY64_EFFECT_COUNT)?1:-1];
-static void* a64_factory(int i){void* instance=((A64Factory)(a64_image()+0x341F60u))();if(instance)*(void**)instance=g_a64vt[i]+1;return instance;}
+static void* a64_factory(int i){void* instance=a64_image()?((A64Factory)(a64_image()+NativeAdapter_Symbol(NSY_VAR_FACTORY)))():NULL;if(instance)*(void**)instance=g_a64vt[i]+1;return instance;}
 static void* a64_tip(void* self,void* out,void* ctx,int i)
 {
     char text[256],name[21]="?",value[48]="runtime";unsigned char* d=(unsigned char*)self+88;unsigned char* p=(unsigned char*)self+296;
@@ -187,7 +188,7 @@ static void* a64_tip(void* self,void* out,void* ctx,int i)
         if(n>0&&n<=20&&ConsoleCmd_IsReadable(s,(size_t)n)){memcpy(name,s,(size_t)n);name[n]=0;}}
     if(ConsoleCmd_IsReadable(p,208)&&p[9])Trigger_FormatRaw(*(long long*)(p+64),value,sizeof(value));
     sprintf_s(text,sizeof(text),"Array64 %s: %s; value=%s (journaled)\n",g_a64names[i],name,value);
-    if(out){memset(out,0,32);*(unsigned long long*)((unsigned char*)out+24)=15;((A64Append)(a64_image()+0x129C10u))(out,text,strlen(text));}return out;
+    if(out&&a64_image()){memset(out,0,32);*(unsigned long long*)((unsigned char*)out+24)=15;((A64Append)(a64_image()+NativeAdapter_RegistryRva(NS_TEXT_APPEND)))(out,text,strlen(text));}return out;
 }
 #define A64_EFFECT(N, OP, MODE) \
     static void* __fastcall a64_factory##N(void){return a64_factory(N);} \
@@ -204,11 +205,11 @@ int Array64_RegisterEffects(void)
     int count=0;unsigned char* image=a64_image();if(!image||!Effect_RegistryReady())return 0;
     for(int i=0;i<ARRAY64_EFFECT_COUNT;++i){
         EffectDef* def=&g_a64defs[i];if(def->state==EFF_STATE_OK){++count;continue;}
-        g_a64vt[i][0]=*(void**)(image+0x2775698u-8);
-        for(int k=0;k<25;++k)g_a64vt[i][k+1]=*(void**)(image+0x2775698u+8*k);
+        g_a64vt[i][0]=*(void**)(image+NativeAdapter_Symbol(NSY_A64_SET_VT)-8);
+        for(int k=0;k<25;++k)g_a64vt[i][k+1]=*(void**)(image+NativeAdapter_Symbol(NSY_A64_SET_VT)+8*k);
         g_a64vt[i][14]=(void*)executes[i];g_a64vt[i][8]=(void*)tips[i];
         def->name=g_a64names[i];def->desc="Journaled explicit Array64 operation, native var/value syntax.";def->locKey="ARRAY64_EFFECT";
-        def->exec=executes[i];def->factory=factories[i];def->tooltip=tips[i];def->entryParser=*(void**)(image+0x277C418u);
+        def->exec=executes[i];def->factory=factories[i];def->tooltip=tips[i];def->entryParser=*(void**)(image+NativeAdapter_Symbol(NSY_VAR_ENTRY_VT));
         if(Effect_RegistryRegister(def))++count;
     }
     Plugin_Log("[array64] effects=%d/10",count);return count;

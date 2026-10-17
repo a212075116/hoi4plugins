@@ -29,9 +29,9 @@
 #include "crash_test.h"
 
 
-#define RVA_GS_GLOBAL   0x332F260u
-#define RVA_VT_MAIN     0x2721158u
-#define RVA_VT_SEC      0x27211B0u
+#define RVA_GS_GLOBAL   NativeAdapter_Symbol(NSY_GAMESTATE)
+#define RVA_VT_MAIN     NativeAdapter_Symbol(NSY_DIAG_GAMESTATE_VT)
+#define RVA_VT_SEC      NativeAdapter_Symbol(NSY_DIAG_GAMESTATE_VT2)
 
 static HMODULE g_self = NULL;
 
@@ -53,6 +53,10 @@ static void VerifyClassStructure(void)
 
     if (base == NULL) {
         Plugin_Log("[verify] no module base");
+        return;
+    }
+    if (!NativeAdapter_GroupReady(NG_DIAG)) {
+        Plugin_Log("[verify] diagnostic symbols unavailable: %s", NativeAdapter_GroupDiagnostic(NG_DIAG));
         return;
     }
     vtWantMain = (void*)(img + RVA_VT_MAIN);
@@ -80,16 +84,16 @@ static void VerifyClassStructure(void)
 
 static int ScanKnownArrays(void)
 {
-    static const struct { const char* name; unsigned long rva; } kKnown[] = {
-        { "CCountry",   0x27E7360ul },
-        { "CState",     0x2936CC0ul },
-        { "CProvince",  0x2971B18ul },
-        { "CCharacter", 0x297EA60ul },
-        { "CArmy",      0x295A2B0ul },
-        { "CUnit",      0x29530D8ul },
-        { "CDecision",  0x27EB3D0ul },
-        { "CEffect",    0x27D4990ul },
-        { "CTrigger",   0x27D55F0ul },
+    static const struct { const char* name; int symbol; } kKnown[] = {
+        { "CCountry",   NSY_DIAG_COUNTRY },
+        { "CState",     NSY_DIAG_STATE },
+        { "CProvince",  NSY_DIAG_PROVINCE },
+        { "CCharacter", NSY_DIAG_CHARACTER },
+        { "CArmy",      NSY_DIAG_ARMY },
+        { "CUnit",      NSY_DIAG_UNIT },
+        { "CDecision",  NSY_DIAG_DECISION },
+        { "CEffect",    NSY_DIAG_EFFECT },
+        { "CTrigger",   NSY_DIAG_TRIGGER },
         { NULL, 0 }
     };
     HMODULE base = GetModuleHandleA(NULL);
@@ -112,7 +116,7 @@ static int ScanKnownArrays(void)
         if (ptr > 0x00007FFFFFFFFFFFULL) continue;
 
         for (k = 0; kKnown[k].name != NULL; ++k) {
-            void* want = (void*)(img + kKnown[k].rva);
+            void* want = (void*)(img + NativeAdapter_Symbol(kKnown[k].symbol));
             int hits = 0;
             unsigned long long j;
             unsigned long long limit = size < 8 ? size : 8;
@@ -151,7 +155,25 @@ static PluginRegistrationStep g_triggerSteps[] = {
     {"array64", Array64_RegisterTriggers, ARRAY64_TRIGGER_COUNT, NULL, 0, 0}
 };
 
-static void RegisterPluginGroups(const char* kind, int (*ready)(void), PluginRegistrationStep* steps, int count)
+static const char* g_effectDisabled[sizeof(g_effectSteps) / sizeof(g_effectSteps[0])];
+static const char* g_triggerDisabled[sizeof(g_triggerSteps) / sizeof(g_triggerSteps[0])];
+
+static void DisableStep(PluginRegistrationStep* step, const char** reason, const char* why)
+{
+    step->run = NULL;
+    step->expected = 0;
+    step->complete = 1;
+    *reason = why;
+}
+
+static int GroupAvailable(int group, const char* capability)
+{
+    if (NativeAdapter_GroupReady(group)) return 1;
+    NativeAdapter_Report(capability, 0, NativeAdapter_GroupDiagnostic(group));
+    return 0;
+}
+
+static void RegisterPluginGroups(const char* kind, int (*ready)(void), PluginRegistrationStep* steps, const char** disabled, int count)
 {
     int round, i, complete = 0;
     for (round = 0; round < 3000 && !complete; ++round) {
@@ -164,9 +186,19 @@ static void RegisterPluginGroups(const char* kind, int (*ready)(void), PluginReg
             kind, steps[i].name, steps[i].last, steps[i].expected, steps[i].complete, round);
         _snprintf_s(capability, sizeof(capability), _TRUNCATE, "registration.%s.%s", kind, steps[i].name);
         NativeAdapter_Report(capability, steps[i].complete && steps[i].expected > 0,
-            steps[i].expected == 0 ? "CAMERA_WRITE_CONTRACT_NOT_APPROVED" : steps[i].complete ? "EXACT_COUNT_AND_DEPENDENCIES_READY" : "REGISTRATION_INCOMPLETE");
+            steps[i].expected == 0 ? (disabled[i] ? disabled[i] : "STEP_DISABLED") : steps[i].complete ? "EXACT_COUNT_AND_DEPENDENCIES_READY" : "REGISTRATION_INCOMPLETE");
     }
     if (!complete) Plugin_Log("[plugin] %s registration incomplete after %d polls", kind, round);
+}
+
+static void ReportSteps(const char* kind, PluginRegistrationStep* steps, int count, const char* reason)
+{
+    int i;
+    for (i = 0; i < count; ++i) {
+        char capability[128];
+        _snprintf_s(capability, sizeof(capability), _TRUNCATE, "registration.%s.%s", kind, steps[i].name);
+        NativeAdapter_Report(capability, 0, reason);
+    }
 }
 
 static DWORD WINAPI PluginThread(LPVOID p)
@@ -182,74 +214,81 @@ static DWORD WINAPI PluginThread(LPVOID p)
     Plugin_Log("[plugin] thread start, pid=%lu", (unsigned long)GetCurrentProcessId());
     Plugin_Log("[plugin] hoi4 base=%p", (void*)GetModuleHandleA(NULL));
     NativeAdapter_Initialize();
-    Plugin_Log("[adapter] legacy=%d reason=%s", NativeAdapter_LegacyAllowed(), NativeAdapter_Diagnostic());
+    Plugin_Log("[adapter] core=%d reason=%s camera=%s", NativeAdapter_GroupReady(NG_CORE), NativeAdapter_GroupDiagnostic(NG_CORE), NativeAdapter_Diagnostic());
     for (i = 0; i < (int)(sizeof(capabilities) / sizeof(capabilities[0])); ++i)
-        NativeAdapter_Report(capabilities[i], 0, NativeAdapter_LegacyAllowed() ? "INITIALIZING" : "LEGACY_BUILD_UNREVIEWED");
+        NativeAdapter_Report(capabilities[i], 0, "INITIALIZING");
     NativeAdapter_StartMonitor();
-    if (!NativeAdapter_LegacyAllowed()) {
-        NativeAdapter_OpenLogConsole();
-        Plugin_Log("[adapter] legacy initialization blocked before any business hook or registry access");
-        return 0;
-    }
-    source = AchievementSource_Install(); compat = AchievementCompat_Install(); ui = AchievementUi_Install();
-    Plugin_Log("[plugin] AchievementSource_Install -> %d", source);
-    Plugin_Log("[plugin] AchievementCompat_Install -> %d", compat);
-    Plugin_Log("[plugin] AchievementUi_Install -> %d", ui);
-    NativeAdapter_Report("achievement.source", source, source ? "INSTALLED" : "INSTALL_FAILED");
-    NativeAdapter_Report("achievement.compatibility", compat, compat ? "INSTALLED" : "INSTALL_FAILED");
-    NativeAdapter_Report("achievement.ui", ui, ui ? "INSTALLED" : "INSTALL_FAILED");
 
-    {
+    if (GroupAvailable(NG_ACHIEVEMENT, "achievement.source")) {
+        source = AchievementSource_Install(); compat = AchievementCompat_Install(); ui = AchievementUi_Install();
+        Plugin_Log("[plugin] AchievementSource_Install -> %d", source);
+        Plugin_Log("[plugin] AchievementCompat_Install -> %d", compat);
+        Plugin_Log("[plugin] AchievementUi_Install -> %d", ui);
+        NativeAdapter_Report("achievement.source", source, source ? "INSTALLED" : "INSTALL_FAILED");
+        NativeAdapter_Report("achievement.compatibility", compat, compat ? "INSTALLED" : "INSTALL_FAILED");
+        NativeAdapter_Report("achievement.ui", ui, ui ? "INSTALLED" : "INSTALL_FAILED");
+    } else {
+        GroupAvailable(NG_ACHIEVEMENT, "achievement.compatibility");
+        GroupAvailable(NG_ACHIEVEMENT, "achievement.ui");
+    }
+
+    if (GroupAvailable(NG_IMPORTS, "redirect.files")) {
         int ok = FileRedirect_Install();
         NativeAdapter_Report("redirect.files", ok, ok ? "INSTALLED" : "INSTALL_FAILED");
         Plugin_Log("[plugin] FileRedirect_Install -> %d (gameRoot=%s)",
                    ok, FileRedirect_GameRoot());
-    }
-
-    {
-        int ok = ProcBlock_Install();
+        ok = ProcBlock_Install();
         if (!ProcBlock_Complete()) ProcBlock_SetEnabled(0);
         NativeAdapter_Report("redirect.process", ProcBlock_Complete(), ProcBlock_Complete() ? "A_AND_W_INSTALLED" : ok ? "PARTIAL_INSTALL" : "INSTALL_FAILED");
         Plugin_Log("[plugin] ProcBlock_Install -> %d", ok);
-    }
-
-    DebugConsole_Start();
-
-    if (!NativeAdapter_CameraWriteAllowed()) {
-        g_effectSteps[0].run = NULL;
-        g_effectSteps[0].expected = 0;
-        g_effectSteps[0].complete = 1;
-    }
-
-    if (NativeAdapter_RegistryReady()) {
-    RegisterPluginGroups("effects", Effect_RegistryReady, g_effectSteps,
-        (int)(sizeof(g_effectSteps) / sizeof(g_effectSteps[0])));
-    RegisterPluginGroups("triggers", Trigger_RegistryReady, g_triggerSteps,
-        (int)(sizeof(g_triggerSteps) / sizeof(g_triggerSteps[0])));
     } else {
-        for (i = 0; i < 6; ++i) {
-            char capability[128];
-            _snprintf_s(capability, sizeof(capability), _TRUNCATE, "registration.effects.%s", g_effectSteps[i].name);
-            NativeAdapter_Report(capability, 0, NativeAdapter_RegistryDiagnostic());
-        }
-        for (i = 0; i < 2; ++i) {
-            char capability[128];
-            _snprintf_s(capability, sizeof(capability), _TRUNCATE, "registration.triggers.%s", g_triggerSteps[i].name);
-            NativeAdapter_Report(capability, 0, NativeAdapter_RegistryDiagnostic());
-        }
+        GroupAvailable(NG_IMPORTS, "redirect.process");
+    }
+
+    if (GroupAvailable(NG_BRIDGE, "console.commands")) {
+        DebugConsole_Start();
+    } else {
+        NativeAdapter_OpenLogConsole();
+    }
+
+    if (!NativeAdapter_CameraWriteAllowed()) DisableStep(&g_effectSteps[0], &g_effectDisabled[0], "CAMERA_WRITE_CONTRACT_NOT_APPROVED");
+    if (!NativeAdapter_GroupReady(NG_CORE)) DisableStep(&g_effectSteps[1], &g_effectDisabled[1], NativeAdapter_GroupDiagnostic(NG_CORE));
+    if (!NativeAdapter_GroupReady(NG_VAR64)) {
+        DisableStep(&g_effectSteps[2], &g_effectDisabled[2], NativeAdapter_GroupDiagnostic(NG_VAR64));
+        DisableStep(&g_effectSteps[4], &g_effectDisabled[4], NativeAdapter_GroupDiagnostic(NG_VAR64));
+        DisableStep(&g_effectSteps[5], &g_effectDisabled[5], NativeAdapter_GroupDiagnostic(NG_VAR64));
+    } else if (!NativeAdapter_GroupReady(NG_CONSOLE)) {
+        DisableStep(&g_effectSteps[4], &g_effectDisabled[4], NativeAdapter_GroupDiagnostic(NG_CONSOLE));
+    }
+    if (!NativeAdapter_GroupReady(NG_ARRAY64)) {
+        DisableStep(&g_effectSteps[3], &g_effectDisabled[3], NativeAdapter_GroupDiagnostic(NG_ARRAY64));
+        DisableStep(&g_triggerSteps[1], &g_triggerDisabled[1], NativeAdapter_GroupDiagnostic(NG_ARRAY64));
+    }
+
+    if (NativeAdapter_RegistryReady() && NativeAdapter_GroupReady(NG_CORE)) {
+        RegisterPluginGroups("effects", Effect_RegistryReady, g_effectSteps, g_effectDisabled,
+            (int)(sizeof(g_effectSteps) / sizeof(g_effectSteps[0])));
+        RegisterPluginGroups("triggers", Trigger_RegistryReady, g_triggerSteps, g_triggerDisabled,
+            (int)(sizeof(g_triggerSteps) / sizeof(g_triggerSteps[0])));
+    } else {
+        const char* reason = NativeAdapter_RegistryReady() ? NativeAdapter_GroupDiagnostic(NG_CORE) : NativeAdapter_RegistryDiagnostic();
+        ReportSteps("effects", g_effectSteps, (int)(sizeof(g_effectSteps) / sizeof(g_effectSteps[0])), reason);
+        ReportSteps("triggers", g_triggerSteps, (int)(sizeof(g_triggerSteps) / sizeof(g_triggerSteps[0])), reason);
     }
     NativeAdapter_CameraRegistered(0, g_effectSteps[0].expected > 0 && g_effectSteps[0].complete ? g_effectSteps[0].last : 0);
 
-    for (i = 0; i < 300; ++i) {
-        void* cur = NULL;
-        HMODULE b = GetModuleHandleA(NULL);
-        if (b != NULL) cur = *(void**)((unsigned char*)b + RVA_GS_GLOBAL);
-        if (cur != NULL) break;
-        Sleep(200);
+    if (NativeAdapter_GroupReady(NG_CORE)) {
+        for (i = 0; i < 300; ++i) {
+            void* cur = NULL;
+            HMODULE b = GetModuleHandleA(NULL);
+            if (b != NULL) cur = *(void**)((unsigned char*)b + RVA_GS_GLOBAL);
+            if (cur != NULL) break;
+            Sleep(200);
+        }
     }
-    VerifyClassStructure();
+    if (NativeAdapter_GroupReady(NG_DIAG)) VerifyClassStructure();
 
-    {
+    if (NativeAdapter_CameraWriteAllowed()) {
         int round;
         int got = 0;
         for (round = 0; round < 600 && !got; ++round) {
@@ -259,7 +298,7 @@ static DWORD WINAPI PluginThread(LPVOID p)
         if (!got) Plugin_Log("[plugin] true upper limit not captured after %d polls", round);
     }
 
-    {
+    if (GroupAvailable(NG_CONSOLE, "commands.camera")) {
         int n = NativeAdapter_CameraWriteAllowed() ? Camera_RegisterCommands() : 0;
         Plugin_Log("[plugin] Camera_RegisterCommands -> %d", n);
         NativeAdapter_CameraRegistered(n, g_effectSteps[0].expected > 0 && g_effectSteps[0].complete ? g_effectSteps[0].last : 0);
@@ -269,35 +308,39 @@ static DWORD WINAPI PluginThread(LPVOID p)
             Plugin_Log("[plugin] Camera_RegisterReadCommand -> %d", readCommand);
             NativeAdapter_Report("commands.camera.read", readCommand == 1, readCommand == 1 ? "REGISTERED" : "REGISTRATION_FAILED");
         }
+        {
+            int n = GameDate_RegisterCommands();
+            Plugin_Log("[plugin] GameDate_RegisterCommands -> %d", n);
+            NativeAdapter_Report("commands.clock", n == 5, n == 5 ? "FIVE_COMMANDS_REGISTERED" : "REGISTRATION_INCOMPLETE");
+        }
+        {
+            int n = CrashTest_RegisterCommands();
+            Plugin_Log("[plugin] CrashTest_RegisterCommands -> %d", n);
+            NativeAdapter_Report("commands.crash", n == 2, n == 2 ? "TWO_COMMANDS_REGISTERED" : "REGISTRATION_INCOMPLETE");
+        }
+        if (GroupAvailable(NG_ACHIEVEMENT, "commands.achievement")) {
+            source = AchievementProbe_RegisterCommands(); compat = AchievementCompat_RegisterCommands(); ui = AchievementUi_RegisterCommands();
+            Plugin_Log("[plugin] AchievementProbe_RegisterCommands -> %d", source);
+            Plugin_Log("[plugin] AchievementCompat_RegisterCommands -> %d", compat);
+            Plugin_Log("[plugin] AchievementUi_RegisterCommands -> %d", ui);
+            NativeAdapter_Report("commands.achievement", source == 2 && compat == 1 && ui == 1, source == 2 && compat == 1 && ui == 1 ? "ALL_FOUR_COMMANDS_REGISTERED" : "REGISTRATION_INCOMPLETE");
+        }
+        if (NativeAdapter_GroupReady(NG_BRIDGE)) DebugConsole_RegisterCommands();
+        Plugin_Log("[plugin] NativeAdapter_RegisterScriptDiagnostic -> %d", NativeAdapter_RegisterScriptDiagnostic());
+    } else {
+        GroupAvailable(NG_CONSOLE, "commands.camera.read");
+        GroupAvailable(NG_CONSOLE, "commands.clock");
+        GroupAvailable(NG_CONSOLE, "commands.crash");
+        GroupAvailable(NG_CONSOLE, "commands.achievement");
     }
 
-    {
-        int n = GameDate_RegisterCommands();
-        Plugin_Log("[plugin] GameDate_RegisterCommands -> %d", n);
-        NativeAdapter_Report("commands.clock", n == 5, n == 5 ? "FIVE_COMMANDS_REGISTERED" : "REGISTRATION_INCOMPLETE");
-    }
-
-    {
+    if (GroupAvailable(NG_GAMEDATE, "ui.date")) {
         int r = GameDateUi_Init();
         Plugin_Log("[plugin] GameDateUi_Init -> %d", r);
         NativeAdapter_Report("ui.date", r > 0, r > 0 ? "READY" : "INIT_FAILED");
     }
 
-    {
-        int n = CrashTest_RegisterCommands();
-        Plugin_Log("[plugin] CrashTest_RegisterCommands -> %d", n);
-        NativeAdapter_Report("commands.crash", n == 2, n == 2 ? "TWO_COMMANDS_REGISTERED" : "REGISTRATION_INCOMPLETE");
-    }
-
-    source = AchievementProbe_RegisterCommands(); compat = AchievementCompat_RegisterCommands(); ui = AchievementUi_RegisterCommands();
-    Plugin_Log("[plugin] AchievementProbe_RegisterCommands -> %d", source);
-    Plugin_Log("[plugin] AchievementCompat_RegisterCommands -> %d", compat);
-    Plugin_Log("[plugin] AchievementUi_RegisterCommands -> %d", ui);
-    NativeAdapter_Report("commands.achievement", source == 2 && compat == 1 && ui == 1, source == 2 && compat == 1 && ui == 1 ? "ALL_FOUR_COMMANDS_REGISTERED" : "REGISTRATION_INCOMPLETE");
-    DebugConsole_RegisterCommands();
-    Plugin_Log("[plugin] NativeAdapter_RegisterScriptDiagnostic -> %d", NativeAdapter_RegisterScriptDiagnostic());
-
-    {
+    if (NativeAdapter_GroupReady(NG_DIAG)) {
         int round;
         int found = 0;
         for (round = 0; round < 2400 && found == 0; ++round) {

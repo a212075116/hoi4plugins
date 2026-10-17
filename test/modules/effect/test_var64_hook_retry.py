@@ -27,7 +27,7 @@ typedef long long (__fastcall *Var64GameSetExecFn)(void*,void*);
 static unsigned int failMask,readMask;static int installed[6],calls[6],checks,failed;
 static unsigned char* Var64_Image(void){return (unsigned char*)0x10000000;}
 RVAS
-static unsigned int rvas[6]={RVA_VAR_ADD_EXEC,RVA_VAR_SUB_EXEC,RVA_VAR_MUL_EXEC,RVA_VAR_DIV_EXEC,RVA_VARCLAMP_EXEC,RVA_VAR_CLEAR_EXEC};
+static unsigned int rvas[6];static void init_rvas(void){unsigned int v[6]={RVA_VAR_ADD_EXEC,RVA_VAR_SUB_EXEC,RVA_VAR_MUL_EXEC,RVA_VAR_DIV_EXEC,RVA_VARCLAMP_EXEC,RVA_VAR_CLEAR_EXEC};memcpy(rvas,v,sizeof(v));}
 static int index(void* p){for(int i=0;i<6;++i)if(p==Var64_Image()+rvas[i])return i;return -1;}
 static int ConsoleCmd_IsReadable(const void* p,size_t n){(void)n;int i=index((void*)p);return i>=0&&!(readMask&(1u<<i));}
 static long long __fastcall Original(void* a,void* b){(void)a;(void)b;return 123;}
@@ -37,13 +37,15 @@ static int InlineHook_InstallInto(void* p,void* d,void** out){int i=index(p);(vo
 DECLS
 CODE
 static int ready(void){return READY;}
-int main(void){int cases=0;for(unsigned f=0;f<64;++f)for(unsigned r=0;r<64;++r){memset(calls,0,sizeof(calls));memset(installed,0,sizeof(installed));RESET failMask=f;readMask=r;Var64_InstallArithmeticHooks();failMask=readMask=0;Var64_InstallArithmeticHooks();++checks;if(!ready())++failed;for(int i=0;i<6;++i){++checks;if(calls[i]!=(r&(1u<<i)?1:f&(1u<<i)?2:1))++failed;}int before=0;for(int i=0;i<6;++i)before+=calls[i];Var64_InstallArithmeticHooks();int after=0;for(int i=0;i<6;++i)after+=calls[i];++checks;if(before!=after||!ready())++failed;++cases;}printf("hook_retry_cases=%d checks=%d failed=%d;actual arithmetic installer,controlled readability/install ownership,successful originals retained andnot recreated\n",cases,checks,failed);return failed?1:0;}
+int main(void){int cases=0;init_rvas();for(unsigned f=0;f<64;++f)for(unsigned r=0;r<64;++r){memset(calls,0,sizeof(calls));memset(installed,0,sizeof(installed));RESET failMask=f;readMask=r;Var64_InstallArithmeticHooks();failMask=readMask=0;Var64_InstallArithmeticHooks();++checks;if(!ready())++failed;for(int i=0;i<6;++i){++checks;if(calls[i]!=(r&(1u<<i)?1:f&(1u<<i)?2:1))++failed;}int before=0;for(int i=0;i<6;++i)before+=calls[i];Var64_InstallArithmeticHooks();int after=0;for(int i=0;i<6;++i)after+=calls[i];++checks;if(before!=after||!ready())++failed;++cases;}printf("hook_retry_cases=%d checks=%d failed=%d;actual arithmetic installer,controlled readability/install ownership,successful originals retained andnot recreated\n",cases,checks,failed);return failed?1:0;}
 '''
 decls = "".join(f"static Var64GameSetExecFn g_var64Orig{n}Exec;static long long __fastcall Var64_{n}Detour(void* a,void* b){{(void)a;(void)b;return 0;}}\n" for n in names)
 reset = "".join(f"g_var64Orig{n}Exec=0;" for n in names)
 ready = " && ".join(f"g_var64Orig{n}Exec==(Var64GameSetExecFn)Original" for n in names)
 if "int Var64_SyntaxHooksReady(" in text:
     ready = "Var64_SyntaxHooksReady()"
+if "NativeAdapter_Symbol" in rvas:
+    rvas = "#include \"" + (root / "test/lib/native_symbols_fixture.h").as_posix() + "\"\n" + rvas
 fixture = fixture.replace("RVAS", rvas).replace("DECLS", decls).replace("CODE", code).replace("RESET", reset).replace("READY", ready)
 (output / "fixture.c").write_text(fixture, encoding="ascii")
 p, build = execute('cmd /d /s /c "' + f'"{VCVARS}" >nul && cl /nologo /W3 /TC /MT /O2 fixture.c /Fe:fixture.exe' + '"', output)
