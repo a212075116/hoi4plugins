@@ -52,4 +52,4 @@ msbuild hoi4plugins.sln /p:Configuration=Release /p:Platform=x64
 
 脚本注册基础还需对应 `.registry` 资料，缺失时整个脚本注册组明确拒绝，不退回旧地址；见[第二轮](ai_docs/07_逆向能力/脚本注册基础绑定.md)。
 
-其余业务地址集中在 `src/plugin/adapter/symbol_catalog.h`，需对应 `.symbols` 资料，按组 fail closed；新版本用迁移工具生成禁用候选，见[第三轮](ai_docs/07_逆向能力/原生符号目录.md)。
+其余业务地址集中在 `src/plugin/adapter/symbol_catalog.h`，需对应 `.symbols` 资料，按组 fail closed；新版本用 `test/tools/migrate_image.py` 一次生成三类禁用候选，见[第三轮](ai_docs/07_逆向能力/原生符号目录.md)。

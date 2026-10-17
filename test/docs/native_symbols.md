@@ -42,8 +42,34 @@ exe3的`diag.gamestate_vt2`静态与运行时都报RTTI_TABLE_MISSING；`achieve
 `achievement/verify_ui_fixture.py`为8/12，第二轮代码stash后同为8/12，是既有失败，不属本轮回归。
 Windows控制台GBK下部分夹具打印报UnicodeEncodeError，设`PYTHONIOENCODING=utf-8`后正常，不是功能失败。
 
+## 一键迁移（第四轮）
+
+```powershell
+python test/tools/migrate_image.py --image ../hoi4.exe.backup --output-directory test/reports/20261017_migrate_image/backup --symbols-fixture <sym.exe>
+```
+
+默认基准为`../hoi4.exe`；同SHA用`--rescan`自扫。三映像并行约12.5分钟（锚点跳层占大头）。
+自扫`.symbols`、`.registry`去掉批准行后与已提交逐字节相同；backup symbols 27/27、registry 23/23、token 10766，`--accept` 10/10。
+
+## 实机驱动
+
+```powershell
+python test/modules/adapter/live_bindings_check.py --exe ../hoi4.exe --output test/reports/20261017_live/current
+```
+
+关闭已有游戏（先CloseMainWindow，超时才强杀）、把功能日志移为`.log.prev`、以`-start_tag=CHI`启动、等`Launching SINGLEPLAYER-game`后30秒，
+经`hoi4_debug_console.exe --pid --command`执行四条只读命令，正常关闭，输出`live.json`与功能日志副本。
+功能日志`adapter.identity`不等于映像SHA即判失败；载体只在宿主名为`hoi4.exe`时加载插件，其他文件名会表现为“无日志”。
+
+| 运行 | 结果 |
+|---|---|
+| 当前映像+新构建 | 35秒进图，36项全可用，四命令exit 0，正常关闭 |
+| backup以原名启动 | 40秒进图但插件未加载（载体按名拒绝），作为驱动修正依据保留 |
+| backup换名为hoi4.exe | 38秒进图，除有意关闭的摄像机写入4项外全可用，token 10766，摄像机310/50/3000，正常关闭；exe已按SHA复原 |
+
 ## 证据
 
 `test/reports/20261017_native_symbols/`保存修正前self/backup/exe3与修正后v2_*资料、`migration.json`；报告不纳入Git。
 v2自扫去掉approve行仍与已提交资料逐字节相同；backup与修正前唯一差异是`var64.vartext=0x12bd550`。
-未启动backup或exe3游戏，结论仅为离线候选与加载器接受性。
+`test/reports/20261017_migrate_image/`保存第四轮三映像资料与报告；`test/reports/20261017_live/`保存实机`live.json`、功能日志、部署前DLL及backup测试资料。
+backup只做了启动、注册与只读命令实机；exe3未启动。脚本行为与摄像机写入未在backup上验证。

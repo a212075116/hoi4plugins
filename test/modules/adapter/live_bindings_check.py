@@ -14,9 +14,13 @@ COMMANDS = ['plugin_script_bindings', 'plugin_camera_read', 'achievementstatus',
 
 
 def pids(name):
-    out = subprocess.run(['tasklist', '/FI', 'IMAGENAME eq ' + name, '/FO', 'CSV', '/NH'],
-                         capture_output=True, text=True, encoding='mbcs').stdout
-    return [int(line.split('","')[1]) for line in out.splitlines() if line.startswith('"' + name + '"')]
+    stem = name[:-4] if name.lower().endswith('.exe') else name
+    out = subprocess.run(['powershell', '-NoProfile', '-Command',
+                          '[Console]::OutputEncoding=[Text.Encoding]::UTF8; '
+                          '(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -eq $env:LIVE_STEM }).Id'],
+                         capture_output=True, text=True, encoding='utf-8', timeout=60,
+                         env=dict(__import__('os').environ, LIVE_STEM=stem)).stdout
+    return [int(x) for x in out.split()]
 
 
 def close(name, timeout=60):
@@ -28,7 +32,8 @@ def close(name, timeout=60):
         time.sleep(1)
     graceful = not pids(name)
     if not graceful:
-        subprocess.run(['taskkill', '/F', '/IM', name], capture_output=True)
+        for pid in pids(name):
+            subprocess.run(['taskkill', '/F', '/PID', str(pid)], capture_output=True, timeout=60)
         while pids(name):
             time.sleep(0.5)
     return graceful
@@ -95,6 +100,9 @@ def main():
             states[head.split('] ')[-1]] = dict(available='[function:available]' in head, state=value)
     report['final_states'] = states
     report['unavailable'] = sorted(k for k, v in states.items() if not v['available'])
+    identity = states.get('adapter.identity', {}).get('state', '')
+    if identity != report['sha256']:
+        report['failure'] = report.get('failure') or 'PLUGIN_NOT_LOADED_FOR_IMAGE:' + (identity or 'NO_FUNCTION_LOG')
     (args.output / 'live.json').write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding='utf-8')
     print(json.dumps(dict(sha256=report['sha256'][:16], in_game=report.get('in_game_seconds'),
                           failure=report.get('failure'), unavailable=report['unavailable'],
