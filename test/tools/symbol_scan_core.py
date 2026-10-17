@@ -10,6 +10,7 @@ import pefile
 from capstone.x86 import X86_OP_IMM, X86_OP_MEM, X86_REG_RIP
 
 EXECUTE, WRITE = 0x20000000, 0x80000000
+RIP_DISP = 4
 
 
 class ScanError(Exception):
@@ -208,7 +209,7 @@ class Image:
                 break
             for op in ins.operands:
                 if op.type == X86_OP_MEM and op.mem.base == X86_REG_RIP:
-                    mask[at + ins.disp_offset:at + ins.disp_offset + ins.disp_size] = b'\1' * ins.disp_size
+                    mask[at + ins.disp_offset:at + ins.disp_offset + RIP_DISP] = b'\1' * RIP_DISP
             if ins.group(capstone.CS_GRP_CALL) or ins.group(capstone.CS_GRP_JUMP) or ins.group(capstone.CS_GRP_BRANCH_RELATIVE):
                 if ins.imm_size:
                     mask[at + ins.imm_offset:at + ins.imm_offset + ins.imm_size] = b'\1' * ins.imm_size
@@ -260,9 +261,9 @@ class Image:
             for ins in cache[fn]:
                 a = ins.address - self.base
                 if a <= at < a + ins.size:
-                    if ins.disp_size == 4 and a + ins.disp_offset == at:
-                        mem = [op for op in ins.operands if op.type == X86_OP_MEM and op.mem.base == X86_REG_RIP]
-                        if mem and a + ins.size + mem[0].mem.disp == target:
+                    mem = [op for op in ins.operands if op.type == X86_OP_MEM and op.mem.base == X86_REG_RIP]
+                    if mem and a + ins.disp_offset == at:
+                        if a + ins.size + mem[0].mem.disp == target:
                             verified.append(dict(function=fn, instruction=a, kind='rip'))
                     elif ins.imm_size == 4 and a + ins.imm_offset == at and (ins.group(capstone.CS_GRP_CALL) or ins.group(capstone.CS_GRP_JUMP)):
                         verified.append(dict(function=fn, instruction=a, kind='call' if ins.group(capstone.CS_GRP_CALL) else 'jump'))

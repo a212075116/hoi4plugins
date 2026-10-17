@@ -7,11 +7,12 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'test/tools'))
-from symbol_scan_core import Image, ScanError
+from symbol_scan_core import EXECUTE, WRITE, Image, ScanError
 
 CATALOG = ROOT / 'src/plugin/adapter/symbol_catalog.h'
 MAX_ANCHORS = 12
 DELTA_WINDOW = 0x100000
+MIN_STRING = 8
 
 
 def catalog():
@@ -83,7 +84,81 @@ def anchored(base, target, rva, kind):
     return votes, tried
 
 
+def string_at(image, rva):
+    if not image.readonly_data(rva):
+        return None
+    s = image.mapped_section(rva)
+    raw = s[1][rva - s[0]:rva - s[0] + 512]
+    end = raw.find(b'\0')
+    text = raw[:end]
+    if end < MIN_STRING or any(c < 0x20 or c > 0x7e for c in text):
+        return None
+    return text
+
+
+def string_locations(image, text):
+    found = []
+    for start, raw, flags, mapped, name in image.sections:
+        if flags & (WRITE | EXECUTE):
+            continue
+        for m in re.finditer(re.escape(text + b'\0'), raw):
+            if m.start() == 0 or raw[m.start() - 1] == 0:
+                found.append(start + m.start())
+    return found
+
+
+def string_consensus(base, target, rva):
+    votes = collections.Counter()
+    tried = []
+    seen = set()
+    for ins in base.function_instructions(rva):
+        if ins.mnemonic != 'lea':
+            continue
+        at = base.operand_target(ins)
+        text = string_at(base, at) if at is not None else None
+        if text is None or text in seen:
+            continue
+        seen.add(text)
+        if len(seen) > MAX_ANCHORS:
+            break
+        row = dict(string=text.decode('ascii'))
+        tried.append(row)
+        if string_locations(base, text) != [at] or {r['function'] for r in base.rip_references(at)} != {rva}:
+            row['status'] = 'STRING_SHARED_IN_BASELINE'
+            continue
+        locations = string_locations(target, text)
+        if len(locations) != 1:
+            row['status'] = 'STRING_NOT_UNIQUE_IN_TARGET' if locations else 'STRING_NOT_FOUND'
+            continue
+        users = {r['function'] for r in target.rip_references(locations[0])}
+        if len(users) != 1:
+            row['status'] = 'STRING_USERS_' + str(len(users))
+            continue
+        value = users.pop()
+        row.update(status='VOTE', value=value)
+        votes[value] += 1
+    return votes, tried
+
+
 def recover_code(base, target, rva):
+    value, detail = structural_code(base, target, rva)
+    strings, rows = string_consensus(base, target, rva)
+    detail['strings'] = rows
+    if value is not None:
+        if strings:
+            detail['string_agrees'] = set(strings) == {value}
+        return value, detail
+    if len(strings) == 1 and not detail.get('votes'):
+        value = next(iter(strings))
+        if target.is_function_start(value):
+            detail.pop('status', None)
+            return value, dict(detail, method='STRING_CONSENSUS', votes=strings[value])
+    if len(strings) > 1:
+        detail['status'] = 'STRING_SPLIT'
+    return None, detail
+
+
+def structural_code(base, target, rva):
     twin, found, length, fixed = unique_function(base, target, rva)
     if twin is not None:
         return twin, dict(method='MASKED_PATTERN', signature_bytes=length, fixed_bytes=fixed)
@@ -184,6 +259,8 @@ def main():
         review = []
         if entry.get('votes') == 1:
             review.append('SINGLE_ANCHOR')
+        if entry.get('string_agrees') is False:
+            review.append('STRING_DISAGREES')
         others = list(deltas[entry['group']])
         others.remove(entry['delta'])
         if len(others) >= 2 and all(abs(entry['delta'] - d) > DELTA_WINDOW for d in others):
