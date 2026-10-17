@@ -8,6 +8,7 @@ import sys
 import capstone
 from capstone.x86 import X86_OP_MEM, X86_REG_RIP
 
+RIP_DISP=4
 ROOT=pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'test/modules/camera'))
 from camera_read_adapter_core import ImageBindings
@@ -40,7 +41,7 @@ def signature(image,rva):
         if at!=length:break
         for operand in ins.operands:
             if operand.type==X86_OP_MEM and operand.mem.base==X86_REG_RIP:
-                mask[at+ins.disp_offset:at+ins.disp_offset+ins.disp_size]=b'\1'*ins.disp_size
+                mask[at+ins.disp_offset:at+ins.disp_offset+RIP_DISP]=b'\1'*RIP_DISP
         if ins.group(capstone.CS_GRP_CALL) or ins.group(capstone.CS_GRP_JUMP):
             mask[at+ins.imm_offset:at+ins.imm_offset+ins.imm_size]=b'\1'*ins.imm_size
         length+=ins.size
