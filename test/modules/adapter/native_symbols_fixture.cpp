@@ -1,14 +1,7 @@
 #include "../../../src/plugin/adapter/native_adapter.cpp"
 static int checks,failed;
 static void Check(const char* name,bool ok){++checks;if(!ok){++failed;printf("FAIL %s\n",name);}}
-static const DWORD kLegacy[NSY_COUNT]={
-    0x332F260,0x332F698,0x129CA0,0x35E1A80,0x24B4920,0x24B4C40,0x24B4D40,0xDD3A50,0x18A1EE0,
-    0x542280,0xBC0880,0xDA04F0,0x12CF2B0,0x364C60,0x34F750,0x350240,0x34C760,0x366BC0,0x35B9E0,0x355C70,0x277C418,0x341F60,
-    0xBC5C10,0xBC8FC0,0x2775698,
-    0x3330460,0x34530D4,0x332EC69,0x1205A0,0x61D0D0,0x61CE50,0x6201F0,0x6202C0,0x620570,0x621040,0x24DC920,0x24BB300,0x6207E0,
-    0x3DB5C0,0x2B5BE00,0x1CDA120,0x1CD4570,
-    0x2721158,0x27211B0,0x27E7360,0x2936CC0,0x2971B18,0x297EA60,0x295A2B0,0x29530D8,0x27EB3D0,0x27D4990,0x27D55F0
-};
+#include "../../lib/native_symbols_values.h"
 static void MapImage() {
     g_base=(BYTE*)VirtualAlloc(nullptr,g_imageSize,MEM_COMMIT|MEM_RESERVE,PAGE_READWRITE);
     const auto* dos=(const IMAGE_DOS_HEADER*)g_file.data();const auto* nt=(const IMAGE_NT_HEADERS64*)(g_file.data()+dos->e_lfanew);
@@ -35,7 +28,7 @@ static std::string Replace(std::string text,const std::string& key,const std::st
     return text.replace(begin,end-begin,key+"="+value);
 }
 static bool AllReady() {for(int i=0;i<NG_COUNT;++i)if(!g_groupReady[i])return false;return true;}
-static bool Matches() {for(int i=0;i<NSY_COUNT;++i)if(g_symbolValues[i]!=kLegacy[i])return false;return true;}
+static bool Matches() {for(int i=0;i<NSY_COUNT;++i)if(g_symbolValues[i]!=kNativeSymbolValues[i])return false;return true;}
 static void Reload() {g_rttiBuilt=false;InitializeNativeSymbols();}
 int wmain(int argc,wchar_t** argv) {
     if(argc<3 || !LoadImage(argv[1],false))return 2;
@@ -57,7 +50,7 @@ int wmain(int argc,wchar_t** argv) {
     WriteProfile(g_original);Reload();
     Check("all-groups-ready",AllReady());
     Check("values-equal-previous-constants",Matches());
-    for(int i=0;i<NSY_COUNT;++i)if(g_symbolValues[i]!=kLegacy[i])printf("  mismatch %s got=0x%X want=0x%X\n",kSymbolSpecs[i].key,g_symbolValues[i],kLegacy[i]);
+    for(int i=0;i<NSY_COUNT;++i)if(g_symbolValues[i]!=kNativeSymbolValues[i])printf("  mismatch %s got=0x%X want=0x%X\n",kSymbolSpecs[i].key,g_symbolValues[i],kNativeSymbolValues[i]);
     Check("api-matches",NativeAdapter_Symbol(NSY_VAR_ADD_EXEC)==0x34C760 && NativeAdapter_GroupReady(NG_ACHIEVEMENT) && NativeAdapter_Symbol(NSY_COUNT)==0 && NativeAdapter_Symbol(-1)==0);
     g_scriptReady=false;Reload();
     Check("registry-dependency",g_groupReady[NG_CORE] && !g_groupReady[NG_BRIDGE] && !g_groupReady[NG_VAR64] && !g_groupReady[NG_ARRAY64] && g_groupReason[NG_VAR64]=="DEPENDENCY_SCRIPT_REGISTRY" && g_symbolValues[NSY_VAR_LOOKUP]==0 && g_groupReady[NG_ACHIEVEMENT]);
@@ -83,7 +76,7 @@ int wmain(int argc,wchar_t** argv) {
     {std::string text=g_original;text.push_back(0);WriteProfile(text);Reload();Check("nul-refused",g_groupReason[NG_CORE]=="SYMBOLS_PROFILE_ENCODING_OR_SIZE");}
     WriteProfile(g_original);
     {
-        DWORD table=kLegacy[NSY_VAR_ADD_EXEC];(void)table;
+        DWORD table=kNativeSymbolValues[NSY_VAR_ADD_EXEC];(void)table;
         DWORD addTable=0;BuildRttiIndex();auto it=g_rtti.find(std::make_pair(std::string(".?AVCAddToVariableEffect@@"),(DWORD)0));
         addTable=it==g_rtti.end()?0:it->second[0];
         uintptr_t saved=0;Ptr(g_base+addTable+13*8,saved);uintptr_t other=(uintptr_t)(g_base+0x129CA0);memcpy(g_base+addTable+13*8,&other,8);Reload();

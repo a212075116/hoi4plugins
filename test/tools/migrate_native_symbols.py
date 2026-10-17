@@ -7,12 +7,16 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'test/tools'))
+import capstone
+from capstone.x86 import X86_OP_MEM, X86_REG_RIP
 from symbol_scan_core import EXECUTE, WRITE, Image, ScanError
 
 CATALOG = ROOT / 'src/plugin/adapter/symbol_catalog.h'
 MAX_ANCHORS = 12
 DELTA_WINDOW = 0x100000
 MIN_STRING = 8
+RAW_HITS = 8
+CONTEXT = 2
 
 
 def catalog():
@@ -39,17 +43,50 @@ def read_profile(path):
     return fields
 
 
-def same_shape(a, b):
-    return a.mnemonic == b.mnemonic and a.size == b.size
-
-
 def unique_function(base, target, fn):
     pattern, length, fixed = base.masked_pattern(fn)
-    found = target.search(pattern, limit=2)
+    if base.is_function_start(fn):
+        found = target.search(pattern, limit=2)
+    else:
+        raw = target.search(pattern, limit=RAW_HITS, function_start=False)
+        found = [a for a in raw if target.is_function_start(a) or target.function_of(a) is None][:2]
+        if len(raw) == RAW_HITS:
+            found = found + [None] if len(found) == 1 else found
     return (found[0] if len(found) == 1 else None), found, length, fixed
 
 
-def anchored(base, target, rva, kind):
+def masked_instruction(image, ins):
+    raw = bytearray(ins.bytes)
+    if any(op.type == X86_OP_MEM and op.mem.base == X86_REG_RIP for op in ins.operands):
+        raw[ins.disp_offset:ins.disp_offset + 4] = b'\0' * 4
+    if ins.imm_size and (ins.group(capstone.CS_GRP_CALL) or ins.group(capstone.CS_GRP_JUMP)):
+        raw[ins.imm_offset:ins.imm_offset + ins.imm_size] = b'\0' * ins.imm_size
+    return bytes(raw)
+
+
+def align(base, fn, index, target, twin):
+    mine = base.function_instructions(fn)
+    theirs = target.function_instructions(twin)
+    if index < len(theirs) and masked_instruction(base, mine[index]) == masked_instruction(target, theirs[index]):
+        return index, theirs
+    first = max(0, index - CONTEXT)
+    window = [masked_instruction(base, x) for x in mine[first:index + CONTEXT + 1]]
+    shapes = [masked_instruction(target, x) for x in theirs]
+    hits = [j for j in range(len(shapes) - len(window) + 1) if shapes[j:j + len(window)] == window]
+    return (hits[0] + index - first if len(hits) == 1 else None), theirs
+
+
+def twin_of(base, target, fn, hop):
+    twin, found, length, fixed = unique_function(base, target, fn)
+    if twin is not None or not hop:
+        return twin, ('ANCHOR_AMBIGUOUS' if found else 'ANCHOR_NOT_FOUND')
+    votes, tried = anchored(base, target, fn, 'CODE', False)
+    if len(votes) == 1 and target.is_function_start(next(iter(votes))):
+        return next(iter(votes)), 'HOP'
+    return None, 'ANCHOR_HOP_FAILED'
+
+
+def anchored(base, target, rva, kind, hop=True):
     votes = collections.Counter()
     tried = []
     seen = set()
@@ -59,28 +96,32 @@ def anchored(base, target, rva, kind):
         seen.add(ref['function'])
         if len(seen) > MAX_ANCHORS:
             break
-        row = dict(anchor=ref['function'], instruction=ref['instruction'])
-        tried.append(row)
-        try:
-            twin, found, length, fixed = unique_function(base, target, ref['function'])
-        except ScanError as error:
-            row['status'] = 'ANCHOR_SCAN_ERROR:' + str(error)
-            continue
-        if twin is None:
-            row['status'] = 'ANCHOR_AMBIGUOUS' if found else 'ANCHOR_NOT_FOUND'
-            continue
-        index = base.instruction_index(ref['function'], ref['instruction'])
-        mine = base.function_instructions(ref['function'])
-        theirs = target.function_instructions(twin)
-        if index is None or index >= len(theirs) or not same_shape(mine[index], theirs[index]):
-            row['status'] = 'ANCHOR_SHAPE_CHANGED'
-            continue
-        value = target.operand_target(theirs[index])
-        if value is None:
-            row['status'] = 'ANCHOR_OPERAND_MISSING'
-            continue
-        row.update(status='VOTE', twin=twin, value=value)
-        votes[value] += 1
+        tried.append(dict(anchor=ref['function'], instruction=ref['instruction']))
+    for second in (False, True):
+        if second and (votes or not hop):
+            break
+        for row in tried:
+            if row.get('status') == 'VOTE' or (second and row.get('status') not in ('ANCHOR_AMBIGUOUS', 'ANCHOR_NOT_FOUND')):
+                continue
+            try:
+                twin, how = twin_of(base, target, row['anchor'], second)
+                if twin is None:
+                    row['status'] = how
+                    continue
+                index = base.instruction_index(row['anchor'], row['instruction'])
+                at, theirs = align(base, row['anchor'], index, target, twin) if index is not None else (None, [])
+            except ScanError as error:
+                row['status'] = 'ANCHOR_SCAN_ERROR:' + str(error)
+                continue
+            if at is None:
+                row['status'] = 'ANCHOR_SHAPE_CHANGED'
+                continue
+            value = target.operand_target(theirs[at])
+            if value is None:
+                row['status'] = 'ANCHOR_OPERAND_MISSING'
+                continue
+            row.update(status='VOTE', twin=twin, value=value, via=how if second else 'PATTERN')
+            votes[value] += 1
     return votes, tried
 
 
@@ -185,8 +226,9 @@ def recover_data(base, target, rva, size):
             detail['votes'] = {hex(k): v for k, v in votes.items()}
         return None, detail
     value = next(iter(votes))
-    if not target.writable(value) or not target.writable(value + size - 1):
-        return None, dict(detail, status='CONSENSUS_NOT_WRITABLE')
+    old, new = base.mapped_section(rva), target.mapped_section(value)
+    if not new or (old[2] & (WRITE | EXECUTE)) != (new[2] & (WRITE | EXECUTE)) or value + size > new[0] + new[3]:
+        return None, dict(detail, status='CONSENSUS_SECTION_KIND_CHANGED')
     return value, dict(detail, votes=votes[value])
 
 
@@ -198,40 +240,58 @@ def check_rtti(image, row):
     need = row['index'] + 1 if row['kind'] == 'SLOT' else row['index']
     if image.tables()[table]['slots'] < need:
         return dict(status='RTTI_TABLE_TOO_SHORT', table=table)
-    result = dict(status='RTTI_RESOLVED', table=table)
+    result = dict(status='RTTI_RESOLVED', table=table, slots=image.tables()[table]['slots'])
     if row['kind'] == 'SLOT':
         result['slot'] = image.slot(table, row['index'])
     return result
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--baseline-image', type=pathlib.Path, required=True)
-    parser.add_argument('--image', type=pathlib.Path, required=True)
-    parser.add_argument('--output-directory', type=pathlib.Path, required=True)
-    parser.add_argument('--rescan', action='store_true', help='scan even when SHA matches the baseline')
-    args = parser.parse_args()
-    groups, symbols = catalog()
-    base, target = Image(args.baseline_image), Image(args.image)
-    fields = read_profile(ROOT / 'bindings' / (base.sha + '.symbols'))
-    same = base.sha == target.sha and not args.rescan
-    out = {'schema': '1', 'image_sha256': target.sha, 'contract': 'symbols_v1'}
-    rows = []
+def check_layout(base, target, row, entry):
+    old = check_rtti(base, row)
+    if old['status'] != 'RTTI_RESOLVED':
+        return 'BASELINE_RTTI_UNRESOLVED'
+    if row['kind'] == 'TABLE':
+        if old['slots'] != entry['slots']:
+            entry['baseline_slots'] = old['slots']
+        return None
+    entry['baseline_slot'] = old['slot']
+    pattern, length, fixed = base.masked_pattern(old['slot'])
+    try:
+        if pattern.match(target.bytes(entry['slot'], length)):
+            entry['slot_shape'] = 'SAME'
+            return None
+    except ScanError:
+        pass
+    twin, detail = structural_code(base, target, old['slot'])
+    if twin is not None and twin != entry['slot']:
+        entry['slot_twin'] = twin
+        return 'SLOT_FUNCTION_MOVED'
+    entry['slot_shape'] = 'CHANGED_TWIN_SAME' if twin is not None else 'UNVERIFIED'
+    return None
+
+
+def resolve(base, target, rows, same):
+    out = {}
+    entries = []
     failed = set()
-    for row in symbols:
+    for row in rows:
         entry = dict(key=row['key'], kind=row['kind'], group=row['group'])
         if row['kind'] in ('SLOT', 'TABLE'):
             entry.update(check_rtti(target, row))
+            if entry['status'] == 'RTTI_RESOLVED' and not same:
+                layout = check_layout(base, target, row, entry)
+                if layout:
+                    entry['status'] = layout
             if entry['status'] != 'RTTI_RESOLVED':
                 failed.add(row['group'])
-            rows.append(entry)
+            entries.append(entry)
             continue
-        old = int(fields[row['key']].split(':')[0], 0)
+        old = row['baseline']
         entry['baseline'] = old
         if same:
-            out[row['key']] = fields[row['key']]
+            out[row['key']] = row['text']
             entry['status'] = 'EXACT_IMAGE_REUSE'
-            rows.append(entry)
+            entries.append(entry)
             continue
         try:
             if row['kind'] == 'CODE':
@@ -248,12 +308,21 @@ def main():
         else:
             out[row['key']] = hex(value) + (':' + target.fingerprint(value) if row['kind'] == 'CODE' else '')
             entry.update(status='CANDIDATE', rva=value, delta=value - old)
-        rows.append(entry)
+        entries.append(entry)
+    flag_review(entries)
+    return out, entries, failed
+
+
+def flag_review(rows):
     deltas = collections.defaultdict(list)
     for entry in rows:
         if entry['status'] == 'CANDIDATE':
             deltas[entry['group']].append(entry['delta'])
     for entry in rows:
+        if entry.get('slot_shape') == 'UNVERIFIED':
+            entry['review'] = ['SLOT_UNVERIFIED']
+        if 'baseline_slots' in entry:
+            entry['review'] = ['TABLE_SLOT_COUNT_CHANGED']
         if entry['status'] != 'CANDIDATE':
             continue
         review = []
@@ -267,26 +336,49 @@ def main():
             review.append('DELTA_OUTLIER')
         if review:
             entry['review'] = review
-    approvals = {}
-    for name in groups:
-        approvals['approve.' + name] = fields['approve.' + name] if same else '0'
-    ordered = {k: out[k] for k in ('schema', 'image_sha256', 'contract')}
-    ordered.update(approvals)
-    ordered.update({r['key']: out[r['key']] for r in symbols if r['kind'] in ('DATA', 'CODE')})
-    args.output_directory.mkdir(parents=True, exist_ok=True)
-    profile = args.output_directory / (target.sha + '.symbols')
-    profile.write_text(''.join(k + '=' + v + '\n' for k, v in ordered.items()), encoding='ascii', newline='\n')
+
+
+def summarize(rows):
     summary = collections.Counter(r['status'] for r in rows)
     summary['NEEDS_REVIEW'] = sum('review' in r for r in rows)
-    report = dict(
+    return dict(summary)
+
+
+def migrate_symbols(base, target, same, output):
+    groups, symbols = catalog()
+    fields = read_profile(ROOT / 'bindings' / (base.sha + '.symbols'))
+    for row in symbols:
+        if row['kind'] in ('CODE', 'DATA'):
+            row.update(text=fields[row['key']], baseline=int(fields[row['key']].split(':')[0], 0))
+    out, rows, failed = resolve(base, target, symbols, same)
+    ordered = {'schema': '1', 'image_sha256': target.sha, 'contract': 'symbols_v1'}
+    for name in groups:
+        ordered['approve.' + name] = fields['approve.' + name] if same else '0'
+    ordered.update({r['key']: out[r['key']] for r in symbols if r['kind'] in ('DATA', 'CODE')})
+    output.mkdir(parents=True, exist_ok=True)
+    profile = output / (target.sha + '.symbols')
+    profile.write_text(''.join(k + '=' + v + '\n' for k, v in ordered.items()), encoding='ascii', newline='\n')
+    return dict(
         baseline_sha256=base.sha, target_sha256=target.sha, profile=str(profile.resolve()),
         approved=same, complete_groups=[g for g in groups if g not in failed], incomplete_groups=sorted(failed),
-        summary=dict(summary), symbols=rows,
+        summary=summarize(rows), symbols=rows,
         scope='Read-only candidates. Masked pattern for CODE; caller/reference consensus over uniquely matched anchors '
-              'for DATA and ambiguous CODE; RTTI tables checked statically. Candidates are not ABI proof. '
+              'for DATA and ambiguous CODE; exclusive strings as fallback and cross-check; RTTI tables checked '
+              'statically with slot twins and slot counts compared to the baseline. Candidates are not ABI proof. '
               'A different image is always written with every approve.<group>=0.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--baseline-image', type=pathlib.Path, required=True)
+    parser.add_argument('--image', type=pathlib.Path, required=True)
+    parser.add_argument('--output-directory', type=pathlib.Path, required=True)
+    parser.add_argument('--rescan', action='store_true', help='scan even when SHA matches the baseline')
+    args = parser.parse_args()
+    base, target = Image(args.baseline_image), Image(args.image)
+    report = migrate_symbols(base, target, base.sha == target.sha and not args.rescan, args.output_directory)
     (args.output_directory / 'migration.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
-    print(json.dumps(dict(profile=report['profile'], approved=same, summary=report['summary'],
+    print(json.dumps(dict(profile=report['profile'], approved=report['approved'], summary=report['summary'],
                           incomplete_groups=report['incomplete_groups']), indent=2))
 
 
