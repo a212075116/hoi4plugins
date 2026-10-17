@@ -45,6 +45,14 @@ int wmain(int argc,wchar_t** argv) {
     std::wstring hash(g_sha.begin(),g_sha.end());g_profilePath=g_root+L"\\hoi4plugins\\bindings\\"+hash+L".symbols";
     std::vector<BYTE> bytes;if(!ReadFileBytes(argv[2],bytes,32768))return 3;g_original.assign(bytes.begin(),bytes.end());
     g_scriptReady=true;InterlockedExchange(&g_prepared,1);
+    if(argc>=4 && !wcscmp(argv[3],L"--accept")) {
+        std::string text=g_original;
+        for(const auto& g:kGroupSpecs)text=Replace(text,std::string("approve.")+g.name,"1");
+        WriteProfile(text);Reload();int ready=0;
+        for(const auto& g:kGroupSpecs) {ready+=g_groupReady[g.id];printf("%-12s %s %s\n",g.name,g_groupReady[g.id]?"READY":"CLOSED",g_groupReason[g.id].c_str());}
+        DeleteFileW(g_profilePath.c_str());RemoveDirectoryW((g_root+L"\\hoi4plugins\\bindings").c_str());RemoveDirectoryW((g_root+L"\\hoi4plugins").c_str());RemoveDirectoryW(g_root.c_str());
+        printf("native-symbols accept ready=%d groups=%d\n",ready,(int)NG_COUNT);return ready==NG_COUNT?0:1;
+    }
     Check("missing-profile-refused",(Reload(),!g_groupReady[NG_CORE] && g_groupReason[NG_CORE]=="SYMBOLS_PROFILE_MISSING"));
     WriteProfile(g_original);Reload();
     Check("all-groups-ready",AllReady());
