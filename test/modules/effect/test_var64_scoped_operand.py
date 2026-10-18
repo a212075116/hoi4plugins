@@ -14,6 +14,8 @@ prefix=r'''
 #include <stdarg.h>
 #define VAR64_FRAC_SCALE 100000LL
 #define RVA_VAR_LOOKUP 0
+#define VAR64_SUBOBJ_OFF 88u
+#define VAR64_PARAM_SECOND 296u
 typedef unsigned char* (__fastcall *Var64LookupFn)(void*,void*,void*);
 static long long target=1000000,other=950000,operand=250000;
 static unsigned lastOffset=0;

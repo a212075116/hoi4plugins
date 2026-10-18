@@ -106,7 +106,7 @@ backup复核文件填7个非一致字段（3个多数一致、4个无见证）�
 控制台：新构建`--self-test` 17/17、`--completion-self-test` 20/20、`--status-color-self-test` 7检查；实机补全返回`set_weather`等。
 backup首次9/11（`vanilla_last`、`language`），插件日志显示原版set被执行为两次log_variable64；修正后两映像均11/11，backup日志出现`vanilla set reclaimed`。
 var64夹具：debt、decode、hook_retry、name_fields、public_header、registration_glue、log_reader、raw_math、stored_raw、text_refactor、setter_debt、identity、language_name均通过。
-`test_var64_scoped_operand.py`在HEAD与修改版同样编译失败（`VAR64_PARAM_SECOND`/`VAR64_SUBOBJ_OFF`未声明），源于字段资料化后夹具未同步，本轮未修。
+`test_var64_scoped_operand.py`因字段资料化后缺`VAR64_PARAM_SECOND`/`VAR64_SUBOBJ_OFF`桩宏而编译失败（HEAD同样），已按当前值88/296补桩，EXIT 0。
 
 ## 证据
 
