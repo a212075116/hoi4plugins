@@ -9,6 +9,11 @@
 > 本文记录 `set_variable64` / `add_to_variable64` / `log_variable64` 的实现与实测。
 ## 二十二、`set_variable64` 实现完成（第11轮 · MinHook 方案）
 
+> 2026-10-18修正：+505..+511空隙构造函数不初始化，原版工厂造出的`CSetVariableEffect`可能带着释放后复用内存里的旧标记，
+> 被误派成`log_variable64`等（backup实机复现：原版`set_variable`变成两次log）。现在内联挂原版工厂，构造后把7字节空隙清零，
+> 插件工厂在此之后再写标记；清零钩子装不上时不安装语法钩子。`CAddToVariableEffect`上的标记判断只能命中残留，已删除。
+
+
 ### 22.1 实现结构
 
 ```c

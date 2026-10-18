@@ -146,6 +146,33 @@ static unsigned char* Var64_Image(void)
     return NativeAdapter_GroupReady(NG_VAR64) ? (unsigned char*)GetModuleHandleA(NULL) : NULL;
 }
 
+#define VAR64_MARK_GAP     7u
+
+static Var64FactoryFn g_var64OrigFactory = NULL;
+
+static void* __fastcall Var64_ClearedFactory(void)
+{
+    void* inst = g_var64OrigFactory != NULL ? g_var64OrigFactory() : NULL;
+
+    if (inst != NULL && VAR64_MARK_OFF != 0 && ConsoleCmd_IsReadable((unsigned char*)inst + VAR64_MARK_OFF, VAR64_MARK_GAP)) {
+        memset((unsigned char*)inst + VAR64_MARK_OFF, 0, VAR64_MARK_GAP);
+    }
+    return inst;
+}
+
+static int Var64_InstallFactoryClear(void)
+{
+    unsigned char* img = Var64_Image();
+
+    if (g_var64OrigFactory != NULL) return 1;
+    if (img == NULL || !ConsoleCmd_IsReadable(img + RVA_VARSET_FACTORY, 16)) return 0;
+    if (!InlineHook_InstallInto(img + RVA_VARSET_FACTORY, (void*)Var64_ClearedFactory, (void**)&g_var64OrigFactory)) {
+        g_var64OrigFactory = NULL;
+        return 0;
+    }
+    return 1;
+}
+
 static void* __fastcall Var64_PureGameFactory(void)
 {
     unsigned char* img = Var64_Image();
@@ -943,12 +970,6 @@ static int Var64_TryArithmetic(void* self, void* ctx, int op, const char* opName
 
 static long long __fastcall Var64_AddDetour(void* self, void* ctx)
 {
-    unsigned int mark = 0;
-
-    if (self != NULL && ConsoleCmd_IsReadable((unsigned char*)self + VAR64_MARK_OFF, 7)) {
-        mark = *(unsigned int*)((unsigned char*)self + VAR64_MARK_OFF);
-    }
-    if (mark == VAR64_MARK_ADD) return Var64_DoAddToVariable64(self, ctx);
     if (Var64_TryDebtArithmetic(self, ctx, VAR64_OP_ADD, "add_to_variable")) return 0;
     if (Var64_TryArithmetic(self, ctx, VAR64_OP_ADD, "add_to_variable")) return 0;
     if (g_var64OrigAddExec != NULL) return g_var64OrigAddExec(self, ctx);
@@ -1087,6 +1108,10 @@ static void Var64_InstallGameSyntaxHook(void)
     if (g_var64GameSyntaxHookReady) return;
     if (img == NULL) return;
     if (!ConsoleCmd_IsReadable(img + RVA_GAME_SET_EXEC, 16)) return;
+    if (!Var64_InstallFactoryClear()) {
+        Plugin_Log("[var64] factory mark-gap clear install failed; gamesyntax hook not installed");
+        return;
+    }
     orig = (void*)g_var64OrigGameSetExec;
     if (!InlineHook_InstallInto(img + RVA_GAME_SET_EXEC, (void*)Var64_GameSyntaxDetour, (void**)&g_var64OrigGameSetExec)) {
         g_var64OrigGameSetExec = (Var64GameSetExecFn)orig;
