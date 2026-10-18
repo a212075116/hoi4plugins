@@ -11,6 +11,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--pid", type=int, required=True)
 parser.add_argument("--helper", type=pathlib.Path, required=True)
 parser.add_argument("--report", type=pathlib.Path, required=True)
+parser.add_argument("--skip", action="append", default=[], help="command label to leave out, e.g. camera")
 args = parser.parse_args()
 root = pathlib.Path(__file__).resolve().parents[2]
 game = root.parent
@@ -39,6 +40,7 @@ commands = [
     ("array_trigger", "--command", expression("eval_trigger", "check_array64 = { var = norm21a^num value = 3 compare = equals }")),
     ("language", "--command", expression("eval_effect", 'log = "NORM21 language=[?norm21]"')),
 ]
+commands = [c for c in commands if c[0] not in args.skip]
 ledger_path = report / "commands.json"
 rows = json.loads(ledger_path.read_text(encoding="utf-8")) if ledger_path.exists() else []
 if any(row["exit"] != 0 for row in rows):

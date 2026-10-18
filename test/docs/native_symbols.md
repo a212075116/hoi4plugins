@@ -95,6 +95,19 @@ exe3摄像机指针`0x728`另由`camera_read_adapter_core.find_getter`在槽36/3
 夹具调整：`native_script_bindings_fixture.h`引入`native_symbols_fixture.h`提供组与字段桩；tooltip与var64名字字段夹具补入新宏常量。
 `native_symbols_values.h`另含51项字段值。证据在`test/reports/20261018_fields_v2/`。
 
+## 行为验收（第六轮）
+
+```powershell
+python test/modules/adapter/live_bindings_check.py --exe ../hoi4.exe --output test/reports/20261018_v2/fix_current --smoke
+python test/tools/migrate_image.py --image ../hoi4.exe.backup --output-directory test/reports/20261018_v2/backup --review test/reports/20261018_v2/backup.review
+```
+
+backup复核文件填7个非一致字段（3个多数一致、4个无见证），加载器11/11组接受。backup仍按临时换名为`hoi4.exe`运行，结束后按SHA复原。
+控制台：新构建`--self-test` 17/17、`--completion-self-test` 20/20、`--status-color-self-test` 7检查；实机补全返回`set_weather`等。
+backup首次9/11（`vanilla_last`、`language`），插件日志显示原版set被执行为两次log_variable64；修正后两映像均11/11，backup日志出现`vanilla set reclaimed`。
+var64夹具：debt、decode、hook_retry、name_fields、public_header、registration_glue、log_reader、raw_math、stored_raw、text_refactor、setter_debt、identity、language_name均通过。
+`test_var64_scoped_operand.py`在HEAD与修改版同样编译失败（`VAR64_PARAM_SECOND`/`VAR64_SUBOBJ_OFF`未声明），源于字段资料化后夹具未同步，本轮未修。
+
 ## 证据
 
 `test/reports/20261017_native_symbols/`保存修正前self/backup/exe3与修正后v2_*资料、`migration.json`；报告不纳入Git。

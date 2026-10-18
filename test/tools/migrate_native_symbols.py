@@ -396,15 +396,16 @@ def migrate_symbols(base, target, same, output):
     return report
 
 
-def write_fields(report, values, source=None):
+def write_fields(report, values, source=None, sources=None):
     rows = []
     failed = set(report['symbol_failures'])
     for field in catalog_fields():
         value = values.get(field['key'])
         if not value:
             failed.add(field['group'])
+        origin = (sources or {}).get(field['key'], source)
         rows.append(dict(key=field['key'], group=field['group'], value=value or 0,
-                         source=source if value else 'NO_UNANIMOUS_EVIDENCE'))
+                         source=origin if value else 'NO_UNANIMOUS_EVIDENCE'))
         report['ordered']['field.' + field['key']] = hex(value) if value else '0'
     report['fields'] = rows
     report['complete_groups'] = [g for g in report['groups'] if g not in failed]

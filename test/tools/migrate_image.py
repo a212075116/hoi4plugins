@@ -87,6 +87,39 @@ def migrate_camera(base, target_path, sha, same, output, layout):
     return result
 
 
+def read_review(path):
+    entries = {}
+    for number, line in enumerate(path.read_text(encoding='ascii').splitlines(), 1):
+        body, _, reason = line.partition('#')
+        if not body.strip():
+            continue
+        key, _, value = body.partition('=')
+        key, value, reason = key.strip(), value.strip(), reason.strip()
+        if not key or not value or not reason or key.startswith(('approve.', 'runtime_')) or key in entries:
+            raise SystemExit('review line %d needs key=value # reason, no approvals, no duplicates' % number)
+        entries[key] = dict(value=value, reason=reason)
+    return entries
+
+
+def apply_review(review, symbols, registry, field_values, field_sources):
+    applied = []
+    registry_path = pathlib.Path(registry['profile'])
+    registry_lines = dict(line.split('=', 1) for line in registry_path.read_text(encoding='ascii').splitlines() if line)
+    for key, entry in review.items():
+        if key.startswith('field.'):
+            field_values[key[6:]] = int(entry['value'], 0)
+            field_sources[key[6:]] = 'REVIEWED'
+        elif key in symbols['ordered']:
+            symbols['ordered'][key] = entry['value']
+        elif key in registry_lines:
+            registry_lines[key] = entry['value']
+        else:
+            raise SystemExit('review key not in any profile: ' + key)
+        applied.append(dict(key=key, **entry))
+    registry_path.write_text(''.join(k + '=' + v + '\n' for k, v in registry_lines.items()), encoding='ascii', newline='\n')
+    return applied
+
+
 def accept(fixture, image, profile):
     if not fixture:
         return None
@@ -101,6 +134,7 @@ def main():
     parser.add_argument('--output-directory', type=pathlib.Path, required=True)
     parser.add_argument('--rescan', action='store_true', help='scan even when SHA matches the baseline')
     parser.add_argument('--symbols-fixture', type=pathlib.Path, help='compiled native_symbols_fixture.exe for --accept')
+    parser.add_argument('--review', type=pathlib.Path, help='reviewed key=value # reason lines applied to candidates')
     args = parser.parse_args()
     base, target = Image(args.baseline_image), Image(args.image)
     same = base.sha == target.sha and not args.rescan
@@ -108,12 +142,16 @@ def main():
     symbols = migrate_symbols(base, target, same, args.output_directory)
     registry = migrate_registry(base, target, same, args.output_directory)
     fields = field_report(base, target, dict(target_sha256=target.sha, symbols=symbols, registry=registry))
+    reviewed = []
     if not same:
-        write_fields(symbols, {r['key']: int(next(iter(r['votes'])), 16) for r in fields['fields']
-                               if r['status'] in ('SAME', 'MOVED')}, 'UNANIMOUS_WITNESS')
+        values = {r['key']: int(next(iter(r['votes'])), 16) for r in fields['fields'] if r['status'] in ('SAME', 'MOVED')}
+        sources = {k: 'UNANIMOUS_WITNESS' for k in values}
+        if args.review:
+            reviewed = apply_review(read_review(args.review), symbols, registry, values, sources)
+        write_fields(symbols, values, sources=sources)
     camera = migrate_camera(base, args.image, target.sha, same, args.output_directory, fields)
     report = dict(baseline_sha256=base.sha, target_sha256=target.sha, approved=same,
-                  symbols=symbols, registry=registry, camera=camera, fields=fields,
+                  symbols=symbols, registry=registry, camera=camera, fields=fields, reviewed=reviewed,
                   symbols_accept=accept(args.symbols_fixture, args.image, symbols['profile']))
     (args.output_directory / 'migration.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
     print(json.dumps(dict(
@@ -122,7 +160,7 @@ def main():
         registry=dict(summary=registry['summary'], complete=registry['complete'],
                       static_token_count=registry['static_token_count']),
         camera=dict(located=camera['located'], failure=camera.get('failure'), origin=camera['origin']),
-        fields=brief(fields),
+        fields=brief(fields), reviewed=[r['key'] for r in reviewed],
         symbols_accept=report['symbols_accept'] and report['symbols_accept']['stdout'][-1]), indent=2))
 
 

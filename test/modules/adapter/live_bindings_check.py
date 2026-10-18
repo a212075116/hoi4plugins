@@ -63,6 +63,9 @@ def main():
     parser.add_argument('--output', type=pathlib.Path, required=True)
     parser.add_argument('--start-tag', default='CHI')
     parser.add_argument('--settle', type=float, default=30.0)
+    parser.add_argument('--smoke', action='store_true', help='run test/tools/run_normalization_smoke.py before closing')
+    parser.add_argument('--smoke-skip', action='append', default=[])
+    parser.add_argument('--extra-command', action='append', default=[], help='additional console line, may change the unsaved session')
     args = parser.parse_args()
     exe = args.exe.resolve()
     name = exe.name
@@ -82,11 +85,21 @@ def main():
             time.sleep(args.settle)
             pid = pids(name)[0]
             report['commands'] = {}
-            for command in COMMANDS:
+            for command in COMMANDS + args.extra_command:
                 p = subprocess.run([str(GAME / 'hoi4_debug_console.exe'), '--pid', str(pid), '--command', command],
                                    capture_output=True, timeout=60)
                 report['commands'][command] = dict(exit=p.returncode,
                                                    stdout=p.stdout.decode('utf-8', 'replace').splitlines()[-30:])
+            if args.smoke:
+                smoke = args.output / 'smoke'
+                command = ['python', str(GAME / 'hoi4plugins/test/tools/run_normalization_smoke.py'), '--pid', str(pid),
+                           '--helper', str(GAME / 'hoi4_debug_console.exe'), '--report', str(smoke)]
+                for label in args.smoke_skip:
+                    command += ['--skip', label]
+                p = subprocess.run(command, capture_output=True, timeout=600)
+                summary = smoke / 'comparison.json'
+                report['smoke'] = dict(exit=p.returncode, checks=json.loads(summary.read_text(encoding='utf-8'))['checks']
+                                       if summary.exists() else None, tail=p.stdout.decode('utf-8', 'replace').splitlines()[-5:])
     except RuntimeError as error:
         report['failure'] = str(error)
     report['alive_before_close'] = bool(pids(name))
@@ -106,6 +119,7 @@ def main():
     (args.output / 'live.json').write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding='utf-8')
     print(json.dumps(dict(sha256=report['sha256'][:16], in_game=report.get('in_game_seconds'),
                           failure=report.get('failure'), unavailable=report['unavailable'],
+                          smoke=report.get('smoke') and report['smoke']['checks'],
                           graceful_close=report['graceful_close']), indent=2, ensure_ascii=False))
 
 
