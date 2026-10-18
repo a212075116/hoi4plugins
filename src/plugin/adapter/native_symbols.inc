@@ -7,12 +7,14 @@ static const GroupSpec kGroupSpecs[]={
 #define NATIVE_DATA(id,group,key,bytes)
 #define NATIVE_SLOT(id,group,key,type,offset,slot)
 #define NATIVE_TABLE(id,group,key,type,offset,slots)
+#define NATIVE_FIELD(id, group, key)
 #include "symbol_catalog.h"
 #undef NATIVE_GROUP
 #undef NATIVE_CODE
 #undef NATIVE_DATA
 #undef NATIVE_SLOT
 #undef NATIVE_TABLE
+#undef NATIVE_FIELD
 };
 static const SymbolSpec kSymbolSpecs[]={
 #define NATIVE_GROUP(id,name,registry,first,second)
@@ -20,16 +22,36 @@ static const SymbolSpec kSymbolSpecs[]={
 #define NATIVE_DATA(id,group,key,bytes) {id,group,SK_DATA,key,nullptr,0,0,bytes},
 #define NATIVE_SLOT(id,group,key,type,offset,slot) {id,group,SK_SLOT,key,type,offset,slot,0},
 #define NATIVE_TABLE(id,group,key,type,offset,slots) {id,group,SK_TABLE,key,type,offset,slots,0},
+#define NATIVE_FIELD(id, group, key)
 #include "symbol_catalog.h"
 #undef NATIVE_GROUP
 #undef NATIVE_CODE
 #undef NATIVE_DATA
 #undef NATIVE_SLOT
 #undef NATIVE_TABLE
+#undef NATIVE_FIELD
+};
+struct FieldSpec {int id,group;const char* key;};
+static const FieldSpec kFieldSpecs[]={
+#define NATIVE_GROUP(id,name,registry,first,second)
+#define NATIVE_CODE(id,group,key)
+#define NATIVE_DATA(id,group,key,bytes)
+#define NATIVE_SLOT(id,group,key,type,offset,slot)
+#define NATIVE_TABLE(id,group,key,type,offset,slots)
+#define NATIVE_FIELD(id,group,key) {id,group,key},
+#include "symbol_catalog.h"
+#undef NATIVE_GROUP
+#undef NATIVE_CODE
+#undef NATIVE_DATA
+#undef NATIVE_SLOT
+#undef NATIVE_TABLE
+#undef NATIVE_FIELD
 };
 static_assert(sizeof(kGroupSpecs)/sizeof(kGroupSpecs[0])==NG_COUNT,"group catalog");
 static_assert(sizeof(kSymbolSpecs)/sizeof(kSymbolSpecs[0])==NSY_COUNT,"symbol catalog");
+static_assert(sizeof(kFieldSpecs)/sizeof(kFieldSpecs[0])==NFL_COUNT,"field catalog");
 DWORD g_symbolValues[NSY_COUNT]={};
+DWORD g_fieldValues[NFL_COUNT]={};
 bool g_groupReady[NG_COUNT]={};
 std::string g_groupReason[NG_COUNT];
 std::map<std::pair<std::string,DWORD>,std::vector<DWORD>> g_rtti;
@@ -116,14 +138,15 @@ bool SymbolFields(const std::vector<BYTE>& bytes,std::map<std::string,std::strin
     std::set<std::string> expected={"schema","image_sha256","contract"};
     for(const auto& g:kGroupSpecs)expected.insert(std::string("approve.")+g.name);
     for(const auto& s:kSymbolSpecs)if(s.kind==SK_CODE || s.kind==SK_DATA)expected.insert(s.key);
+    for(const auto& f:kFieldSpecs)expected.insert(std::string("field.")+f.key);
     if(fields.size()!=expected.size()) {reason="SYMBOLS_PROFILE_KEY_SET";return false;}
     for(const auto& key:expected)if(!fields.count(key)) {reason="SYMBOLS_PROFILE_KEY_SET";return false;}
-    if(fields["schema"]!="1" || fields["image_sha256"]!=g_sha || fields["contract"]!="symbols_v1") {reason="SYMBOLS_PROFILE_IDENTITY_OR_SCHEMA";return false;}
+    if(fields["schema"]!="1" || fields["image_sha256"]!=g_sha || fields["contract"]!="symbols_v2") {reason="SYMBOLS_PROFILE_IDENTITY_OR_SCHEMA";return false;}
     for(const auto& g:kGroupSpecs) {const std::string& v=fields[std::string("approve.")+g.name];if(v!="0" && v!="1") {reason="SYMBOLS_PROFILE_APPROVAL_VALUE";return false;}}
     return true;
 }
 void InitializeNativeSymbols() {
-    memset(g_symbolValues,0,sizeof(g_symbolValues));
+    memset(g_symbolValues,0,sizeof(g_symbolValues));memset(g_fieldValues,0,sizeof(g_fieldValues));
     for(int i=0;i<NG_COUNT;++i) {g_groupReady[i]=false;g_groupReason[i]="SYMBOLS_NOT_INITIALIZED";}
     std::vector<BYTE> bytes;std::wstring sha(g_sha.begin(),g_sha.end());std::string common;
     std::map<std::string,std::string> fields;
@@ -136,6 +159,13 @@ void InitializeNativeSymbols() {
         const char* why=ResolveSymbol(spec,fields,values[spec.id]);
         if(why) {failure[spec.group]=std::string(spec.key)+":"+why;values[spec.id]=0;}
     }
+    DWORD offsets[NFL_COUNT]={};
+    for(const auto& spec:kFieldSpecs) {
+        if(fields[std::string("approve.")+kGroupSpecs[spec.group].name]!="1" || !failure[spec.group].empty())continue;
+        if(!ScriptNumber(fields[std::string("field.")+spec.key],NATIVE_FIELD_MAX,offsets[spec.id]) || !offsets[spec.id]) {
+            failure[spec.group]=std::string("field.")+spec.key+":FIELD_INVALID";offsets[spec.id]=0;
+        }
+    }
     for(const auto& g:kGroupSpecs) {
         bool ready=false;std::string reason;
         if(fields[std::string("approve.")+g.name]!="1")reason="GROUP_NOT_APPROVED";
@@ -147,4 +177,5 @@ void InitializeNativeSymbols() {
         g_groupReady[g.id]=ready;g_groupReason[g.id]=reason;
     }
     for(const auto& spec:kSymbolSpecs)if(g_groupReady[spec.group])g_symbolValues[spec.id]=values[spec.id];
+    for(const auto& spec:kFieldSpecs)if(g_groupReady[spec.group])g_fieldValues[spec.id]=offsets[spec.id];
 }

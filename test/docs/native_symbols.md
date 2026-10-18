@@ -24,7 +24,7 @@ test\reports\20261017_native_symbols\sym.exe "D:\SteamLibrary\steamapps\common\H
 test\reports\20261017_native_symbols\sym.exe "D:\SteamLibrary\steamapps\common\Hearts of Iron IV\hoi4.exe.backup" test\reports\20261017_native_symbols\v2_backup\<SHA>.symbols --accept
 ```
 
-默认模式：实际`native_adapter.cpp`与`native_symbols.inc`在当前映像及重定位受控内存中23检查，覆盖缺资料、批准传播、
+默认模式：实际`native_adapter.cpp`与`native_symbols.inc`在当前映像及重定位受控内存中36检查（第六轮起含字段），覆盖缺资料、批准传播、
 registry依赖、指纹/节/格式/key集合/身份/NUL拒绝、loaded槽与代码被改、恢复后一致、未发布API关闭。
 `--accept`：把临时副本全部批准位改为1，只报告生产加载器逐组结果；不修改输入资料，退出码0表示全部组就绪。
 
@@ -78,6 +78,22 @@ exe3摄像机指针`0x728`另由`camera_read_adapter_core.find_getter`在槽36/3
 
 速度回归：缓存索引与旧扫描在7个真实目标上引用集合完全相同；首版按位置取前N个锚点时`achievement.vector_push`退化为未解析，
 跨步加按函数长度排序后恢复；`param.get`在backup出现10:1，以多数票加复核标记恢复。最终三映像126秒，资料与第四轮逐字节相同。
+
+## 字段资料化（第六轮）
+
+| 运行 | 结果 |
+|---|---|
+| 原生夹具（当前映像，symbols_v2） | 36/36：原23项加字段一致、访问器、0/超界/非数拒绝、脚本字段带动var64链关闭、未批准组字段为0、缺/多field key与v1合同拒绝 |
+| 摄像机原生夹具 | 101/101（夹具补入四个摄像机字段；修改前同为101） |
+| 脚本注册原生夹具 | 23/23，与修改前相同 |
+| 24个受影响Python夹具 | 23通过，无回归；`console/test_peer_startup`修改前后均因vswhere编译环境失败 |
+| 自扫`migrate_image --rescan` | 资料与已提交仅差4个无见证字段（写0），`--accept` 7/11组 |
+| backup | 44/51字段写入，`--accept` 5/11组；3项`MOSTLY_SAME`关闭script与achievement |
+| exe3 | 20/51字段，`--accept` 1/11组 |
+| 实机：当前`hoi4.exe`+新构建 | 31秒进图，37项全部可用（新增`symbols.script`），四条只读命令正常，正常关闭 |
+
+夹具调整：`native_script_bindings_fixture.h`引入`native_symbols_fixture.h`提供组与字段桩；tooltip与var64名字字段夹具补入新宏常量。
+`native_symbols_values.h`另含51项字段值。证据在`test/reports/20261018_fields_v2/`。
 
 ## 证据
 

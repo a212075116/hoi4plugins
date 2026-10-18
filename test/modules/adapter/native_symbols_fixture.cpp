@@ -52,11 +52,28 @@ int wmain(int argc,wchar_t** argv) {
     Check("values-equal-previous-constants",Matches());
     for(int i=0;i<NSY_COUNT;++i)if(g_symbolValues[i]!=kNativeSymbolValues[i])printf("  mismatch %s got=0x%X want=0x%X\n",kSymbolSpecs[i].key,g_symbolValues[i],kNativeSymbolValues[i]);
     Check("api-matches",NativeAdapter_Symbol(NSY_VAR_ADD_EXEC)==0x34C760 && NativeAdapter_GroupReady(NG_ACHIEVEMENT) && NativeAdapter_Symbol(NSY_COUNT)==0 && NativeAdapter_Symbol(-1)==0);
+    {bool same=true;for(int i=0;i<NFL_COUNT;++i)if(g_fieldValues[i]!=kNativeFieldValues[i]) {same=false;printf("  field mismatch %s got=0x%X want=0x%X\n",kFieldSpecs[i].key,g_fieldValues[i],kNativeFieldValues[i]);}Check("fields-equal-previous-constants",same);}
+    Check("field-api",NativeAdapter_Field(NFL_CAMERA_HEIGHT)==0x69C && NativeAdapter_Field(NFL_TRIGGER_COMPARE)==504 && NativeAdapter_Field(NFL_COUNT)==0 && NativeAdapter_Field(-1)==0);
+    WriteProfile(Replace(g_original,"field.var64.name","0"));Reload();
+    Check("zero-field-closes-own-group",!g_groupReady[NG_VAR64] && g_groupReason[NG_VAR64]=="SYMBOL_field.var64.name:FIELD_INVALID" && !g_groupReady[NG_ARRAY64] && g_groupReady[NG_SCRIPT] && g_groupReady[NG_CONSOLE] && NativeAdapter_Field(NFL_VAR64_NAME)==0 && NativeAdapter_Field(NFL_PARAM_TEXT)==0x70 && NativeAdapter_Symbol(NSY_VAR_LOOKUP)==0);
+    WriteProfile(Replace(g_original,"field.console.network","0x10000"));Reload();
+    Check("oversized-field-closes-dependents",!g_groupReady[NG_CONSOLE] && !g_groupReady[NG_ACHIEVEMENT] && !g_groupReady[NG_BRIDGE] && g_groupReady[NG_CORE] && g_groupReady[NG_VAR64] && g_groupReason[NG_CONSOLE]=="SYMBOL_field.console.network:FIELD_INVALID");
+    for(const char* bad:{"abc","-4","0x","+8"}) {WriteProfile(Replace(g_original,"field.gamedate.raw",bad));Reload();Check("malformed-field-refused",!g_groupReady[NG_GAMEDATE] && g_groupReady[NG_CORE] && NativeAdapter_Field(NFL_GD_YEAR)==0);}
+    WriteProfile(Replace(g_original,"field.param.text","0"));Reload();
+    Check("script-field-closes-var64-chain",!g_groupReady[NG_SCRIPT] && !g_groupReady[NG_VAR64] && !g_groupReady[NG_ARRAY64] && g_groupReason[NG_VAR64]=="DEPENDENCY_script" && g_groupReady[NG_ACHIEVEMENT] && g_groupReady[NG_GAMEDATE]);
+    WriteProfile(Replace(g_original,"approve.camera_write","0"));Reload();
+    Check("unapproved-group-fields-zero",!g_groupReady[NG_CAMERA_WRITE] && NativeAdapter_Field(NFL_CAMERA_HEIGHT)==0 && g_fieldValues[NFL_CAMERA_OBJECT]==0 && g_groupReady[NG_CORE]);
+    {std::string text=g_original;size_t at=text.find("field.camera.maximum=");text.erase(at,text.find('\n',at)-at+1);WriteProfile(text);Reload();Check("missing-field-key-refused",g_groupReason[NG_CORE]=="SYMBOLS_PROFILE_KEY_SET");}
+    WriteProfile(g_original+"field.camera.interpolation=0x698\n");Reload();
+    Check("unknown-field-key-refused",g_groupReason[NG_CORE]=="SYMBOLS_PROFILE_KEY_SET");
+    WriteProfile(Replace(g_original,"contract","symbols_v1"));Reload();
+    Check("v1-contract-refused",g_groupReason[NG_CORE]=="SYMBOLS_PROFILE_IDENTITY_OR_SCHEMA");
+    WriteProfile(g_original);Reload();
     g_scriptReady=false;Reload();
-    Check("registry-dependency",g_groupReady[NG_CORE] && !g_groupReady[NG_BRIDGE] && !g_groupReady[NG_VAR64] && !g_groupReady[NG_ARRAY64] && g_groupReason[NG_VAR64]=="DEPENDENCY_SCRIPT_REGISTRY" && g_symbolValues[NSY_VAR_LOOKUP]==0 && g_groupReady[NG_ACHIEVEMENT]);
+    Check("registry-dependency",g_groupReady[NG_CORE] && !g_groupReady[NG_BRIDGE] && !g_groupReady[NG_VAR64] && !g_groupReady[NG_ARRAY64] && !g_groupReady[NG_SCRIPT] && g_groupReason[NG_SCRIPT]=="DEPENDENCY_SCRIPT_REGISTRY" && g_groupReason[NG_VAR64]=="DEPENDENCY_script" && g_symbolValues[NSY_VAR_LOOKUP]==0 && NativeAdapter_Field(NFL_PARAM_TEXT)==0 && g_groupReady[NG_ACHIEVEMENT]);
     g_scriptReady=true;
     WriteProfile(Replace(g_original,"approve.core","0"));Reload();
-    Check("core-unapproved-propagates",!g_groupReady[NG_CORE] && !g_groupReady[NG_CONSOLE] && !g_groupReady[NG_ACHIEVEMENT] && !g_groupReady[NG_DIAG] && g_groupReady[NG_IMPORTS] && g_groupReady[NG_CAMERA_WRITE] && g_groupReason[NG_CONSOLE]=="DEPENDENCY_core" && NativeAdapter_Symbol(NSY_GAMESTATE)==0);
+    Check("core-unapproved-propagates",!g_groupReady[NG_CORE] && !g_groupReady[NG_CONSOLE] && !g_groupReady[NG_ACHIEVEMENT] && !g_groupReady[NG_DIAG] && !g_groupReady[NG_SCRIPT] && !g_groupReady[NG_GAMEDATE] && g_groupReady[NG_IMPORTS] && g_groupReady[NG_CAMERA_WRITE] && g_groupReason[NG_CONSOLE]=="DEPENDENCY_core" && NativeAdapter_Symbol(NSY_GAMESTATE)==0 && NativeAdapter_Field(NFL_ACH_COUNT)==0);
     WriteProfile(Replace(g_original,"approve.var64","0"));Reload();
     Check("var64-unapproved-keeps-others",!g_groupReady[NG_VAR64] && !g_groupReady[NG_ARRAY64] && g_groupReady[NG_CONSOLE] && g_groupReady[NG_ACHIEVEMENT] && g_groupReason[NG_VAR64]=="GROUP_NOT_APPROVED");
     WriteProfile(Replace(g_original,"var64.lookup","0x542280:00000000000000000000000000000000"));Reload();

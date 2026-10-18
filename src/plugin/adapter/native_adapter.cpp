@@ -300,7 +300,7 @@ int NativeAdapter_Initialize(void) {
         NativeAdapter_Report("script.bindings",g_scriptReady,g_scriptReason.c_str());
         InitializeNativeSymbols();
     } catch(...) {
-        g_bound=false;g_scriptReady=false;memset(g_symbolValues,0,sizeof(g_symbolValues));
+        g_bound=false;g_scriptReady=false;memset(g_symbolValues,0,sizeof(g_symbolValues));memset(g_fieldValues,0,sizeof(g_fieldValues));
         for(int i=0;i<NG_COUNT;++i) {g_groupReady[i]=false;g_groupReason[i]="ADAPTER_INITIALIZATION_EXCEPTION";}
         g_reason="ADAPTER_INITIALIZATION_EXCEPTION";NativeAdapter_Report("camera.binding",0,g_reason.c_str());
     }
@@ -309,6 +309,7 @@ int NativeAdapter_Initialize(void) {
 }
 int NativeAdapter_GroupReady(int group) {return InterlockedCompareExchange(&g_prepared,0,0) && group>=0 && group<NG_COUNT && g_groupReady[group]?1:0;}
 unsigned int NativeAdapter_Symbol(int symbol) {return symbol>=0 && symbol<NSY_COUNT && NativeAdapter_GroupReady(kSymbolSpecs[symbol].group)?g_symbolValues[symbol]:0;}
+unsigned int NativeAdapter_Field(int field) {return field>=0 && field<NFL_COUNT && NativeAdapter_GroupReady(kFieldSpecs[field].group)?g_fieldValues[field]:0;}
 const char* NativeAdapter_GroupDiagnostic(int group) {return group>=0 && group<NG_COUNT?(g_groupReason[group].empty()?"SYMBOLS_NOT_INITIALIZED":g_groupReason[group].c_str()):"GROUP_UNKNOWN";}
 int NativeAdapter_RegistryReady(void) {return InterlockedCompareExchange(&g_prepared,0,0) && g_scriptReady;}
 unsigned int NativeAdapter_RegistryRva(unsigned int symbol) {return NativeAdapter_RegistryReady() && symbol<NS_SYMBOL_COUNT?g_scriptValues[symbol]:0;}
@@ -318,7 +319,7 @@ int NativeAdapter_ScriptTemplate(int kind,NativeScriptTemplate* out) {
     *out=g_scriptTemplates[kind];return 1;
 }
 const char* NativeAdapter_RegistryDiagnostic(void) {return g_scriptReason.c_str();}
-int NativeAdapter_CameraWriteAllowed(void) {return g_groupReady[NG_CAMERA_WRITE] && g_bound && g_profile.camera==0x750 && g_profile.height==0x69c && g_profile.minimum==0x6d0 && g_profile.maximum==0x6d4;}
+int NativeAdapter_CameraWriteAllowed(void) {return g_groupReady[NG_CAMERA_WRITE] && g_bound && g_profile.camera==g_fieldValues[NFL_CAMERA_OBJECT] && g_profile.height==g_fieldValues[NFL_CAMERA_HEIGHT] && g_profile.minimum==g_fieldValues[NFL_CAMERA_MINIMUM] && g_profile.maximum==g_fieldValues[NFL_CAMERA_MAXIMUM];}
 const char* NativeAdapter_Diagnostic(void) {return g_reason.c_str();}
 void NativeAdapter_Report(const char* name,int available,const char* reason) {
     if(!name || !reason || g_log.empty())return;

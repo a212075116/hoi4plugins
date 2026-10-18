@@ -28,12 +28,14 @@ enum NativeGroup {
 #define NATIVE_DATA(id, group, key, bytes)
 #define NATIVE_SLOT(id, group, key, type, offset, slot)
 #define NATIVE_TABLE(id, group, key, type, offset, slots)
+#define NATIVE_FIELD(id, group, key)
 #include "symbol_catalog.h"
 #undef NATIVE_GROUP
 #undef NATIVE_CODE
 #undef NATIVE_DATA
 #undef NATIVE_SLOT
 #undef NATIVE_TABLE
+#undef NATIVE_FIELD
     NG_COUNT
 };
 enum NativeSymbol {
@@ -42,16 +44,36 @@ enum NativeSymbol {
 #define NATIVE_DATA(id, group, key, bytes) id,
 #define NATIVE_SLOT(id, group, key, type, offset, slot) id,
 #define NATIVE_TABLE(id, group, key, type, offset, slots) id,
+#define NATIVE_FIELD(id, group, key)
 #include "symbol_catalog.h"
 #undef NATIVE_GROUP
 #undef NATIVE_CODE
 #undef NATIVE_DATA
 #undef NATIVE_SLOT
 #undef NATIVE_TABLE
+#undef NATIVE_FIELD
     NSY_COUNT
 };
+enum NativeField {
+#define NATIVE_GROUP(id, name, registry, first, second)
+#define NATIVE_CODE(id, group, key)
+#define NATIVE_DATA(id, group, key, bytes)
+#define NATIVE_SLOT(id, group, key, type, offset, slot)
+#define NATIVE_TABLE(id, group, key, type, offset, slots)
+#define NATIVE_FIELD(id, group, key) id,
+#include "symbol_catalog.h"
+#undef NATIVE_GROUP
+#undef NATIVE_CODE
+#undef NATIVE_DATA
+#undef NATIVE_SLOT
+#undef NATIVE_TABLE
+#undef NATIVE_FIELD
+    NFL_COUNT
+};
+#define NATIVE_FIELD_MAX 0xFFFFu
 int NativeAdapter_GroupReady(int group);
 unsigned int NativeAdapter_Symbol(int symbol);
+unsigned int NativeAdapter_Field(int field);
 const char* NativeAdapter_GroupDiagnostic(int group);
 typedef struct NativeScriptTemplate {
     unsigned int vt, entryVt, factory, parse, eval, slots, allocation;

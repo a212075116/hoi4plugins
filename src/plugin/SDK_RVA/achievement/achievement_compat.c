@@ -8,6 +8,23 @@
 #include "MinHook.h"
 #include "../../adapter/native_adapter.h"
 #define ACH_RVA(symbol) NativeAdapter_Symbol(symbol)
+#define ACH_DEFINITIONS NativeAdapter_Field(NFL_ACH_DEFINITIONS)
+#define ACH_COUNT NativeAdapter_Field(NFL_ACH_COUNT)
+#define ACH_PENDING_LIST NativeAdapter_Field(NFL_ACH_LIST)
+#define ACH_PENDING_COUNT NativeAdapter_Field(NFL_ACH_PENDING)
+#define ACH_COMPLETED_COUNT NativeAdapter_Field(NFL_ACH_COMPLETED)
+#define ACH_EXCLUDED_COUNT NativeAdapter_Field(NFL_ACH_EXCLUDED)
+#define ACH_COMPLETED_LIST (ACH_COMPLETED_COUNT - 12)
+#define ACH_EXCLUDED_LIST (ACH_EXCLUDED_COUNT - 12)
+#define ACH_FLAG_A0 NativeAdapter_Field(NFL_ACH_FLAG_A0)
+#define ACH_FLAG_A3 NativeAdapter_Field(NFL_ACH_FLAG_A3)
+#define ACH_FLAG_A4 NativeAdapter_Field(NFL_ACH_FLAG_A4)
+#define ACH_MANAGER_SPAN (ACH_FLAG_A4 + 4)
+#define ACH_BACKEND NativeAdapter_Field(NFL_ACH_BACKEND)
+#define ACH_ID NativeAdapter_Field(NFL_ACH_ID)
+#define ACH_NODE_STATE NativeAdapter_Field(NFL_ACH_NODE_STATE)
+#define ACH_CONTEXT_READY NativeAdapter_Field(NFL_ACH_CONTEXT_READY)
+#define ACH_CONSOLE_NETWORK NativeAdapter_Field(NFL_CONSOLE_NETWORK)
 
 #include "../common/plugin_log.h"
 typedef unsigned char (__fastcall *Unary)(void*);
@@ -20,7 +37,7 @@ static __declspec(thread) int g_possible;
 static volatile LONG g_installed, g_needRebuild = 1, g_rebuilds, g_ticks, g_nativeCompletions, g_ironOverrides;
 
 static int NativeGate(const unsigned char* manager) {
-    return manager[163] || (manager[161] && manager[162] && !g_base[ACH_RVA(NSY_ACH_FLAG_DEBUG)] && !g_base[ACH_RVA(NSY_ACH_FLAG_LOG)]);
+    return manager[ACH_FLAG_A3] || (manager[ACH_FLAG_A0 + 1] && manager[ACH_FLAG_A0 + 2] && !g_base[ACH_RVA(NSY_ACH_FLAG_DEBUG)] && !g_base[ACH_RVA(NSY_ACH_FLAG_LOG)]);
 }
 
 static int Compatible(unsigned char* manager) {
@@ -30,16 +47,16 @@ static int Compatible(unsigned char* manager) {
     unsigned char* context;
     void* network;
     void** table;
-    if (!g_installed || !ConsoleCmd_IsReadable(manager, 168) || manager[160] || manager[163] || manager[164] || *(int*)(manager + 28) <= 0) return 0;
-    definitions = *(unsigned char***)(manager + 16);
-    if (!ConsoleCmd_IsReadable(definitions, sizeof(void*)) || !ConsoleCmd_IsReadable(definitions[0], 88)) return 0;
-    backend = *(unsigned char**)(definitions[0] + 72);
+    if (!g_installed || !ConsoleCmd_IsReadable(manager, ACH_MANAGER_SPAN) || manager[ACH_FLAG_A0] || manager[ACH_FLAG_A3] || manager[ACH_FLAG_A4] || *(int*)(manager + ACH_COUNT) <= 0) return 0;
+    definitions = *(unsigned char***)(manager + ACH_DEFINITIONS);
+    if (!ConsoleCmd_IsReadable(definitions, sizeof(void*)) || !ConsoleCmd_IsReadable(definitions[0] + ACH_BACKEND, sizeof(void*))) return 0;
+    backend = *(unsigned char**)(definitions[0] + ACH_BACKEND);
     if (!ConsoleCmd_IsReadable(backend, 96)) return 0;
     context = *(unsigned char**)(backend + 16);
-    if (!ConsoleCmd_IsReadable(context, 280) || *(void**)context != g_base + ACH_RVA(NSY_ACH_CONTEXT_VT) || !context[266] || !ConsoleCmd_IsReadable(*(void**)(context + 160), sizeof(void*))) return 0;
+    if (!ConsoleCmd_IsReadable(context, 280) || *(void**)context != g_base + ACH_RVA(NSY_ACH_CONTEXT_VT) || !context[ACH_CONTEXT_READY] || !ConsoleCmd_IsReadable(*(void**)(context + 160), sizeof(void*))) return 0;
     console = *(unsigned char**)(g_base + ACH_RVA(NSY_CMD_MANAGER));
     if (!ConsoleCmd_IsReadable(console, 224)) return 0;
-    network = *(void**)(console + 144);
+    network = *(void**)(console + ACH_CONSOLE_NETWORK);
     if (!ConsoleCmd_IsReadable(network, sizeof(void*))) return 0;
     table = *(void***)network;
     if (!ConsoleCmd_IsReadable(table, 3 * sizeof(void*)) || !ConsoleCmd_IsReadable(table[2], 1)) return 0;
@@ -70,24 +87,24 @@ static int Possible(unsigned char* achievement, void* scope) {
 static void Append(unsigned char* manager, int offset, unsigned char* achievement) {
     typedef void* (__fastcall *Add)(void*, const void*);
     ((Add)(g_base + ACH_RVA(NSY_ACH_VECTOR_PUSH)))(manager + offset, &achievement);
-    if (offset == 40) {
-        unsigned short id = *(unsigned short*)(achievement + 80);
+    if (offset == (int)ACH_PENDING_LIST) {
+        unsigned short id = *(unsigned short*)(achievement + ACH_ID);
         ((Add)(g_base + ACH_RVA(NSY_ACH_ID_PUSH)))(manager + 136, &id);
     }
 }
 
 static void VanillaCandidates(unsigned char* manager, void* scope) {
-    int i, count = *(int*)(manager + 28);
-    unsigned char** all = *(unsigned char***)(manager + 16);
+    int i, count = *(int*)(manager + ACH_COUNT);
+    unsigned char** all = *(unsigned char***)(manager + ACH_DEFINITIONS);
     if (count < 0 || count > 100000 || !ConsoleCmd_IsReadable(all, (size_t)count * sizeof(void*))) return;
     for (i = 0; i < count; ++i) {
         unsigned char* achievement = all[i];
-        if (Completed(achievement)) Append(manager, 64, achievement);
-        else Append(manager, Possible(achievement, scope) ? 40 : 88, achievement);
+        if (Completed(achievement)) Append(manager, (int)ACH_COMPLETED_LIST, achievement);
+        else Append(manager, Possible(achievement, scope) ? (int)ACH_PENDING_LIST : (int)ACH_EXCLUDED_LIST, achievement);
     }
     InterlockedExchange(&g_needRebuild, 0);
     InterlockedIncrement(&g_rebuilds);
-    Plugin_Log("[achievement] compatible candidates: pending=%d completed=%d excluded=%d; native possible preserved", *(int*)(manager + 52), *(int*)(manager + 76), *(int*)(manager + 100));
+    Plugin_Log("[achievement] compatible candidates: pending=%d completed=%d excluded=%d; native possible preserved", *(int*)(manager + ACH_PENDING_COUNT), *(int*)(manager + ACH_COMPLETED_COUNT), *(int*)(manager + ACH_EXCLUDED_COUNT));
 }
 
 static unsigned char __fastcall Eligible(void* manager) {
@@ -97,7 +114,7 @@ static unsigned char __fastcall Eligible(void* manager) {
 static unsigned char __fastcall Iron(void* node) {
     if (g_possible > 0) {
         InterlockedIncrement(&g_ironOverrides);
-        return *((unsigned char*)node + 88) == 1;
+        return *((unsigned char*)node + ACH_NODE_STATE) == 1;
     }
     return g_iron(node);
 }
@@ -118,15 +135,15 @@ static void __fastcall Restore(unsigned char* manager, void* ids) {
     saved = *(int*)((unsigned char*)ids + 12);
     values = *(unsigned short**)ids;
     if (saved <= 0 || saved > 100000 || !ConsoleCmd_IsReadable(values, (size_t)saved * 2)) { InterlockedExchange(&g_needRebuild, 1); return; }
-    count = *(int*)(manager + 28); all = *(unsigned char***)(manager + 16);
+    count = *(int*)(manager + ACH_COUNT); all = *(unsigned char***)(manager + ACH_DEFINITIONS);
     if (count < 0 || count > 100000 || !ConsoleCmd_IsReadable(all, (size_t)count * sizeof(void*))) return;
     for (i = 0; i < count; ++i) {
         unsigned char* achievement = all[i];
-        if (Completed(achievement)) Append(manager, 64, achievement);
+        if (Completed(achievement)) Append(manager, (int)ACH_COMPLETED_LIST, achievement);
         else {
-            unsigned short id = *(unsigned short*)(achievement + 80);
+            unsigned short id = *(unsigned short*)(achievement + ACH_ID);
             for (j = 0; j < saved && values[j] != id; ++j) {}
-            Append(manager, j < saved ? 40 : 88, achievement);
+            Append(manager, j < saved ? (int)ACH_PENDING_LIST : (int)ACH_EXCLUDED_LIST, achievement);
         }
     }
     InterlockedExchange(&g_needRebuild, 0);
@@ -139,12 +156,12 @@ static void __fastcall Update(unsigned char* manager, void* scope) {
     g_update(manager, scope);
     if (!supplement) return;
     InterlockedIncrement(&g_ticks);
-    for (i = *(int*)(manager + 52) - 1; i >= 0; --i) {
-        unsigned char* achievement = (*(unsigned char***)(manager + 40))[i];
+    for (i = *(int*)(manager + ACH_PENDING_COUNT) - 1; i >= 0; --i) {
+        unsigned char* achievement = (*(unsigned char***)(manager + ACH_PENDING_LIST))[i];
         void* node = *(void**)(achievement + 24);
         if (!Completed(achievement) && (!node || ((Eval)(*(void***)node)[3])(node, scope))) {
             typedef __int64 (__fastcall *Complete)(void*, void*);
-            Plugin_Log("[achievement] native happened true, invoking original completion id=%u", *(unsigned short*)(achievement + 80));
+            Plugin_Log("[achievement] native happened true, invoking original completion id=%u", *(unsigned short*)(achievement + ACH_ID));
             ((Complete)(g_base + ACH_RVA(NSY_ACH_COMPLETE)))(manager, achievement);
             InterlockedIncrement(&g_nativeCompletions);
         }

@@ -8,7 +8,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'test/tools'))
 sys.path.insert(0, str(ROOT / 'test/modules/camera'))
-from migrate_native_symbols import migrate_symbols, read_profile, resolve, summarize
+from migrate_native_symbols import migrate_symbols, read_profile, resolve, summarize, write_fields
 from symbol_scan_core import Image
 from camera_read_adapter_core import AdapterError, ImageBindings
 from check_native_fields import brief, field_report
@@ -108,6 +108,9 @@ def main():
     symbols = migrate_symbols(base, target, same, args.output_directory)
     registry = migrate_registry(base, target, same, args.output_directory)
     fields = field_report(base, target, dict(target_sha256=target.sha, symbols=symbols, registry=registry))
+    if not same:
+        write_fields(symbols, {r['key']: int(next(iter(r['votes'])), 16) for r in fields['fields']
+                               if r['status'] in ('SAME', 'MOVED')}, 'UNANIMOUS_WITNESS')
     camera = migrate_camera(base, args.image, target.sha, same, args.output_directory, fields)
     report = dict(baseline_sha256=base.sha, target_sha256=target.sha, approved=same,
                   symbols=symbols, registry=registry, camera=camera, fields=fields,

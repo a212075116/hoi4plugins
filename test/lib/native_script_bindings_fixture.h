@@ -1,5 +1,6 @@
 #pragma once
 #include "../../src/plugin/adapter/native_adapter.h"
+#include "native_symbols_fixture.h"
 static int g_scriptFixtureReady=1;
 int NativeAdapter_RegistryReady(void) {return g_scriptFixtureReady;}
 unsigned int NativeAdapter_RegistryRva(unsigned int id) {

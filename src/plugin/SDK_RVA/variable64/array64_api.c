@@ -12,6 +12,15 @@
 
 #include "../common/plugin_log.h"
 #include "../../adapter/native_adapter.h"
+#define A64_FIRST NativeAdapter_Field(NFL_PARAM_FIRST)
+#define A64_SECOND NativeAdapter_Field(NFL_TRIGGER_RHS)
+#define A64_VALUE NativeAdapter_Field(NFL_PARAM_VALUE)
+#define A64_TEXT NativeAdapter_Field(NFL_PARAM_TEXT)
+#define A64_SELECTOR_A NativeAdapter_Field(NFL_PARAM_SELECTOR_A)
+#define A64_SELECTOR NativeAdapter_Field(NFL_PARAM_SELECTOR)
+#define A64_SELECTOR_B NativeAdapter_Field(NFL_PARAM_SELECTOR_B)
+#define A64_COUNT_FLAG NativeAdapter_Field(NFL_SELECTOR_COUNT_FLAG)
+#define A64_COMPARE NativeAdapter_Field(NFL_TRIGGER_COMPARE)
 typedef void* (__fastcall *A64Lookup)(void*,void*,long long);
 typedef void (__fastcall *A64Erase)(void*,void*);
 typedef void* (__fastcall *A64Resolve)(void*,void*,int*,int*,void**,void**,void**,void**,void**,void**);
@@ -68,16 +77,16 @@ static int a64_target(void* self,void* ctx,unsigned int offset,void** container,
     unsigned char* d=(unsigned char*)self+offset;unsigned char* text;unsigned long long len,cap;int a=0,b=0;void* extra[6]={0};
     TriggerScopeView view;long long raw;char roots[6][40];void* selector;
     if(!a64_image()||!self||!ctx||!ConsoleCmd_IsReadable(d,208)||!d[8]||d[9]||d[10]||d[11]||d[14]||
-        *(void**)(d+144)||*(void**)(d+168))return 0;
-    len=*(unsigned long long*)(d+128);cap=*(unsigned long long*)(d+136);text=cap<=15?d+112:*(unsigned char**)(d+112);
+        *(void**)(d+A64_SELECTOR_A)||*(void**)(d+A64_SELECTOR_B))return 0;
+    len=*(unsigned long long*)(d+A64_TEXT+16);cap=*(unsigned long long*)(d+A64_TEXT+24);text=cap<=15?d+A64_TEXT:*(unsigned char**)(d+A64_TEXT);
     if(!len||len>20||len>cap||!ConsoleCmd_IsReadable(text,(size_t)len+1)||text[len]||memchr(text,0,(size_t)len))return 0;
     memcpy(name,text,(size_t)len);name[len]=0;if(!ag_name(name,roots))return 0;
     *container=((A64Resolve)(a64_image()+NativeAdapter_RegistryRva(NS_CONTAINER)))(d,ctx,&a,&b,&extra[0],&extra[1],&extra[2],&extra[3],&extra[4],&extra[5]);
     if(!*container||!ConsoleCmd_IsReadable(*container,56))return 0;
-    selector=*(void**)(d+160);*indexed=selector!=NULL;*index=0;*count_index=0;
+    selector=*(void**)(d+A64_SELECTOR);*indexed=selector!=NULL;*index=0;*count_index=0;
     if(selector){
         if(!ConsoleCmd_IsReadable(selector,208))return 0;
-        if(*((unsigned char*)selector+152)){*count_index=1;*index=-1;return 1;}
+        if(*((unsigned char*)selector+A64_COUNT_FLAG)){*count_index=1;*index=-1;return 1;}
         if(!Trigger_ScopeView(ctx,&view))return 0;
         typedef long long* (__fastcall *ParamFn)(void*,long long*,void*,void*,unsigned char);
         if(*((unsigned char*)selector+11))return 0;
@@ -90,8 +99,8 @@ static int a64_target(void* self,void* ctx,unsigned int offset,void** container,
 static int a64_read(void* self,const TriggerScopeView* view,unsigned int offset,long long* out)
 {
     void* c;char name[21];int index,indexed,count_index,n,g,status;
-    if(offset!=88)return Trigger_ReadRawParameter(self,view,offset,out);
-    if(!view||!a64_target(self,view->nativeContext,88,&c,name,&index,&indexed,&count_index)||!indexed)return 0;
+    if(offset!=A64_FIRST)return Trigger_ReadRawParameter(self,view,offset,out);
+    if(!view||!a64_target(self,view->nativeContext,A64_FIRST,&c,name,&index,&indexed,&count_index)||!indexed)return 0;
     status=Array64Group_Read(c,name,index,-1,out,&n,&g);
     if(count_index&&status==2){*out=n*100000LL;return 1;}return status==1;
 }
@@ -139,14 +148,14 @@ static void a64_execute(void* self,void* ctx,int operation,int native_mode)
     unsigned char* record=NULL;Array64Journal* journal=NULL;Array64ShapeWork* work=NULL;const char* opname;
     static const char* labels[]={"create","append","insert","erase","clear","resize","set","recover","log"};
     opname=labels[operation];
-    if(!a64_target(self,ctx,88,&c,name,&index,&indexed,&count_index)||count_index)goto done;
+    if(!a64_target(self,ctx,A64_FIRST,&c,name,&index,&indexed,&count_index)||count_index)goto done;
     if(operation!=8&&((operation==2||operation==3||operation==6)!=indexed))goto done;
     if(operation==8){
         if(Array64Group_Read(c,name,indexed?index:-1,-1,&value,&n,&g)==(indexed?1:2)){
             Trigger_FormatRaw(indexed?value:n*100000LL,shown,sizeof(shown));Plugin_Log("[array64-value] %s^%d=%s gen=%d",name,indexed?index:-1,shown,g);status=0;
         }else status=-904;goto done;
     }
-    if(operation!=7&&(!Trigger_ScopeView(ctx,&view)||!Trigger_ReadRawParameter(self,&view,296,&rhs)))goto done;
+    if(operation!=7&&(!Trigger_ScopeView(ctx,&view)||!Trigger_ReadRawParameter(self,&view,A64_SECOND,&rhs)))goto done;
     if(operation==0||operation==5){if(rhs<0||rhs%100000||rhs/100000>4096)goto done;size=(int)(rhs/100000);rhs=0;}
     if(operation==0){char roots[6][40];int owned;if(!ag_name(name,roots)||!ag_inventory(c,roots,&owned)||owned||!as_owner_absent(c,name)||!aj_absent(c,name)){status=-2;goto done;}}
     if(!a64_identity(c,operation==0,scope,&lineage)){status=-902;goto done;}
@@ -182,11 +191,11 @@ typedef char array_effect_count_valid[(sizeof(g_a64names)/sizeof(g_a64names[0])=
 static void* a64_factory(int i){void* instance=a64_image()?((A64Factory)(a64_image()+NativeAdapter_Symbol(NSY_VAR_FACTORY)))():NULL;if(instance)*(void**)instance=g_a64vt[i]+1;return instance;}
 static void* a64_tip(void* self,void* out,void* ctx,int i)
 {
-    char text[256],name[21]="?",value[48]="runtime";unsigned char* d=(unsigned char*)self+88;unsigned char* p=(unsigned char*)self+296;
+    char text[256],name[21]="?",value[48]="runtime";unsigned char* d=(unsigned char*)self+A64_FIRST;unsigned char* p=(unsigned char*)self+A64_SECOND;
     (void)ctx;
-    if(ConsoleCmd_IsReadable(d,208)){unsigned long long n=*(unsigned long long*)(d+128),cap=*(unsigned long long*)(d+136);const char* s=cap<=15?(char*)d+112:*(const char**)(d+112);
+    if(ConsoleCmd_IsReadable(d,208)){unsigned long long n=*(unsigned long long*)(d+A64_TEXT+16),cap=*(unsigned long long*)(d+A64_TEXT+24);const char* s=cap<=15?(char*)d+A64_TEXT:*(const char**)(d+A64_TEXT);
         if(n>0&&n<=20&&ConsoleCmd_IsReadable(s,(size_t)n)){memcpy(name,s,(size_t)n);name[n]=0;}}
-    if(ConsoleCmd_IsReadable(p,208)&&p[9])Trigger_FormatRaw(*(long long*)(p+64),value,sizeof(value));
+    if(ConsoleCmd_IsReadable(p,208)&&p[9])Trigger_FormatRaw(*(long long*)(p+A64_VALUE),value,sizeof(value));
     sprintf_s(text,sizeof(text),"Array64 %s: %s; value=%s (journaled)\n",g_a64names[i],name,value);
     if(out&&a64_image()){memset(out,0,32);*(unsigned long long*)((unsigned char*)out+24)=15;((A64Append)(a64_image()+NativeAdapter_RegistryRva(NS_TEXT_APPEND)))(out,text,strlen(text));}return out;
 }
@@ -219,8 +228,8 @@ static TriggerDef g_a64trigger;
 static void* __fastcall a64_trigger_factory(void){return Trigger_NewTypedInstance(&g_a64trigger);}
 static unsigned char __fastcall a64_eval(void* self,void* ctx)
 {
-    TriggerScopeView view;long long left,right;if(!Trigger_ScopeView(ctx,&view)||!a64_read(self,&view,88,&left)||!a64_read(self,&view,296,&right))return 0;
-    return (unsigned char)Trigger_CompareRaw(left,right,*(int*)((unsigned char*)self+504));
+    TriggerScopeView view;long long left,right;if(!Trigger_ScopeView(ctx,&view)||!a64_read(self,&view,A64_FIRST,&left)||!a64_read(self,&view,A64_SECOND,&right))return 0;
+    return (unsigned char)Trigger_CompareRaw(left,right,*(int*)((unsigned char*)self+A64_COMPARE));
 }
 static void* __fastcall a64_trigger_tip(void* s,void* out,void* ctx,unsigned char inv,int indent){return Trigger_TypedTooltip(&g_a64trigger,s,out,ctx,inv,indent);}
 int Array64_RegisterTriggers(void)

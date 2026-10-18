@@ -252,7 +252,7 @@ static DWORD WINAPI PluginThread(LPVOID p)
     }
 
     if (!NativeAdapter_CameraWriteAllowed()) DisableStep(&g_effectSteps[0], &g_effectDisabled[0], "CAMERA_WRITE_CONTRACT_NOT_APPROVED");
-    if (!NativeAdapter_GroupReady(NG_CORE)) DisableStep(&g_effectSteps[1], &g_effectDisabled[1], NativeAdapter_GroupDiagnostic(NG_CORE));
+    if (!NativeAdapter_GroupReady(NG_GAMEDATE)) DisableStep(&g_effectSteps[1], &g_effectDisabled[1], NativeAdapter_GroupDiagnostic(NG_GAMEDATE));
     if (!NativeAdapter_GroupReady(NG_VAR64)) {
         DisableStep(&g_effectSteps[2], &g_effectDisabled[2], NativeAdapter_GroupDiagnostic(NG_VAR64));
         DisableStep(&g_effectSteps[4], &g_effectDisabled[4], NativeAdapter_GroupDiagnostic(NG_VAR64));
@@ -265,13 +265,13 @@ static DWORD WINAPI PluginThread(LPVOID p)
         DisableStep(&g_triggerSteps[1], &g_triggerDisabled[1], NativeAdapter_GroupDiagnostic(NG_ARRAY64));
     }
 
-    if (NativeAdapter_RegistryReady() && NativeAdapter_GroupReady(NG_CORE)) {
+    if (NativeAdapter_RegistryReady() && NativeAdapter_GroupReady(NG_SCRIPT)) {
         RegisterPluginGroups("effects", Effect_RegistryReady, g_effectSteps, g_effectDisabled,
             (int)(sizeof(g_effectSteps) / sizeof(g_effectSteps[0])));
         RegisterPluginGroups("triggers", Trigger_RegistryReady, g_triggerSteps, g_triggerDisabled,
             (int)(sizeof(g_triggerSteps) / sizeof(g_triggerSteps[0])));
     } else {
-        const char* reason = NativeAdapter_RegistryReady() ? NativeAdapter_GroupDiagnostic(NG_CORE) : NativeAdapter_RegistryDiagnostic();
+        const char* reason = NativeAdapter_RegistryReady() ? NativeAdapter_GroupDiagnostic(NG_SCRIPT) : NativeAdapter_RegistryDiagnostic();
         ReportSteps("effects", g_effectSteps, (int)(sizeof(g_effectSteps) / sizeof(g_effectSteps[0])), reason);
         ReportSteps("triggers", g_triggerSteps, (int)(sizeof(g_triggerSteps) / sizeof(g_triggerSteps[0])), reason);
     }
@@ -309,9 +309,9 @@ static DWORD WINAPI PluginThread(LPVOID p)
             NativeAdapter_Report("commands.camera.read", readCommand == 1, readCommand == 1 ? "REGISTERED" : "REGISTRATION_FAILED");
         }
         {
-            int n = GameDate_RegisterCommands();
+            int n = NativeAdapter_GroupReady(NG_GAMEDATE) ? GameDate_RegisterCommands() : 0;
             Plugin_Log("[plugin] GameDate_RegisterCommands -> %d", n);
-            NativeAdapter_Report("commands.clock", n == 5, n == 5 ? "FIVE_COMMANDS_REGISTERED" : "REGISTRATION_INCOMPLETE");
+            NativeAdapter_Report("commands.clock", n == 5, n == 5 ? "FIVE_COMMANDS_REGISTERED" : NativeAdapter_GroupReady(NG_GAMEDATE) ? "REGISTRATION_INCOMPLETE" : NativeAdapter_GroupDiagnostic(NG_GAMEDATE));
         }
         {
             int n = CrashTest_RegisterCommands();

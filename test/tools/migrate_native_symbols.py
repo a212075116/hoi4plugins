@@ -38,6 +38,12 @@ def catalog():
     return list(groups.values()), symbols
 
 
+def catalog_fields():
+    text = CATALOG.read_text(encoding='ascii')
+    groups = {m[0]: m[1] for m in re.findall(r'^NATIVE_GROUP\((\w+),\s*"(\w+)"', text, re.M)}
+    return [dict(key=k, group=groups[g]) for g, k in re.findall(r'^NATIVE_FIELD\(\w+,\s*(\w+),\s*"([^"]+)"\)', text, re.M)]
+
+
 def read_profile(path):
     fields = {}
     for line in path.read_text(encoding='ascii').splitlines():
@@ -371,21 +377,40 @@ def migrate_symbols(base, target, same, output):
         if row['kind'] in ('CODE', 'DATA'):
             row.update(text=fields[row['key']], baseline=int(fields[row['key']].split(':')[0], 0))
     out, rows, failed = resolve(base, target, symbols, same)
-    ordered = {'schema': '1', 'image_sha256': target.sha, 'contract': 'symbols_v1'}
+    ordered = {'schema': '1', 'image_sha256': target.sha, 'contract': 'symbols_v2'}
     for name in groups:
         ordered['approve.' + name] = fields['approve.' + name] if same else '0'
     ordered.update({r['key']: out[r['key']] for r in symbols if r['kind'] in ('DATA', 'CODE')})
     output.mkdir(parents=True, exist_ok=True)
     profile = output / (target.sha + '.symbols')
-    profile.write_text(''.join(k + '=' + v + '\n' for k, v in ordered.items()), encoding='ascii', newline='\n')
-    return dict(
+    report = dict(
         baseline_sha256=base.sha, target_sha256=target.sha, profile=str(profile.resolve()),
-        approved=same, complete_groups=[g for g in groups if g not in failed], incomplete_groups=sorted(failed),
+        approved=same, groups=groups, symbol_failures=sorted(failed), ordered=ordered,
         summary=summarize(rows), symbols=rows,
         scope='Read-only candidates. Masked pattern for CODE; caller/reference consensus over uniquely matched anchors '
               'for DATA and ambiguous CODE; exclusive strings as fallback and cross-check; RTTI tables checked '
               'statically with slot twins and slot counts compared to the baseline. Candidates are not ABI proof. '
               'A different image is always written with every approve.<group>=0.')
+    baseline = {f['key']: int(fields['field.' + f['key']], 0) for f in catalog_fields()} if same else {}
+    write_fields(report, baseline, 'EXACT_IMAGE_REUSE' if same else None)
+    return report
+
+
+def write_fields(report, values, source=None):
+    rows = []
+    failed = set(report['symbol_failures'])
+    for field in catalog_fields():
+        value = values.get(field['key'])
+        if not value:
+            failed.add(field['group'])
+        rows.append(dict(key=field['key'], group=field['group'], value=value or 0,
+                         source=source if value else 'NO_UNANIMOUS_EVIDENCE'))
+        report['ordered']['field.' + field['key']] = hex(value) if value else '0'
+    report['fields'] = rows
+    report['complete_groups'] = [g for g in report['groups'] if g not in failed]
+    report['incomplete_groups'] = sorted(failed)
+    pathlib.Path(report['profile']).write_text(''.join(k + '=' + v + '\n' for k, v in report['ordered'].items()),
+                                               encoding='ascii', newline='\n')
 
 
 def main():

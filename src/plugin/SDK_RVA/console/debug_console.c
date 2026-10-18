@@ -1,6 +1,11 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include "../../adapter/native_adapter.h"
+#define CON_PERMISSION NativeAdapter_Field(NFL_CONSOLE_PERMISSION)
+#define CON_NETWORK NativeAdapter_Field(NFL_CONSOLE_NETWORK)
+#define CON_SINK NativeAdapter_Field(NFL_CONSOLE_SINK)
+#define CON_UI_STATE NativeAdapter_Field(NFL_CONSOLE_UI_STATE)
+#define CON_MANAGER_SPAN (CON_UI_STATE + 8)
 #include <sddl.h>
 #include <shellapi.h>
 #include <stdio.h>
@@ -41,7 +46,7 @@ static unsigned char __fastcall ExternalDeveloperPermission(void* object) {
 static int DispatchExternal(unsigned char* base, void* manager, CmdResult* result, CmdArgs* args, char* output, size_t outputSize) {
     typedef unsigned char (__fastcall *Predicate)(void*);
     typedef long long (__fastcall *Dispatch)(void*, CmdResult*, CmdArgs*);
-    void* network = *(void**)((char*)manager + 144);
+    void* network = *(void**)((char*)manager + CON_NETWORK);
     void** table = *(void***)network;
     void* permissionTable[3] = {NULL, NULL, (void*)ExternalDeveloperPermission};
     void** permissionObject = permissionTable;
@@ -55,13 +60,13 @@ static int DispatchExternal(unsigned char* base, void* manager, CmdResult* resul
         strcpy_s(output, outputSize, "External console commands are disabled in multiplayer.");
         return 0;
     }
-    memcpy(originalUiState, (char*)manager + 216, sizeof(originalUiState));
-    originalPermission = InterlockedExchangePointer((PVOID volatile*)((char*)manager + 80), &permissionObject);
+    memcpy(originalUiState, (char*)manager + CON_UI_STATE, sizeof(originalUiState));
+    originalPermission = InterlockedExchangePointer((PVOID volatile*)((char*)manager + CON_PERMISSION), &permissionObject);
     __try {
         ((Dispatch)(base + NativeAdapter_Symbol(NSY_CMD_DISPATCH)))(manager, result, args);
     } __finally {
-        InterlockedExchangePointer((PVOID volatile*)((char*)manager + 80), originalPermission);
-        memcpy((char*)manager + 216, originalUiState, sizeof(originalUiState));
+        InterlockedExchangePointer((PVOID volatile*)((char*)manager + CON_PERMISSION), originalPermission);
+        memcpy((char*)manager + CON_UI_STATE, originalUiState, sizeof(originalUiState));
     }
     return 1;
 }
@@ -119,10 +124,10 @@ static void Execute(Pending* p) {
         strcpy_s(p->output, sizeof(p->output), "Invalid syntax: use command plus at most 8 arguments, balanced double quotes.");
     } else {
         manager = *(void**)(base + NativeAdapter_Symbol(NSY_CMD_MANAGER));
-        if (!ConsoleCmd_IsReadable(manager, 224) ||
-            !ConsoleCmd_IsReadable(*(void**)((char*)manager + 80), 8) ||
-            !ConsoleCmd_IsReadable(*(void**)((char*)manager + 144), 8) ||
-            !ConsoleCmd_IsReadable(*(void**)((char*)manager + 208), 8)) {
+        if (!NativeAdapter_GroupReady(NG_CONSOLE) || !ConsoleCmd_IsReadable(manager, CON_MANAGER_SPAN) ||
+            !ConsoleCmd_IsReadable(*(void**)((char*)manager + CON_PERMISSION), 8) ||
+            !ConsoleCmd_IsReadable(*(void**)((char*)manager + CON_NETWORK), 8) ||
+            !ConsoleCmd_IsReadable(*(void**)((char*)manager + CON_SINK), 8)) {
             strcpy_s(p->output, sizeof(p->output), "Command manager is not ready; request was not executed.");
         } else {
             if (!DispatchExternal(base, manager, &result, &args, p->output, sizeof(p->output))) {

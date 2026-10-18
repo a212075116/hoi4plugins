@@ -8,6 +8,15 @@
 #include "trigger_reg.h"
 
 #include "../../adapter/native_adapter.h"
+#define TRG_PARAM_FIRST NativeAdapter_Field(NFL_PARAM_FIRST)
+#define TRG_PARAM_SECOND NativeAdapter_Field(NFL_TRIGGER_RHS)
+#define TRG_COMPARE NativeAdapter_Field(NFL_TRIGGER_COMPARE)
+#define TRG_PARAM_FLAGS NativeAdapter_Field(NFL_PARAM_FLAGS)
+#define TRG_PARAM_TEXT NativeAdapter_Field(NFL_PARAM_TEXT)
+#define TRG_PARAM_SELECTOR_A NativeAdapter_Field(NFL_PARAM_SELECTOR_A)
+#define TRG_PARAM_SELECTOR NativeAdapter_Field(NFL_PARAM_SELECTOR)
+#define TRG_PARAM_SELECTOR_B NativeAdapter_Field(NFL_PARAM_SELECTOR_B)
+#define TRG_CONTAINER_MAP NativeAdapter_Field(NFL_CONTAINER_MAP)
 
 #define RVA_TRIGGER_MAP NativeAdapter_RegistryRva(NS_TRIGGER_MAP)
 #define RVA_REGISTER_TRIGGER NativeAdapter_RegistryRva(NS_TRIGGER_REGISTER)
@@ -189,10 +198,10 @@ static int Trigger_HasTemporaryOperand(unsigned char* descriptor, void* context)
     typedef void* (__fastcall *NameFn)(void*, void*, void*, void*);
     typedef unsigned char (__fastcall *ContainsFn)(void*, void*);
     if (descriptor[14]) return 1;
-    if (*(int*)(descriptor + 100) != 0) return 0;
+    if (*(int*)(descriptor + TRG_PARAM_FLAGS) != 0) return 0;
     temporary = ((TemporaryFn)(img + NativeAdapter_RegistryRva(NS_TEMPORARY)))();
     if (temporary == NULL) return 0;
-    ((NameFn)(img + NativeAdapter_RegistryRva(NS_PARAM_NAME)))(descriptor, name, context, *(void**)(descriptor + 160));
+    ((NameFn)(img + NativeAdapter_RegistryRva(NS_PARAM_NAME)))(descriptor, name, context, *(void**)(descriptor + TRG_PARAM_SELECTOR));
     view.data = NativeString_Data((const NativeString*)name);
     view.size = *(unsigned long long*)(name + 16);
     found = ((ContainsFn)(img + NativeAdapter_RegistryRva(NS_CONTAINS)))(temporary, &view) != 0;
@@ -211,7 +220,7 @@ static int Trigger_HasDynamicBinding(void* container, const char* name, size_t l
     unsigned int hash = 2166136261u;
     size_t i;
     if (!NativeMemory_IsReadable(container, 56)) return 1;
-    map = *(unsigned char**)((unsigned char*)container + 48);
+    map = *(unsigned char**)((unsigned char*)container + TRG_CONTAINER_MAP);
     if (map == NULL) return 0;
     if (!NativeMemory_IsReadable(map, 56)) return 1;
     sentinel = *(void**)(map + 8);
@@ -238,19 +247,19 @@ static int Trigger_HasDynamicBinding(void* container, const char* name, size_t l
 
 int Trigger_ReadRawParameter(void* self, const TriggerScopeView* scope, unsigned int offset, long long* out)
 {
-    if (!NativeAdapter_RegistryReady()) return 0;
+    if (!NativeAdapter_RegistryReady() || !NativeAdapter_GroupReady(NG_SCRIPT)) return 0;
     unsigned char* img = Trigger_Image();
     unsigned char* descriptor;
     typedef long long* (__fastcall *ParamFn)(void*, long long*, void*, void*, unsigned char);
     typedef void* (__fastcall *ContainerFn)(void*, void*, int*, int*, void**, void**, void**, void**, void**, void**);
     if (img == NULL || self == NULL || scope == NULL || scope->nativeContext == NULL || out == NULL) return 0;
-    if (offset != 88u && offset != 96u && offset != 296u) return 0;
+    if (offset != TRG_PARAM_FIRST && offset != 96u && offset != TRG_PARAM_SECOND) return 0;
     descriptor = (unsigned char*)self + offset;
     if (!NativeMemory_IsReadable(descriptor, 208) || !descriptor[8]) return 0;
-    if (!descriptor[9] && !descriptor[10] && !descriptor[11] && *(void**)(descriptor + 144) == NULL
-        && *(void**)(descriptor + 160) == NULL && *(void**)(descriptor + 168) == NULL
+    if (!descriptor[9] && !descriptor[10] && !descriptor[11] && *(void**)(descriptor + TRG_PARAM_SELECTOR_A) == NULL
+        && *(void**)(descriptor + TRG_PARAM_SELECTOR) == NULL && *(void**)(descriptor + TRG_PARAM_SELECTOR_B) == NULL
         && !Trigger_HasTemporaryOperand(descriptor, scope->nativeContext)) {
-        unsigned char* text = descriptor + 112;
+        unsigned char* text = descriptor + TRG_PARAM_TEXT;
         unsigned long long size = *(unsigned long long*)(text + 16);
         unsigned long long cap = *(unsigned long long*)(text + 24);
         const char* name = cap <= 15 ? (const char*)text : *(const char**)text;
@@ -299,9 +308,9 @@ unsigned char __fastcall Trigger_EvaluateVariable(void* self, void* scope)
     TriggerScopeView view;
     long long lhs, rhs;
     if (!NativeMemory_IsReadable(self, 544) || !Trigger_ScopeView(scope, &view)
-        || !Trigger_ReadRawParameter(self, &view, 88u, &lhs)
-        || !Trigger_ReadRawParameter(self, &view, 296u, &rhs)) return 0;
-    return (unsigned char)Trigger_CompareRaw(lhs, rhs, *(int*)((unsigned char*)self + 504));
+        || !Trigger_ReadRawParameter(self, &view, TRG_PARAM_FIRST, &lhs)
+        || !Trigger_ReadRawParameter(self, &view, TRG_PARAM_SECOND, &rhs)) return 0;
+    return (unsigned char)Trigger_CompareRaw(lhs, rhs, *(int*)((unsigned char*)self + TRG_COMPARE));
 }
 
 void* Trigger_TypedTooltip(TriggerDef* def, void* self, void* out, void* ctx, unsigned char invert, int indent)
@@ -311,7 +320,7 @@ void* Trigger_TypedTooltip(TriggerDef* def, void* self, void* out, void* ctx, un
     TriggerScopeView view;
     long long left = 0, right = 0;
     int token = 0, valid = 0, actual = 0, i;
-    unsigned int lhsOffset = 88u, rhsOffset = 296u;
+    unsigned int lhsOffset = TRG_PARAM_FIRST, rhsOffset = TRG_PARAM_SECOND;
     char lhs[48] = "?", rhs[48] = "?";
     unsigned char params[4][104], packed[32] = {0}, resultPacked[32] = {0}, resultText[32] = {0};
     const char* op = "?";
@@ -325,7 +334,7 @@ void* Trigger_TypedTooltip(TriggerDef* def, void* self, void* out, void* ctx, un
     if (def->parameterTemplate != TRG_TEMPLATE_VALUE && def->parameterTemplate != TRG_TEMPLATE_VARIABLE) return out;
     if (def->parameterTemplate == TRG_TEMPLATE_VALUE) { lhsOffset = 96u; rhsOffset = 96u; }
     if (NativeMemory_IsReadable(self, def->parameterTemplate == TRG_TEMPLATE_VALUE ? 304 : 544))
-        token = *(int*)((unsigned char*)self + (def->parameterTemplate == TRG_TEMPLATE_VALUE ? 88 : 504));
+        token = *(int*)((unsigned char*)self + (def->parameterTemplate == TRG_TEMPLATE_VALUE ? 88 : TRG_COMPARE));
     if (NativeMemory_IsReadable(self, def->parameterTemplate == TRG_TEMPLATE_VALUE ? 304 : 544)
         && Trigger_ScopeView(ctx, &view)
         && !*((unsigned char*)self + lhsOffset + 11) && !*((unsigned char*)self + rhsOffset + 11)) {
@@ -337,10 +346,10 @@ void* Trigger_TypedTooltip(TriggerDef* def, void* self, void* out, void* ctx, un
                 valid = 1;
             }
         } else {
-            token = *(int*)((unsigned char*)self + 504);
-            if(def->operandReader!=NULL)valid=def->operandReader(self,&view,88u,&left)&&def->operandReader(self,&view,296u,&right);
-            else valid = Trigger_ReadRawParameter(self, &view, 88u, &left)
-                && Trigger_ReadRawParameter(self, &view, 296u, &right);
+            token = *(int*)((unsigned char*)self + TRG_COMPARE);
+            if(def->operandReader!=NULL)valid=def->operandReader(self,&view,TRG_PARAM_FIRST,&left)&&def->operandReader(self,&view,TRG_PARAM_SECOND,&right);
+            else valid = Trigger_ReadRawParameter(self, &view, TRG_PARAM_FIRST, &left)
+                && Trigger_ReadRawParameter(self, &view, TRG_PARAM_SECOND, &right);
         }
     }
     switch (token) {

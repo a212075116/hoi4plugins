@@ -9,6 +9,19 @@
 #include "MinHook.h"
 #include "../../adapter/native_adapter.h"
 #define ACH_RVA(symbol) NativeAdapter_Symbol(symbol)
+#define ACH_DEFINITIONS NativeAdapter_Field(NFL_ACH_DEFINITIONS)
+#define ACH_COUNT NativeAdapter_Field(NFL_ACH_COUNT)
+#define ACH_PENDING_LIST NativeAdapter_Field(NFL_ACH_LIST)
+#define ACH_PENDING_COUNT NativeAdapter_Field(NFL_ACH_PENDING)
+#define ACH_COMPLETED_COUNT NativeAdapter_Field(NFL_ACH_COMPLETED)
+#define ACH_EXCLUDED_COUNT NativeAdapter_Field(NFL_ACH_EXCLUDED)
+#define ACH_COMPLETED_LIST (ACH_COMPLETED_COUNT - 12)
+#define ACH_EXCLUDED_LIST (ACH_EXCLUDED_COUNT - 12)
+#define ACH_FLAG_A0 NativeAdapter_Field(NFL_ACH_FLAG_A0)
+#define ACH_FLAG_A3 NativeAdapter_Field(NFL_ACH_FLAG_A3)
+#define ACH_FLAG_A4 NativeAdapter_Field(NFL_ACH_FLAG_A4)
+#define ACH_MANAGER_SPAN (ACH_FLAG_A4 + 4)
+#define ACH_STATE NativeAdapter_Field(NFL_ACH_STATE)
 #include "achievement_source.h"
 
 #include "../common/plugin_log.h"
@@ -139,7 +152,7 @@ static long long __fastcall AchievementSourceStatus(CmdResult* out, CmdArgs* arg
     ConsoleCmd_InitResult(out);
     if (SourceHostSupported(base)) {
         manager = *(const unsigned char**)(base + ACH_RVA(NSY_ACH_MANAGER));
-        if (ConsoleCmd_IsReadable(manager, 168)) definitions = *(const int*)(manager + 28);
+        if (ConsoleCmd_IsReadable(manager, ACH_MANAGER_SPAN)) definitions = *(const int*)(manager + ACH_COUNT);
     }
     _snprintf_s(text, sizeof(text), _TRUNCATE,
         "[info] Original achievement source: installed=%ld mounted=%ld loads=%ld redirects=%ld failures=%ld definitions=%d. "
@@ -168,7 +181,7 @@ static long long __fastcall AchievementStatus(CmdResult* out, CmdArgs* args) {
     }
     manager = *(const unsigned char**)(base + ACH_RVA(NSY_ACH_MANAGER));
     state = *(const unsigned char**)(base + ACH_RVA(NSY_GAMESTATE));
-    if (!ConsoleCmd_IsReadable(manager, 168) || !ConsoleCmd_IsReadable(state, 193)) {
+    if (!ConsoleCmd_IsReadable(manager, ACH_MANAGER_SPAN) || !ConsoleCmd_IsReadable(state, ACH_STATE + 1)) {
         ConsoleCmd_SetMessage(out, "[warning] Achievement probe: game context not ready; no state changed."); return (long long)out;
     }
     _snprintf_s(text, sizeof(text), _TRUNCATE,
@@ -178,9 +191,9 @@ static long long __fastcall AchievementStatus(CmdResult* out, CmdArgs* args) {
         "debug_flag=%u debug_or_crash_log_flag=%u. "
         "No SetAchievement/StoreStats/ClearAchievement/ResetAllStats calls. "
         "original_source_hook=%ld mounted=%ld loads=%ld redirects=%ld failures=%ld.",
-        AchievementCompat_Installed(), state[192] & 1, *(const int*)(manager + 28), *(const int*)(manager + 52),
-        *(const int*)(manager + 76), *(const int*)(manager + 100),
-        manager[160], manager[161], manager[162], manager[163], manager[164],
+        AchievementCompat_Installed(), state[ACH_STATE] & 1, *(const int*)(manager + ACH_COUNT), *(const int*)(manager + ACH_PENDING_COUNT),
+        *(const int*)(manager + ACH_COMPLETED_COUNT), *(const int*)(manager + ACH_EXCLUDED_COUNT),
+        manager[ACH_FLAG_A0], manager[ACH_FLAG_A0 + 1], manager[ACH_FLAG_A0 + 2], manager[ACH_FLAG_A3], manager[ACH_FLAG_A4],
         base[ACH_RVA(NSY_ACH_FLAG_DEBUG)], base[ACH_RVA(NSY_ACH_FLAG_LOG)],
         g_sourceInstalled, g_sourceMounted, g_sourceLoads, g_sourceRedirects, g_sourceFailed);
     ConsoleCmd_SetMessage(out, text); out->ok = 1;

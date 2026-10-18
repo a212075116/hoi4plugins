@@ -2,16 +2,14 @@
 #include "../../adapter/native_adapter.h"
 
 #define RVA_GD_GS_GLOBAL   NativeAdapter_Symbol(NSY_GAMESTATE)
-#define OFF_GD_CGAMEDATE   0x460u
-#define OFF_GD_RAW         0x468u
-#define OFF_GD_YEAR        0x478u
-#define OFF_GD_MONTH0      0x488u
-#define OFF_GD_DAY         0x480u
-#define OFF_GD_MONTHDAYS   0x47Cu
-#define OFF_GD_DOY         0x484u
-#define OFF_GD_DIRTY       0x4C0u
+#define OFF_GD_RAW         NativeAdapter_Field(NFL_GD_RAW)
+#define OFF_GD_YEAR        NativeAdapter_Field(NFL_GD_YEAR)
+#define OFF_GD_MONTH0      NativeAdapter_Field(NFL_GD_MONTH0)
+#define OFF_GD_DAY         NativeAdapter_Field(NFL_GD_DAY)
+#define OFF_GD_MONTHDAYS   NativeAdapter_Field(NFL_GD_MONTH_DAYS)
+#define OFF_GD_DOY         NativeAdapter_Field(NFL_GD_DAY_OF_YEAR)
 #define RVA_GD_UI_DATE_UPDATE NativeAdapter_Symbol(NSY_DATE_UI_UPDATE)
-#define OFF_GD_PARAMSTR    0x108u
+#define OFF_GD_PARAMSTR    NativeAdapter_Field(NFL_GD_PARAM_TEXT)
 #define GD_TEXT_MAX        48
 
 #define GD_UNIT_YEAR       0

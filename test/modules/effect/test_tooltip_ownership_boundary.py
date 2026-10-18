@@ -37,6 +37,9 @@ fixture = r'''
 #include <string.h>
 #include "@@STRING@@"
 #define EFF_PARAMDESC_SIZE 0x68
+#define EFF_PARAMDESC_CAPACITY 256
+#define EFF_PARAMDESC_FIXED 0x50
+#define EFF_PARAM_FIRST 0x58
 #define EFF_SSO_MAX 15
 #define RVA_EFF_PACKKEY 0
 #define RVA_EFF_PARAM_TAG 0

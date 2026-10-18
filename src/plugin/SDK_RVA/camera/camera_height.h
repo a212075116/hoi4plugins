@@ -1,18 +1,16 @@
 #pragma once
 
 #include "console_cmd.h"
+#include "../../adapter/native_adapter.h"
 
-#define OFF_CAM_OBJ2CAM   0x750u
-#define OFF_CAM_HEIGHT    0x69Cu
-#define OFF_CAM_MINH      0x6D0u
-#define OFF_CAM_MAXH      0x6D4u
+#define OFF_CAM_HEIGHT    NativeAdapter_Field(NFL_CAMERA_HEIGHT)
+#define OFF_CAM_MINH      NativeAdapter_Field(NFL_CAMERA_MINIMUM)
+#define OFF_CAM_MAXH      NativeAdapter_Field(NFL_CAMERA_MAXIMUM)
 #define CAM_TRUE_LOWER    35
-#define OFF_CAM_PARAM_FIXED 0x98u
 #define CAM_TRUE_UPPER_FALLBACK 3000u
 #define CAM_MIN_SPAN      50
 #define CAM_SMOOTH_STEPS  18
 #define CAM_SMOOTH_STEP_MS 16
-#define OFF_CAM_INTERP    0x698u
 
 typedef struct {
     void*  base;

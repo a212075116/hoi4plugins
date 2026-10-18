@@ -43,8 +43,8 @@ static __int64 __fastcall FrontUpdate(void* view) {
     void* icon;
     void** table;
     CmdString name = {{0}, 6, 15};
-    if (!ConsoleCmd_IsReadable((unsigned char*)view + 1384, sizeof(void*))) return result;
-    window = *(void**)((unsigned char*)view + 1384);
+    if (NativeAdapter_Field(NFL_ACH_VIEW_WINDOW) == 0 || !ConsoleCmd_IsReadable((unsigned char*)view + NativeAdapter_Field(NFL_ACH_VIEW_WINDOW), sizeof(void*))) return result;
+    window = *(void**)((unsigned char*)view + NativeAdapter_Field(NFL_ACH_VIEW_WINDOW));
     if (!ConsoleCmd_IsReadable(window, sizeof(void*))) return result;
     table = *(void***)window;
     if (!ConsoleCmd_IsReadable(table, 56 * sizeof(void*)) || !ConsoleCmd_IsReadable(table[55], 1)) return result;

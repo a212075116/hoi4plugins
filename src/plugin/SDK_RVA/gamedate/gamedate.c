@@ -23,7 +23,7 @@ static const int kGregorianMonthDayCounts[12] = { 31, 28, 31, 30, 31, 30, 31, 31
 unsigned char* GameDate_GameState(void)
 {
     unsigned char* img = Img();
-    if (img == NULL || RVA_GD_GS_GLOBAL == 0) return NULL;
+    if (img == NULL || RVA_GD_GS_GLOBAL == 0 || !NativeAdapter_GroupReady(NG_GAMEDATE)) return NULL;
     if (!ConsoleCmd_IsReadable(img + RVA_GD_GS_GLOBAL, sizeof(void*))) return NULL;
     return *(unsigned char**)(img + RVA_GD_GS_GLOBAL);
 }
@@ -239,7 +239,7 @@ int GameDate_ReadParamText(void* effectInstance, char* dst, int dstn)
     int i;
 
     if (p == NULL || dst == NULL || dstn <= 1) return 0;
-    if (!ConsoleCmd_IsReadable(p + OFF_GD_PARAMSTR, 8)) return 0;
+    if (OFF_GD_PARAMSTR == 0 || !ConsoleCmd_IsReadable(p + OFF_GD_PARAMSTR, 32)) return 0;
     sz  = *(unsigned long long*)(p + OFF_GD_PARAMSTR + 0x10);
     cap = *(unsigned long long*)(p + OFF_GD_PARAMSTR + 0x18);
     if (sz == 0 || sz > (unsigned long long)(GD_TEXT_MAX - 1)) return 0;

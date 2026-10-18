@@ -23,6 +23,7 @@ static void Synthetic() {
     const BYTE code[]={0x48,0x8b,0x81,0x50,7,0,0,0xc3};memcpy(g_file.data()+0x1120,code,8);
     Put64(0x2400+37*8,g_preferred+0x1120);Put64(0x2400+38*8,g_preferred+0x1120);
     g_profile={0x750,0x69c,0x6d0,0x6d4,true};g_binding={};g_roots.clear();g_groupReady[NG_CAMERA_WRITE]=true;
+    g_fieldValues[NFL_CAMERA_OBJECT]=0x750;g_fieldValues[NFL_CAMERA_HEIGHT]=0x69c;g_fieldValues[NFL_CAMERA_MINIMUM]=0x6d0;g_fieldValues[NFL_CAMERA_MAXIMUM]=0x6d4;
     InterlockedExchange(&g_prepared,1);
     Check("synthetic-bind",Bind(g_preferred));g_bound=true;
     memcpy(g_base,g_file.data(),g_file.size());

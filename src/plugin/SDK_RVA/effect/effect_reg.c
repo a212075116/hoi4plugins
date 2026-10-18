@@ -101,7 +101,7 @@ float Effect_ParamFloat(void* self, void* ctx)
 
     if (img == NULL || self == NULL || !NativeAdapter_RegistryReady()) return 0.0f;
     if (!NativeMemory_IsReadable(img + NativeAdapter_RegistryRva(NS_PARAM_GET), 16)) return 0.0f;
-    ((GetParamFn)(img + NativeAdapter_RegistryRva(NS_PARAM_GET)))((unsigned char*)self + 0x58, &fixed, ctx, 0, 0);
+    ((GetParamFn)(img + NativeAdapter_RegistryRva(NS_PARAM_GET)))((unsigned char*)self + EFF_PARAM_FIRST, &fixed, ctx, 0, 0);
     return (float)((double)fixed / EFF_FIXED_SCALE);
 }
 
@@ -109,20 +109,21 @@ void Effect_SetParamFixed(void* self, double value)
 {
     unsigned char* p = (unsigned char*)self;
     if (self == NULL || !NativeAdapter_RegistryReady()) return;
-    if (!NativeMemory_IsReadable(p + 0x98, 8)) return;
-    *(long long*)(p + 0x98) = (long long)(value * EFF_FIXED_SCALE);
+    if (!NativeMemory_IsReadable(p + EFF_PARAM_FIXED, 8)) return;
+    *(long long*)(p + EFF_PARAM_FIXED) = (long long)(value * EFF_FIXED_SCALE);
 }
 
 void* Effect_BuildTooltip(void* self, void* out, void* ctx, const char* locKey)
 {
     unsigned char* img = Effect_GetModuleBase();
-    unsigned char paramDesc[EFF_PARAMDESC_SIZE];
+    unsigned char paramDesc[EFF_PARAMDESC_CAPACITY];
     unsigned char packed[32];
     unsigned char fin[32];
     unsigned long long sz;
     unsigned char* src;
 
     if (img == NULL || out == NULL || !NativeAdapter_RegistryReady()) return out;
+    if (EFF_PARAMDESC_SIZE == 0 || EFF_PARAMDESC_SIZE > sizeof(paramDesc) || EFF_PARAMDESC_FIXED + 8 > EFF_PARAMDESC_SIZE) return out;
     if (locKey == NULL) locKey = "";
     if (!NativeMemory_IsReadable(img + NativeAdapter_RegistryRva(NS_TEXT_PACK), 16)) return out;
 
@@ -132,11 +133,11 @@ void* Effect_BuildTooltip(void* self, void* out, void* ctx, const char* locKey)
 
     {
         long long fixed = 0;
-        ((GetParamFn)(img + NativeAdapter_RegistryRva(NS_PARAM_GET)))((unsigned char*)self + 0x58, &fixed, ctx, 0, 0);
+        ((GetParamFn)(img + NativeAdapter_RegistryRva(NS_PARAM_GET)))((unsigned char*)self + EFF_PARAM_FIRST, &fixed, ctx, 0, 0);
         ((ParamCtorFn)(img + NativeAdapter_RegistryRva(NS_PARAM_CTOR)))(paramDesc);
         *(int*)(paramDesc + 0x00) = 9;
         *(void**)(paramDesc + 0x08) = (void*)(img + NativeAdapter_RegistryRva(NS_PARAM_TAG));
-        *(long long*)(paramDesc + 0x50) = fixed;
+        *(long long*)(paramDesc + EFF_PARAMDESC_FIXED) = fixed;
         ((PackKeyFn)(img + NativeAdapter_RegistryRva(NS_TEXT_PACK)))(packed, locKey, paramDesc, 1);
         ((ParamDtorFn)(img + NativeAdapter_RegistryRva(NS_PARAM_DTOR)))(paramDesc);
     }
@@ -195,6 +196,8 @@ int Effect_RegistryRegister(EffectDef* def)
     img = Effect_GetModuleBase();
     if (img == NULL) return 0;
     if (!Effect_RegistryReady() || !NativeAdapter_ScriptTemplate(0, &t)) return 0;
+    if (EFF_VT_EXEC == 0 || EFF_VT_TOOLTIP == 0 || EFF_VT_EXEC % 8 || EFF_VT_TOOLTIP % 8
+        || EFF_VT_EXEC / 8 >= EFF_VT_SLOTS || EFF_VT_TOOLTIP / 8 >= EFF_VT_SLOTS) return 0;
 
     if (!Effect_AddToken(def->name, &id)) {
         Plugin_Log("[eff] Effect_AddToken failed: %s", def->name);

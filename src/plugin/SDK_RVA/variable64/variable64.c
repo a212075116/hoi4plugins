@@ -25,7 +25,7 @@ typedef void* (__fastcall *Var64LookupFn)(void* scopedVar, void* ctx, void* a3);
 #define RVA_VAR_LOOKUP     NativeAdapter_Symbol(NSY_VAR_LOOKUP)
 #define RVA_VARSET_ENTRYVT NativeAdapter_Symbol(NSY_VAR_ENTRY_VT)
 #define RVA_GAME_SET_EXEC  NativeAdapter_Symbol(NSY_VAR_SET_EXEC)
-#define VAR64_MARK_OFF     505u
+#define VAR64_MARK_OFF     NativeAdapter_Field(NFL_VAR64_MARK)
 #define VAR64_SSO_LIMIT    15u
 #define RVA_VAR_CONTAINER NativeAdapter_RegistryRva(NS_CONTAINER)
 #define VAR64_MARK_SET     0x53343656u
@@ -35,8 +35,13 @@ typedef void* (__fastcall *Var64LookupFn)(void* scopedVar, void* ctx, void* a3);
 #define VAR64_MARK_RND     0x53343652u
 #define VAR64_MARK_CLP     0x53343643u
 #define VAR64_MARK_CLH     0x53343648u
-#define VAR64_NAME_OFF     200u
-#define VAR64_SUBOBJ_OFF   88u
+#define VAR64_NAME_OFF     NativeAdapter_Field(NFL_VAR64_NAME)
+#define VAR64_SUBOBJ_OFF   NativeAdapter_Field(NFL_PARAM_FIRST)
+#define VAR64_PARAM_SECOND NativeAdapter_Field(NFL_TRIGGER_RHS)
+#define VAR64_PARAM_VALUE  NativeAdapter_Field(NFL_PARAM_VALUE)
+#define VAR64_PARAM_TEXT   NativeAdapter_Field(NFL_PARAM_TEXT)
+#define VAR64_PARAM_SELECTOR_A NativeAdapter_Field(NFL_PARAM_SELECTOR_A)
+#define VAR64_PARAM_SELECTOR   NativeAdapter_Field(NFL_PARAM_SELECTOR)
 #define RVA_GAMESTATE_GLOBAL   NativeAdapter_Symbol(NSY_GAMESTATE)
 #define RVA_APP_GLOBAL         NativeAdapter_Symbol(NSY_APP)
 #define RVA_SAVEINFO_INIT      NativeAdapter_Symbol(NSY_SAVEINFO_INIT)
@@ -44,9 +49,9 @@ typedef void* (__fastcall *Var64LookupFn)(void* scopedVar, void* ctx, void* a3);
 #define RVA_STRING_APPEND      NativeAdapter_RegistryRva(NS_TEXT_APPEND)
 #define VAR64_SAVEINFO_BYTES   256u
 #define VAR64_SAVEINFO_NAME_AT 32u
-#define VAR64_APP_LOADER_SLOT  880u
-#define VAR64_GS_SLOT_PRIMARY  1312u
-#define VAR64_GS_SLOT_FALLBACK 1316u
+#define VAR64_APP_LOADER_SLOT  NativeAdapter_Field(NFL_VAR64_APP_LOADER)
+#define VAR64_GS_SLOT_PRIMARY  NativeAdapter_Field(NFL_VAR64_GS_PRIMARY)
+#define VAR64_GS_SLOT_FALLBACK NativeAdapter_Field(NFL_VAR64_GS_FALLBACK)
 #define VAR64_SAVEFILE_SUFFIX  ".hoi4"
 #define VAR64_SAVEFILE_MAX     160u
 
@@ -207,8 +212,9 @@ static int Var64_ResolveGameVariableEx(void* self, void* ctx, long long* outValu
     unsigned char* p = (unsigned char*)self;
 
     if (img == NULL || p == NULL || nameBuf == NULL || nameBufSize < 40) return 0;
-    if (!ConsoleCmd_IsReadable(p + VAR64_SUBOBJ_OFF + 144, 24)) return 0;
-    if (*(void**)(p + VAR64_SUBOBJ_OFF + 144) != NULL || *(void**)(p + VAR64_SUBOBJ_OFF + 160) != NULL) {
+    if (!ConsoleCmd_IsReadable(p + VAR64_SUBOBJ_OFF + VAR64_PARAM_SELECTOR_A, 8)
+        || !ConsoleCmd_IsReadable(p + VAR64_SUBOBJ_OFF + VAR64_PARAM_SELECTOR, 8)) return 0;
+    if (*(void**)(p + VAR64_SUBOBJ_OFF + VAR64_PARAM_SELECTOR_A) != NULL || *(void**)(p + VAR64_SUBOBJ_OFF + VAR64_PARAM_SELECTOR) != NULL) {
         Plugin_Log("[var64] indexed/compound target unsupported; no split write");
         return 0;
     }
@@ -219,7 +225,7 @@ static int Var64_ResolveGameVariableEx(void* self, void* ctx, long long* outValu
     if (outValue != NULL) {
         *outValue = 0;
         if (NativeAdapter_RegistryReady() && ConsoleCmd_IsReadable(img + NativeAdapter_RegistryRva(NS_PARAM_GET), 16)) {
-            ((Var64GetParamFn)(img + NativeAdapter_RegistryRva(NS_PARAM_GET)))((void*)(p + 296), outValue, ctx, 0,
+            ((Var64GetParamFn)(img + NativeAdapter_RegistryRva(NS_PARAM_GET)))((void*)(p + VAR64_PARAM_SECOND), outValue, ctx, 0,
                                                            (void*)(long long)keepFraction);
         }
     }
@@ -637,8 +643,9 @@ static int Var64_ReadNameOnly(void* self, char* nameBuf, unsigned int nameBufSiz
     unsigned char* p = (unsigned char*)self;
 
     if (p == NULL || nameBuf == NULL || nameBufSize < 40) return 0;
-    if (!ConsoleCmd_IsReadable(p + VAR64_SUBOBJ_OFF + 144, 24)
-        || *(void**)(p + VAR64_SUBOBJ_OFF + 144) != NULL || *(void**)(p + VAR64_SUBOBJ_OFF + 160) != NULL) return 0;
+    if (!ConsoleCmd_IsReadable(p + VAR64_SUBOBJ_OFF + VAR64_PARAM_SELECTOR_A, 8)
+        || !ConsoleCmd_IsReadable(p + VAR64_SUBOBJ_OFF + VAR64_PARAM_SELECTOR, 8)
+        || *(void**)(p + VAR64_SUBOBJ_OFF + VAR64_PARAM_SELECTOR_A) != NULL || *(void**)(p + VAR64_SUBOBJ_OFF + VAR64_PARAM_SELECTOR) != NULL) return 0;
     if (!ConsoleCmd_IsReadable(p + VAR64_NAME_OFF, 32)) return 0;
     if (!Var64_CopyTargetName(p + VAR64_NAME_OFF, nameBuf, nameBufSize, VAR64_NAME_WITH_TERMINATOR)) return 0;
     return 1;
@@ -659,7 +666,7 @@ static void* Var64_ContainerAt(void* self, void* ctx, unsigned int offset)
 
 static void* Var64_Container(void* self, void* ctx)
 {
-    return Var64_ContainerAt(self, ctx, 88u);
+    return Var64_ContainerAt(self, ctx, VAR64_SUBOBJ_OFF);
 }
 
 static int Var64_ReadStoredIn(void* container, const char* name, long long* outRaw)
@@ -695,15 +702,15 @@ static int Var64_ReadOperandLiteralAt(void* self, unsigned int paramOff, long lo
 
     if (out == NULL) return 0;
     *out = 0;
-    if (!ConsoleCmd_IsReadable(pd, 0x48)) return 0;
+    if (VAR64_PARAM_VALUE == 0 || !ConsoleCmd_IsReadable(pd, 10) || !ConsoleCmd_IsReadable(pd + VAR64_PARAM_VALUE, 8)) return 0;
     if (*(unsigned char*)(pd + 9) == 0) return 0;
-    *out = *(long long*)(pd + 0x40);
+    *out = *(long long*)(pd + VAR64_PARAM_VALUE);
     return 1;
 }
 
 static int Var64_ReadOperandLiteral(void* self, long long* out)
 {
-    return Var64_ReadOperandLiteralAt(self, 296u, out);
+    return Var64_ReadOperandLiteralAt(self, VAR64_PARAM_SECOND, out);
 }
 
 static int Var64_ReadOperandNameAt(void* self, unsigned int paramOff,
@@ -716,12 +723,14 @@ static int Var64_ReadOperandNameAt(void* self, unsigned int paramOff,
 
     if (out == NULL || outSize < 8) return 0;
     out[0] = 0;
-    if (!ConsoleCmd_IsReadable(pd, 176) || *(void**)(pd + 144) != NULL || *(void**)(pd + 160) != NULL) return 0;
+    if (VAR64_PARAM_TEXT == 0 || !ConsoleCmd_IsReadable(pd, 10) || !ConsoleCmd_IsReadable(pd + VAR64_PARAM_TEXT, 32)
+        || !ConsoleCmd_IsReadable(pd + VAR64_PARAM_SELECTOR_A, 8) || !ConsoleCmd_IsReadable(pd + VAR64_PARAM_SELECTOR, 8)
+        || *(void**)(pd + VAR64_PARAM_SELECTOR_A) != NULL || *(void**)(pd + VAR64_PARAM_SELECTOR) != NULL) return 0;
     if (*(unsigned char*)(pd + 9) != 0) return 0;
-    size = *(unsigned long long*)(pd + 0x80);
-    cap = *(unsigned long long*)(pd + 0x88);
+    size = *(unsigned long long*)(pd + VAR64_PARAM_TEXT + 16);
+    cap = *(unsigned long long*)(pd + VAR64_PARAM_TEXT + 24);
     if (size == 0 || size >= outSize) return 0;
-    src = (cap <= 15) ? (pd + 0x70) : *(unsigned char**)(pd + 0x70);
+    src = (cap <= 15) ? (pd + VAR64_PARAM_TEXT) : *(unsigned char**)(pd + VAR64_PARAM_TEXT);
     if (src == NULL || !ConsoleCmd_IsReadable(src, size + 1)) return 0;
     memcpy(out, src, (size_t)size);
     out[size] = 0;
@@ -730,7 +739,7 @@ static int Var64_ReadOperandNameAt(void* self, unsigned int paramOff,
 
 static int Var64_ReadOperandName(void* self, char* out, unsigned int outSize)
 {
-    return Var64_ReadOperandNameAt(self, 296u, out, outSize);
+    return Var64_ReadOperandNameAt(self, VAR64_PARAM_SECOND, out, outSize);
 }
 
 static int Var64_ReadStoredOperandAt(void* self, void* ctx, unsigned int offset, long long* out)
@@ -823,12 +832,12 @@ static int Var64_TryDebtArithmetic(void* self, void* ctx, int op, const char* op
     if (img == NULL || self == NULL || ctx == NULL) return 0;
     if (!Var64_ReadNameOnly(self, name, sizeof(name))) return 0;
     namedOperand = Var64_ReadOperandName(self, operandName, sizeof(operandName));
-    storedOperand = namedOperand && Var64_ReadStoredOperandAt(self, ctx, 296u, &operandRaw);
+    storedOperand = namedOperand && Var64_ReadStoredOperandAt(self, ctx, VAR64_PARAM_SECOND, &operandRaw);
     if (!Var64_IsStored64(self, ctx, name) && Var64_FindDebt(self, ctx, name) == NULL && !storedOperand) return 0;
     if (!storedOperand && !Var64_ReadOperandLiteral(self, &operandRaw)) {
         if (!Var64_ResolveGameVariableEx(self, ctx, &operandRaw, NULL, operandName, sizeof(operandName), 0)) return 1;
     }
-    addr = ((Var64LookupFn)(img + RVA_VAR_LOOKUP))((unsigned char*)self + 88, ctx, NULL);
+    addr = ((Var64LookupFn)(img + RVA_VAR_LOOKUP))((unsigned char*)self + VAR64_SUBOBJ_OFF, ctx, NULL);
     if (addr == NULL) return 1;
     currentRaw = Var64_ReadTrueRaw(self, ctx, name, addr);
     if (!Var64_CalculateRaw(currentRaw, operandRaw, op, &result)) {
@@ -868,7 +877,7 @@ static int Var64_TryArithmetic(void* self, void* ctx, int op, const char* opName
     rInt = 0;
     rFrac = 0;
 
-    if (Var64_ReadStoredOperandAt(self, ctx, 296u, &operandRaw)) {
+    if (Var64_ReadStoredOperandAt(self, ctx, VAR64_PARAM_SECOND, &operandRaw)) {
         oInt = operandRaw / VAR64_FRAC_SCALE;
         oFrac = operandRaw % VAR64_FRAC_SCALE;
     }
@@ -1020,13 +1029,13 @@ static long long __fastcall Var64_ClampDetour(void* self, void* ctx)
     if (!Var64_ReadNameOnly(self, name, sizeof(name))) goto vanilla;
     if (!Var64_IsStored64(self, ctx, name) && Var64_FindDebt(self, ctx, name) == NULL) goto vanilla;
 
-    addr = ((Var64LookupFn)(img + RVA_VAR_LOOKUP))((void*)((unsigned char*)self + 88), ctx, NULL);
+    addr = ((Var64LookupFn)(img + RVA_VAR_LOOKUP))((void*)((unsigned char*)self + VAR64_SUBOBJ_OFF), ctx, NULL);
     if (addr == NULL) goto vanilla;
 
-    haveMin = Var64_ReadParamValue(self, ctx, 296u, 304u, &minRaw);
+    haveMin = Var64_ReadParamValue(self, ctx, VAR64_PARAM_SECOND, 304u, &minRaw);
     haveMax = Var64_ReadParamValue(self, ctx, 504u, 512u, &maxRaw);
 
-    if (haveMin) Var64_ReadStoredOperandAt(self, ctx, 296u, &minRaw);
+    if (haveMin) Var64_ReadStoredOperandAt(self, ctx, VAR64_PARAM_SECOND, &minRaw);
     if (haveMax) Var64_ReadStoredOperandAt(self, ctx, 504u, &maxRaw);
 
     curRaw = Var64_ReadTrueRaw(self, ctx, name, addr);

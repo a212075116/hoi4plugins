@@ -1,10 +1,14 @@
 #pragma once
 
 #define EFF_VT_SLOTS         25
-#define EFF_VT_TOOLTIP       0x38
-#define EFF_VT_EXEC          0x68
+#define EFF_VT_TOOLTIP       NativeAdapter_Field(NFL_EFFECT_VT_TOOLTIP)
+#define EFF_VT_EXEC          NativeAdapter_Field(NFL_EFFECT_VT_EXEC)
 #define EFF_ENTRY_VT_FACTORY 0x08
-#define EFF_PARAMDESC_SIZE   0x68
+#define EFF_PARAMDESC_SIZE   NativeAdapter_Field(NFL_EFFECT_PARAMDESC_SIZE)
+#define EFF_PARAMDESC_CAPACITY 256
+#define EFF_PARAMDESC_FIXED  NativeAdapter_Field(NFL_EFFECT_PARAMDESC_FIXED)
+#define EFF_PARAM_FIRST      NativeAdapter_Field(NFL_PARAM_FIRST)
+#define EFF_PARAM_FIXED      NativeAdapter_Field(NFL_EFFECT_PARAM_FIXED)
 #define EFF_SSO_MAX          15
 #define EFF_FIXED_SCALE      100000.0
 
