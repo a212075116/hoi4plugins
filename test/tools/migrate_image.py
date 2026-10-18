@@ -11,10 +11,13 @@ sys.path.insert(0, str(ROOT / 'test/modules/camera'))
 from migrate_native_symbols import migrate_symbols, read_profile, resolve, summarize
 from symbol_scan_core import Image
 from camera_read_adapter_core import AdapterError, ImageBindings
+from check_native_fields import brief, field_report
 
 REGISTRY_SPECS = ROOT / 'src/plugin/adapter/script_bindings.inc'
 TOKEN_BYTES = 72
 CAMERA_KEYS = ('camera_pointer', 'height', 'minimum', 'maximum')
+CAMERA_FIELDS = dict(camera_pointer='camera.object_to_camera', height='camera.height', minimum='camera.minimum',
+                     maximum='camera.maximum')
 
 
 def registry_specs():
@@ -54,24 +57,33 @@ def migrate_registry(base, target, same, output):
                       'array-end reference. Templates, factory ABI and allocator are left to the runtime binder.')
 
 
-def migrate_camera(base, target_path, sha, same, output):
+def migrate_camera(base, target_path, sha, same, output, layout):
     fields = read_profile(ROOT / 'bindings' / (base.sha + '.profile'))
     result = dict(baseline={k: fields[k] for k in CAMERA_KEYS})
+    found = {r['key']: r for r in layout['fields']}
+    offsets, origin = {}, {}
+    for key in CAMERA_KEYS:
+        row = found.get(CAMERA_FIELDS[key], {})
+        if not same and row.get('status') in ('SAME', 'MOVED'):
+            offsets[key], origin[key] = hex(int(next(iter(row['votes'])), 16)), 'WITNESS_' + row['status']
+        else:
+            offsets[key], origin[key] = fields[key], 'CARRIED_FROM_BASELINE'
+    result.update(offsets=offsets, origin=origin)
     try:
         target = ImageBindings(target_path)
-        target.getter = target.find_getter(int(fields['camera_pointer'], 0))
+        target.getter = target.find_getter(int(offsets['camera_pointer'], 0))
         result.update(tables=target.tables, getter=target.getter, located=True)
     except AdapterError as error:
         target = None
         result.update(located=False, failure=error.code, detail=error.detail[:200])
     values = {'schema': '1', 'image_sha256': sha, 'read_contract': fields['read_contract']}
-    values.update({k: fields[k] if result['located'] else '0x0' for k in CAMERA_KEYS})
+    values.update({k: offsets[k] if result['located'] else '0x0' for k in CAMERA_KEYS})
     values['runtime_read'] = fields['runtime_read'] if same else '0'
     profile = output / (sha + '.profile')
     profile.write_text(''.join(k + '=' + v + '\n' for k, v in values.items()), encoding='ascii', newline='\n')
     result.update(profile=str(profile.resolve()), approved=same,
-                  scope='Camera pointer getter is relocated by RTTI and displacement; height/minimum/maximum offsets '
-                        'are carried from the baseline unverified. Field layout needs live review.')
+                  scope='Offsets come from unanimous field witnesses when available, otherwise carried from the baseline; '
+                        'the camera pointer must also have an RTTI getter. Field layout still needs live review.')
     return result
 
 
@@ -95,9 +107,10 @@ def main():
     args.output_directory.mkdir(parents=True, exist_ok=True)
     symbols = migrate_symbols(base, target, same, args.output_directory)
     registry = migrate_registry(base, target, same, args.output_directory)
-    camera = migrate_camera(base, args.image, target.sha, same, args.output_directory)
+    fields = field_report(base, target, dict(target_sha256=target.sha, symbols=symbols, registry=registry))
+    camera = migrate_camera(base, args.image, target.sha, same, args.output_directory, fields)
     report = dict(baseline_sha256=base.sha, target_sha256=target.sha, approved=same,
-                  symbols=symbols, registry=registry, camera=camera,
+                  symbols=symbols, registry=registry, camera=camera, fields=fields,
                   symbols_accept=accept(args.symbols_fixture, args.image, symbols['profile']))
     (args.output_directory / 'migration.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
     print(json.dumps(dict(
@@ -105,7 +118,8 @@ def main():
         symbols=dict(summary=symbols['summary'], incomplete_groups=symbols['incomplete_groups']),
         registry=dict(summary=registry['summary'], complete=registry['complete'],
                       static_token_count=registry['static_token_count']),
-        camera=dict(located=camera['located'], failure=camera.get('failure')),
+        camera=dict(located=camera['located'], failure=camera.get('failure'), origin=camera['origin']),
+        fields=brief(fields),
         symbols_accept=report['symbols_accept'] and report['symbols_accept']['stdout'][-1]), indent=2))
 
 

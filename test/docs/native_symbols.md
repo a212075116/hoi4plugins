@@ -48,7 +48,7 @@ Windows控制台GBK下部分夹具打印报UnicodeEncodeError，设`PYTHONIOENCO
 python test/tools/migrate_image.py --image ../hoi4.exe.backup --output-directory test/reports/20261017_migrate_image/backup --symbols-fixture <sym.exe>
 ```
 
-默认基准为`../hoi4.exe`；同SHA用`--rescan`自扫。三映像并行约12.5分钟（锚点跳层占大头）。
+默认基准为`../hoi4.exe`；同SHA用`--rescan`自扫。三映像并行约2分钟（第五轮缓存后；此前约12.5分钟）。
 自扫`.symbols`、`.registry`去掉批准行后与已提交逐字节相同；backup symbols 27/27、registry 23/23、token 10766，`--accept` 10/10。
 
 ## 实机驱动
@@ -66,6 +66,18 @@ python test/modules/adapter/live_bindings_check.py --exe ../hoi4.exe --output te
 | 当前映像+新构建 | 35秒进图，36项全可用，四命令exit 0，正常关闭 |
 | backup以原名启动 | 40秒进图但插件未加载（载体按名拒绝），作为驱动修正依据保留 |
 | backup换名为hoi4.exe | 38秒进图，除有意关闭的摄像机写入4项外全可用，token 10766，摄像机310/50/3000，正常关闭；exe已按SHA复原 |
+
+## 字段偏移检查（第五轮）
+
+```powershell
+python test/tools/check_native_fields.py --image ../hoi4.exe.backup --migration test/reports/20261018_migrate_image/backup/migration.json --output test/reports/20261018_fields/backup.json
+```
+
+`migrate_image.py`已自动运行并写入`migration.json`的`fields`；单独运行约3秒。自扫50一致、4无见证；backup 47一致、3多数一致；exe3 7项移动。
+exe3摄像机指针`0x728`另由`camera_read_adapter_core.find_getter`在槽36/37独立确认。
+
+速度回归：缓存索引与旧扫描在7个真实目标上引用集合完全相同；首版按位置取前N个锚点时`achievement.vector_push`退化为未解析，
+跨步加按函数长度排序后恢复；`param.get`在backup出现10:1，以多数票加复核标记恢复。最终三映像126秒，资料与第四轮逐字节相同。
 
 ## 证据
 

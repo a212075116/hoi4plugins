@@ -287,4 +287,4 @@ Array64记录和owner键的独立oracle、完整存储夹具及golden字节见[�
 
 第二轮[脚本注册基础绑定](script_bindings.md)已迁移模板/工厂及相关地址管理；不同映像的迁移候选默认禁用，其他业务仍需适配。
 
-第三轮[原生符号目录](native_symbols.md)：23原生检查、自扫逐字节一致、backup/exe3迁移候选与加载器接受性；第四轮一键迁移与`live_bindings_check.py`实机驱动。
+第三轮[原生符号目录](native_symbols.md)：23原生检查、自扫逐字节一致、backup/exe3迁移候选与加载器接受性；第四轮一键迁移与`live_bindings_check.py`实机驱动；第五轮字段偏移检查。

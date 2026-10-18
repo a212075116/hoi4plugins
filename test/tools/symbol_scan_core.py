@@ -37,6 +37,7 @@ class Image:
         self._functions = None
         self._tables = None
         self._reloc = None
+        self._displacements = None
 
     def section(self, rva, count=1):
         for s in self.sections:
@@ -238,23 +239,39 @@ class Image:
                     return found
         return found
 
-    def rip_references(self, target):
-        refs = []
-        for start, raw, flags, mapped, name in self.sections:
-            if not flags & EXECUTE or len(raw) < 8:
-                continue
-            for phase in range(4):
-                count = (len(raw) - phase) // 4
-                disp = numpy.frombuffer(raw, dtype='<i4', count=count, offset=phase).astype(numpy.int64)
-                positions = start + phase + 4 * numpy.arange(count, dtype=numpy.int64)
-                delta = target - 4 - positions - disp
-                for i in numpy.nonzero((delta >= 0) & (delta <= 4))[0].tolist():
-                    refs.append((start + phase + 4 * i, int(delta[i])))
+    def displacement_index(self):
+        if self._displacements is None:
+            ends, positions = [], []
+            for start, raw, flags, mapped, name in self.sections:
+                if not flags & EXECUTE or len(raw) < 8:
+                    continue
+                for phase in range(4):
+                    count = (len(raw) - phase) // 4
+                    at = start + phase + 4 * numpy.arange(count, dtype=numpy.int64)
+                    disp = numpy.frombuffer(raw, dtype='<i4', count=count, offset=phase)
+                    ends.append((at + 4 + disp).astype(numpy.int32))
+                    positions.append(at.astype(numpy.int32))
+            ends, positions = numpy.concatenate(ends), numpy.concatenate(positions)
+            order = numpy.argsort(ends, kind='stable')
+            self._displacements = (ends[order], positions[order])
+        return self._displacements
+
+    def rip_references(self, target, kinds=None, limit=None):
+        ends, positions = self.displacement_index()
+        lo = numpy.searchsorted(ends, target - 4, 'left')
+        hi = numpy.searchsorted(ends, target, 'right')
+        refs = sorted((int(p), int(target - e)) for e, p in zip(ends[lo:hi].tolist(), positions[lo:hi].tolist()))
+        if limit is not None and len(refs) > limit:
+            step = len(refs) // limit
+            refs = [refs[i] for i in sorted(range(len(refs)), key=lambda i: (i % step, i))]
         verified = []
         cache = {}
+        functions = set()
         for at, tail in refs:
             fn = self.function_of(at)
             if fn is None:
+                continue
+            if limit is not None and fn not in functions and len(functions) >= limit:
                 continue
             if fn not in cache:
                 cache[fn] = self.function_instructions(fn)
@@ -262,11 +279,15 @@ class Image:
                 a = ins.address - self.base
                 if a <= at < a + ins.size:
                     mem = [op for op in ins.operands if op.type == X86_OP_MEM and op.mem.base == X86_REG_RIP]
+                    kind = None
                     if mem and a + ins.disp_offset == at:
                         if a + ins.size + mem[0].mem.disp == target:
-                            verified.append(dict(function=fn, instruction=a, kind='rip'))
+                            kind = 'rip'
                     elif ins.imm_size == 4 and a + ins.imm_offset == at and (ins.group(capstone.CS_GRP_CALL) or ins.group(capstone.CS_GRP_JUMP)):
-                        verified.append(dict(function=fn, instruction=a, kind='call' if ins.group(capstone.CS_GRP_CALL) else 'jump'))
+                        kind = 'call' if ins.group(capstone.CS_GRP_CALL) else 'jump'
+                    if kind and (kinds is None or kind in kinds):
+                        verified.append(dict(function=fn, instruction=a, kind=kind))
+                        functions.add(fn)
                     break
         return verified
 

@@ -13,6 +13,10 @@ from symbol_scan_core import EXECUTE, WRITE, Image, ScanError
 
 CATALOG = ROOT / 'src/plugin/adapter/symbol_catalog.h'
 MAX_ANCHORS = 12
+ANCHOR_POOL = 8
+SUPERMAJORITY_VOTES = 5
+SUPERMAJORITY_DISSENT = 1
+SUPERMAJORITY_SHARE = 0.9
 DELTA_WINDOW = 0x100000
 MIN_STRING = 8
 RAW_HITS = 8
@@ -90,13 +94,14 @@ def anchored(base, target, rva, kind, hop=True):
     votes = collections.Counter()
     tried = []
     seen = set()
-    for ref in base.rip_references(rva):
-        if (kind == 'CODE') != (ref['kind'] != 'rip') or ref['function'] in seen or ref['function'] == rva:
+    kinds = ('call', 'jump') if kind == 'CODE' else ('rip',)
+    for ref in base.rip_references(rva, kinds, MAX_ANCHORS * ANCHOR_POOL):
+        if ref['function'] in seen or ref['function'] == rva:
             continue
         seen.add(ref['function'])
-        if len(seen) > MAX_ANCHORS:
-            break
         tried.append(dict(anchor=ref['function'], instruction=ref['instruction']))
+    size = lambda row: sum(e - s for s, e in base.function_bounds(row['anchor']))
+    tried = sorted(tried, key=lambda row: (-size(row), row['anchor']))[:MAX_ANCHORS]
     for second in (False, True):
         if second and (votes or not hop):
             break
@@ -164,14 +169,14 @@ def string_consensus(base, target, rva):
             break
         row = dict(string=text.decode('ascii'))
         tried.append(row)
-        if string_locations(base, text) != [at] or {r['function'] for r in base.rip_references(at)} != {rva}:
+        if string_locations(base, text) != [at] or {r['function'] for r in base.rip_references(at, ('rip',), 2)} != {rva}:
             row['status'] = 'STRING_SHARED_IN_BASELINE'
             continue
         locations = string_locations(target, text)
         if len(locations) != 1:
             row['status'] = 'STRING_NOT_UNIQUE_IN_TARGET' if locations else 'STRING_NOT_FOUND'
             continue
-        users = {r['function'] for r in target.rip_references(locations[0])}
+        users = {r['function'] for r in target.rip_references(locations[0], ('rip',), 2)}
         if len(users) != 1:
             row['status'] = 'STRING_USERS_' + str(len(users))
             continue
@@ -205,12 +210,12 @@ def structural_code(base, target, rva):
         return twin, dict(method='MASKED_PATTERN', signature_bytes=length, fixed_bytes=fixed)
     votes, tried = anchored(base, target, rva, 'CODE')
     detail = dict(method='CALLER_CONSENSUS', pattern_candidates=found, signature_bytes=length, anchors=tried)
-    if len(votes) == 1:
-        value = next(iter(votes))
+    value, extra = consensus(votes)
+    if value is not None:
         if target.is_function_start(value):
-            return value, dict(detail, votes=votes[value])
+            return value, dict(detail, **extra)
         if target.executable(value) and target.function_of(value) is None:
-            return value, dict(detail, votes=votes[value], leaf_without_unwind=True)
+            return value, dict(detail, leaf_without_unwind=True, **extra)
         detail['status'] = 'CONSENSUS_NOT_FUNCTION_START'
     elif votes:
         detail['status'] = 'CONSENSUS_SPLIT'
@@ -218,18 +223,31 @@ def structural_code(base, target, rva):
     return None, detail
 
 
+def consensus(votes):
+    if len(votes) == 1:
+        value = next(iter(votes))
+        return value, dict(votes=votes[value])
+    if not votes:
+        return None, {}
+    (value, top), = votes.most_common(1)
+    total = sum(votes.values())
+    if top >= SUPERMAJORITY_VOTES and total - top <= SUPERMAJORITY_DISSENT and top >= SUPERMAJORITY_SHARE * total:
+        return value, dict(votes=top, dissent={hex(k): v for k, v in votes.items() if k != value})
+    return None, {}
+
+
 def recover_data(base, target, rva, size):
     votes, tried = anchored(base, target, rva, 'DATA')
     detail = dict(method='REFERENCE_CONSENSUS', anchors=tried)
-    if len(votes) != 1:
+    value, extra = consensus(votes)
+    if value is None:
         if votes:
             detail['votes'] = {hex(k): v for k, v in votes.items()}
         return None, detail
-    value = next(iter(votes))
     old, new = base.mapped_section(rva), target.mapped_section(value)
     if not new or (old[2] & (WRITE | EXECUTE)) != (new[2] & (WRITE | EXECUTE)) or value + size > new[0] + new[3]:
         return None, dict(detail, status='CONSENSUS_SECTION_KIND_CHANGED')
-    return value, dict(detail, votes=votes[value])
+    return value, dict(detail, **extra)
 
 
 def check_rtti(image, row):
@@ -328,6 +346,8 @@ def flag_review(rows):
         review = []
         if entry.get('votes') == 1:
             review.append('SINGLE_ANCHOR')
+        if entry.get('dissent'):
+            review.append('ANCHOR_DISSENT')
         if entry.get('string_agrees') is False:
             review.append('STRING_DISAGREES')
         others = list(deltas[entry['group']])
