@@ -54,6 +54,7 @@ static BOOL WINAPI FakeRead(HANDLE h,LPCVOID pointer,LPVOID out,SIZE_T size,SIZE
 #define Module32NextW FakeNext
 #define ReadProcessMemory FakeRead
 #define CloseHandle FakeClose
+static DWORD FixtureManagerRva(DWORD size,std::string& error){if(mode==9||size!=0x37EC000){error="Unsupported game version; command catalog not read.";return 0;}return 0x35E1A80;}
 #include "SOURCE"
 static void prepare(){
  memset(entryData,0,sizeof(entryData));RemoteString first={};const char* name=mode==28?"set_abcdefghijk":"set_foo";first.size=strlen(name);first.capacity=15;memcpy(first.data,name,first.size);if(mode==18)first.size=0;if(mode==19)first.data[0]=' ';if(mode==34)first.capacity=1;memcpy(entryData+8,&first,sizeof(first));
@@ -77,15 +78,22 @@ int main(){
  }
  printf("catalog_cases=35 checks=%d failed=%d; fake WinAPI and allocation fault, no game reads\n",checks,failed);return failed?1:0;
 }
-'''.replace("SOURCE", (root / "src/debug_console/command_catalog.cpp").as_posix())
+'''
+source = (root / 'src/debug_console/command_catalog.cpp').read_text(encoding='utf-8-sig')
+binding = 'ConsoleManagerRva(exe, nt.OptionalHeader.SizeOfImage, error)'
+if source.count(binding) != 1:
+    raise SystemExit('Expected one binding lookup in Query')
+isolated = output / 'catalog.inc'
+isolated.write_text(source.replace(binding, 'FixtureManagerRva(nt.OptionalHeader.SizeOfImage, error)'), encoding='ascii')
+fixture = fixture.replace('SOURCE', isolated.as_posix())
 (output / "fixture.cpp").write_text(fixture, encoding="ascii")
 vc = "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Auxiliary/Build/vcvars64.bat"
-command = 'cmd /d /s /c "' + f'"{vc}" >nul && cl /nologo /W4 /EHsc /std:c++17 /O2 fixture.cpp /Fe:fixture.exe' + '"'
+command = 'cmd /d /s /c "' + f'"{vc}" >nul && cl /nologo /W4 /EHsc /std:c++17 /O2 /I"{root / "src/debug_console"}" fixture.cpp /Fe:fixture.exe' + '"'
 def run(command):
     p = subprocess.run(command, cwd=output, capture_output=True)
     return dict(command=command, cwd=str(output), stdout=p.stdout.decode("utf-8", errors="replace"), stderr=p.stderr.decode("utf-8", errors="replace"), exit=p.returncode)
 build = run(command)
 result = run([str(output / "fixture.exe")]) if build["exit"] == 0 else build
-(output / "result.json").write_text(json.dumps(dict(build=build, result=result, scope="Actual Query and Matching; fake WinAPI address space, real C++ allocation exception; no process or game memory opened"), indent=2), encoding="utf-8")
+(output / "result.json").write_text(json.dumps(dict(build=build, result=result, scope="Actual Query and Matching; binding lookup stubbed (covered by test_completion_profile.py); fake WinAPI address space and real C++ allocation exception; no process or game memory opened"), indent=2), encoding="utf-8")
 print(json.dumps(result, indent=2))
 raise SystemExit(result["exit"])

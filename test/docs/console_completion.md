@@ -14,7 +14,7 @@
 
 ## 候选来源与安全
 
-只读当前绑定PID的命令注册表；限已验证HOI4 1.19.3 PE指纹与x64布局。
+只读当前绑定PID的命令注册表；主模块SHA对应`bindings/<SHA>.symbols`，要求资料批准与已声明的x64命令表布局。
 通过ReadProcessMemory读取名称/别名，不写游戏内存，不执行help或候选，不依赖地图执行上下文。
 注册表前后指针/容量/数量一致才采用结果；读取失败/变化重试有界，失败提示而不改输入。
 首词最长128字节、名称/别名长度有界、表数量有界；输入仍不超过2048 UTF-8字节。
@@ -54,5 +54,30 @@ hoi4_debug_console.exe --pid GAME_PID --complete set_
 
 旧helper不支持新自测开关，BASELINE/ROLLBACK均usage、exit2；MODIFIED新自测20/20、exit0。
 独立副本回滚恢复原helper哈希；该三态是功能入口对照，不是旧版通过补全测试。
-本轮不改插件DLL、不重启游戏；只替换并重启外部helper。
+上述2026-10-13交付不改插件DLL、不重启游戏，只替换并重启外部helper。
 证据在test/reports/20261013_console_completion。
+
+## 资料解析与缓存（2026-10-25）
+
+- 每次游戏指令补全重新读取并解析`.symbols`，不缓存批准状态或`console.manager`；本地`/`指令补全不受影响。
+- 文件非空、最多32768字节；拒绝NUL、非ASCII与非空白控制字符，支持LF/CRLF、首尾空白及末行无换行。
+- 要求`schema=1`、`contract=symbols_v2`、映像SHA一致；键集合直接来自`symbol_catalog.h`，缺键、多键、重复键、空键值均拒绝。
+- 全部批准位必须是0/1；`approve.core`与`approve.console`都为1才读取命令表。
+- `console.manager`只接受完整无符号十进制或`0x`十六进制DWORD；拒绝符号、尾随垃圾、截断溢出、0和超出映像的指针槽。
+- 仅缓存一个映像的SHA，身份键包括路径、卷/文件ID、大小、创建与修改时间；变化后重新哈希，哈希前后身份变化即拒绝。
+- 资料改动即使保留原时间戳，下次查询也重新校验；撤销批准、删除、修复、重新批准均无需重启helper。
+- 错误返回空候选和具体原因，不执行指令，不改变现有5个/行与交替配色。
+
+这是补全端的结构、身份和许可检查，不代替插件原生加载器的代码指纹、组依赖和ABI验证。
+SHA缓存依赖文件身份与元数据，不宣称能检测同一文件原位改写且刻意保留全部元数据；本轮不做防篡改保证。
+插件本身的资料仍按既有启动加载规则生效，补全重新读资料不等于插件热重载。
+
+```powershell
+python test/modules/console/test_completion_profile.py --output test/reports/completion_profile
+python test/modules/console/test_catalog_handles.py . test/reports/catalog_handles
+```
+
+本轮原生资料夹具49检查全通过，含保留资料时间戳的改地址/撤销批准、删除恢复、映像替换与非法输入。
+命令表夹具35场景、1065检查通过；资料解析单独测，命令表夹具桩化绑定解析，不冒充真实进程读取。
+Release控制台构建通过：日志/队列17/17、补全20/20、功能状态配色7检查通过。
+本轮未启动游戏、未替换现用helper；构建及三态回滚证据在`test/reports/20261025_completion_profile/`。
