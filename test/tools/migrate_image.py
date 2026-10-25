@@ -57,19 +57,18 @@ def migrate_registry(base, target, same, output):
                       'array-end reference. Templates, factory ABI and allocator are left to the runtime binder.')
 
 
-def migrate_camera(base, target_path, sha, same, output, layout):
+def migrate_camera(base, target_path, sha, same, output, symbols):
     fields = read_profile(ROOT / 'bindings' / (base.sha + '.profile'))
     result = dict(baseline={k: fields[k] for k in CAMERA_KEYS})
-    found = {r['key']: r for r in layout['fields']}
+    sources = {r['key']: r['source'] for r in symbols.get('fields', [])}
     offsets, origin = {}, {}
-    for key in CAMERA_KEYS:
-        row = found.get(CAMERA_FIELDS[key], {})
-        if not same and row.get('status') in ('SAME', 'MOVED'):
-            offsets[key], origin[key] = hex(int(next(iter(row['votes'])), 16)), 'WITNESS_' + row['status']
-        else:
-            offsets[key], origin[key] = fields[key], 'CARRIED_FROM_BASELINE'
+    for key, field in CAMERA_FIELDS.items():
+        offsets[key] = hex(int(symbols['ordered']['field.' + field], 0))
+        origin[key] = sources.get(field, 'SAME_IMAGE_PROFILE' if same else 'NO_UNANIMOUS_EVIDENCE')
     result.update(offsets=offsets, origin=origin)
     try:
+        if any(int(value, 0) == 0 for value in offsets.values()):
+            raise AdapterError('MISSING_CAMERA_FIELDS', 'Unresolved or explicitly disabled final camera fields')
         target = ImageBindings(target_path)
         target.getter = target.find_getter(int(offsets['camera_pointer'], 0))
         result.update(tables=target.tables, getter=target.getter, located=True)
@@ -77,13 +76,13 @@ def migrate_camera(base, target_path, sha, same, output, layout):
         target = None
         result.update(located=False, failure=error.code, detail=error.detail[:200])
     values = {'schema': '1', 'image_sha256': sha, 'read_contract': fields['read_contract']}
-    values.update({k: offsets[k] if result['located'] else '0x0' for k in CAMERA_KEYS})
-    values['runtime_read'] = fields['runtime_read'] if same else '0'
+    values.update(offsets)
+    values['runtime_read'] = fields['runtime_read'] if same and result['located'] else '0'
     profile = output / (sha + '.profile')
     profile.write_text(''.join(k + '=' + v + '\n' for k, v in values.items()), encoding='ascii', newline='\n')
-    result.update(profile=str(profile.resolve()), approved=same,
-                  scope='Offsets come from unanimous field witnesses when available, otherwise carried from the baseline; '
-                        'the camera pointer must also have an RTTI getter. Field layout still needs live review.')
+    result.update(profile=str(profile.resolve()), approved=values['runtime_read'] == '1',
+                  scope='Offsets match the finalized symbols fields, including reviews and unresolved zeros; '
+                        'a matching RTTI getter is required. Cross-image profiles remain disabled pending live review.')
     return result
 
 
@@ -107,7 +106,12 @@ def apply_review(review, symbols, registry, field_values, field_sources):
     registry_lines = dict(line.split('=', 1) for line in registry_path.read_text(encoding='ascii').splitlines() if line)
     for key, entry in review.items():
         if key.startswith('field.'):
-            field_values[key[6:]] = int(entry['value'], 0)
+            if key not in symbols['ordered']:
+                raise SystemExit('review field not in symbols profile: ' + key)
+            value = int(entry['value'], 0)
+            if not 0 <= value <= 0xffff:
+                raise SystemExit('review field outside 0..0xffff: ' + key)
+            field_values[key[6:]] = value
             field_sources[key[6:]] = 'REVIEWED'
         elif key in symbols['ordered']:
             symbols['ordered'][key] = entry['value']
@@ -138,6 +142,8 @@ def main():
     args = parser.parse_args()
     base, target = Image(args.baseline_image), Image(args.image)
     same = base.sha == target.sha and not args.rescan
+    if same and args.review:
+        raise SystemExit('--review requires a cross-image migration or --rescan; refusing to ignore it')
     args.output_directory.mkdir(parents=True, exist_ok=True)
     symbols = migrate_symbols(base, target, same, args.output_directory)
     registry = migrate_registry(base, target, same, args.output_directory)
@@ -149,7 +155,7 @@ def main():
         if args.review:
             reviewed = apply_review(read_review(args.review), symbols, registry, values, sources)
         write_fields(symbols, values, sources=sources)
-    camera = migrate_camera(base, args.image, target.sha, same, args.output_directory, fields)
+    camera = migrate_camera(base, args.image, target.sha, same, args.output_directory, symbols)
     report = dict(baseline_sha256=base.sha, target_sha256=target.sha, approved=same,
                   symbols=symbols, registry=registry, camera=camera, fields=fields, reviewed=reviewed,
                   symbols_accept=accept(args.symbols_fixture, args.image, symbols['profile']))

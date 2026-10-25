@@ -124,3 +124,23 @@ var64夹具：debt、decode、hook_retry、name_fields、public_header、registr
 v2自扫去掉approve行仍与已提交资料逐字节相同；backup与修正前唯一差异是`var64.vartext=0x12bd550`。
 `test/reports/20261017_migrate_image/`保存第四轮三映像资料与报告；`test/reports/20261017_live/`保存实机`live.json`、功能日志、部署前DLL及backup测试资料。
 backup第六轮已补做脚本行为验收（11/11）；摄像机写入仍未验证，相关4项保持关闭。exe3未启动。
+
+## 摄像机迁移一致性（2026-10-25）
+
+`.symbols`先汇总一致见证与`--review`覆盖，再由同一份最终字段生成`.profile`，不再分别取扫描值/旧版值。
+`camera_pointer`、`height`、`minimum`、`maximum`与对应`field.camera.*`数值一致；报告`camera.origin`保留复核来源。
+无一致证据且未复核的字段为0，不沿用旧版偏移。字段不完整时不查getter，候选保持禁用。
+getter定位失败也保留两份资料中一致的候选偏移，以`located=false`、`runtime_read=0`关闭，不再把仅一份资料清零。
+跨映像即使定位成功也不自动批准，仍需人工复核和实机验收；同SHA正常复制保持已有资料值。
+复核字段必须存在于symbols字段集合，范围0..0xffff，0表示显式禁用；不能通过复核文件设置批准位。
+同SHA使用`--review`必须同时指定`--rescan`，否则报错，避免静默忽略复核。
+
+```powershell
+python test/modules/adapter/test_camera_field_migration.py
+```
+
+夹具覆盖人工覆盖见证、补齐缺证据、部分复核、0禁用、缺/冲突见证、getter失败、同SHA保持、非法字段/范围及批准位拒绝。
+12项回归通过；真实current同SHA迁移的`.profile`与`bindings/`逐字节一致，三份资料键值一致（symbols顺序、registry换行不同）。
+backup沿用7项复核后四个摄像机字段跨文件一致，
+`maximum`来源为`REVIEWED`，全部跨映像批准位与读取/注册开关仍为0。证据：`test/reports/20261025_camera_fields/`。
+本轮不启动游戏，不修改`bindings/`或部署二进制；离线迁移结果不能代替实机验收。
