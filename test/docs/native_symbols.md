@@ -57,9 +57,19 @@ python test/tools/migrate_image.py --image ../hoi4.exe.backup --output-directory
 python test/modules/adapter/live_bindings_check.py --exe ../hoi4.exe --output test/reports/20261017_live/current
 ```
 
-关闭已有游戏（先CloseMainWindow，超时才强杀）、把功能日志移为`.log.prev`、以`-start_tag=CHI`启动、等`Launching SINGLEPLAYER-game`后30秒，
-经`hoi4_debug_console.exe --pid --command`执行四条只读命令，正常关闭，输出`live.json`与功能日志副本。
+发现已有游戏时拒绝启动，不关闭已有游戏。把功能日志移为`.log.prev`、以`-start_tag=CHI`启动，
+等`Launching SINGLEPLAYER-game`后30秒，经`hoi4_debug_console.exe --pid --command`执行四条只读命令。
+只对本轮保留的`Popen`进程发送`WM_CLOSE`；默认等待60秒，超时返回失败、保留进程，不强杀、不自动重启。
+`--ready-timeout`默认400秒；`--close-timeout`默认60秒；`--settle`默认30秒，可设0。
+输出`live.json`与功能日志副本；报告包含`accepted`、`failures`、`pid`、`process_exit`、`still_running`及命令stdout/stderr末30行。
+启动/命令/smoke超时、非零退出、无效smoke报告、身份不符、异常退出或关闭超时均返回非零退出码。
+`--smoke`必须使用没有`smoke/`子目录的输出位置，不复用旧结果；smoke必须正常退出且检查字典非空、每项严格为true。
+命令与smoke超时会结束对应辅助进程的等待，不会强杀游戏；关闭失败后应先人工确认游戏退出，再开下一轮。
 功能日志`adapter.identity`不等于映像SHA即判失败；载体只在宿主名为`hoi4.exe`时加载插件，其他文件名会表现为“无日志”。
+
+2026-10-25脚本回归：`python test/modules/adapter/test_live_bindings_check.py`。
+模拟进程验证成功、已有游戏拒绝、启动/进图/settle/命令/smoke/关闭异常、空/伪布尔/旧smoke结果、有限等待与失败退出。
+本轮不启动游戏；历史实机结果如下，不视为新版驱动的实机验收。
 
 | 运行 | 结果 |
 |---|---|
@@ -113,4 +123,4 @@ var64夹具：debt、decode、hook_retry、name_fields、public_header、registr
 `test/reports/20261017_native_symbols/`保存修正前self/backup/exe3与修正后v2_*资料、`migration.json`；报告不纳入Git。
 v2自扫去掉approve行仍与已提交资料逐字节相同；backup与修正前唯一差异是`var64.vartext=0x12bd550`。
 `test/reports/20261017_migrate_image/`保存第四轮三映像资料与报告；`test/reports/20261017_live/`保存实机`live.json`、功能日志、部署前DLL及backup测试资料。
-backup只做了启动、注册与只读命令实机；exe3未启动。脚本行为与摄像机写入未在backup上验证。
+backup第六轮已补做脚本行为验收（11/11）；摄像机写入仍未验证，相关4项保持关闭。exe3未启动。
